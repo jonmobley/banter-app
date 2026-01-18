@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2 } from "lucide-react";
+import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef } from "react";
 
@@ -15,6 +15,7 @@ interface ExpectedParticipant {
   id: string;
   name: string;
   phone: string;
+  email?: string | null;
 }
 
 interface ParticipantsData {
@@ -152,6 +153,12 @@ export default function Mobley() {
   const [showAddExpectedModal, setShowAddExpectedModal] = useState(false);
   const [newExpectedName, setNewExpectedName] = useState("");
   const [newExpectedPhone, setNewExpectedPhone] = useState("");
+  
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+  const [editingParticipant, setEditingParticipant] = useState<ExpectedParticipant | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
 
   const addExpected = useMutation({
     mutationFn: async () => {
@@ -170,6 +177,32 @@ export default function Mobley() {
       setNewExpectedPhone("");
     },
   });
+
+  const updateExpected = useMutation({
+    mutationFn: async () => {
+      if (!editingParticipant) return;
+      const res = await fetch(`/api/expected/${editingParticipant.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin, name: editName, phone: editPhone, email: editEmail || null }),
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
+      setShowProfileDrawer(false);
+      setEditingParticipant(null);
+    },
+  });
+
+  const openProfileDrawer = (participant: ExpectedParticipant) => {
+    setEditingParticipant(participant);
+    setEditName(participant.name);
+    setEditPhone(participant.phone);
+    setEditEmail(participant.email || "");
+    setShowProfileDrawer(true);
+  };
 
   const handlePinDigit = (index: number, value: string) => {
     if (value.length > 1) return;
@@ -330,6 +363,84 @@ export default function Mobley() {
     </div>
   );
 
+  const profileDrawer = (
+    <div className="fixed inset-0 z-50">
+      <div 
+        className="absolute inset-0 bg-black/50"
+        onClick={() => setShowProfileDrawer(false)}
+      />
+      <div className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl animate-in slide-in-from-bottom duration-300">
+        <div className="flex justify-center pt-3 pb-2">
+          <div className="w-10 h-1 bg-slate-600 rounded-full" />
+        </div>
+        
+        <div className="px-6 pb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold">Edit Profile</h2>
+            <button
+              onClick={() => setShowProfileDrawer(false)}
+              className="p-2 rounded-full hover:bg-slate-800 transition-colors"
+              data-testid="button-close-drawer"
+            >
+              <X className="w-5 h-5 text-slate-400" />
+            </button>
+          </div>
+          
+          <div className="flex justify-center mb-6">
+            <div className="w-20 h-20 rounded-full bg-slate-700 flex items-center justify-center">
+              <span className="text-3xl font-bold text-slate-300">
+                {editName ? editName.charAt(0).toUpperCase() : '?'}
+              </span>
+            </div>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-slate-400 mb-1 block">Name</label>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                data-testid="input-edit-name"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-400 mb-1 block">Phone</label>
+              <input
+                type="tel"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                data-testid="input-edit-phone"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-slate-400 mb-1 block">Email</label>
+              <input
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="Optional"
+                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                data-testid="input-edit-email"
+              />
+            </div>
+          </div>
+          
+          <button
+            onClick={() => updateExpected.mutate()}
+            disabled={!editName || !editPhone}
+            className="w-full mt-6 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium py-4 rounded-full transition-colors"
+            data-testid="button-save-profile"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (hasActiveCall) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col relative">
@@ -442,16 +553,21 @@ export default function Mobley() {
                   className="flex items-center gap-3 bg-slate-700/30 rounded-lg px-4 py-3"
                   data-testid={`expected-${i}`}
                 >
-                  <div className="w-10 h-10 rounded-full bg-slate-600/30 flex items-center justify-center">
-                    <span className="text-base font-medium text-slate-400">
-                      {ep.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-400 truncate">
-                      {ep.name}
-                    </p>
-                    <p className="text-xs text-slate-500 truncate">{formatPhone(ep.phone)}</p>
+                  <div 
+                    className={`flex items-center gap-3 flex-1 min-w-0 ${isAdmin ? 'cursor-pointer' : ''}`}
+                    onClick={() => isAdmin && openProfileDrawer(ep)}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-slate-600/30 flex items-center justify-center">
+                      <span className="text-base font-medium text-slate-400">
+                        {ep.name.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-400 truncate">
+                        {ep.name}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate">{formatPhone(ep.phone)}</p>
+                    </div>
                   </div>
                   <div className="relative" ref={openDropdown === ep.id ? dropdownRef : undefined}>
                     <button
@@ -511,6 +627,7 @@ export default function Mobley() {
 
         {showPinModal && pinModal}
         {showAddExpectedModal && addExpectedModal}
+        {showProfileDrawer && profileDrawer}
       </div>
     );
   }
