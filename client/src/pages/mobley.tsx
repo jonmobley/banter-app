@@ -383,13 +383,15 @@ export default function Mobley() {
 
   const sampleParticipants: Participant[] = [
     { callSid: "sample-1", phone: "+12025551234", name: "Mom", muted: false, hold: false },
-    { callSid: "sample-2", phone: "+13105559876", name: "Jake", muted: true, hold: false },
-    { callSid: "sample-3", phone: "+14155550000", name: null, muted: false, hold: false },
+    { callSid: "sample-2", phone: "+13105559876", name: "Jake", muted: false, hold: false },
+    { callSid: "sample-3", phone: "+12025558888", name: "Sue", muted: true, hold: false },
   ];
 
   const sampleExpected: ExpectedParticipant[] = [
-    { id: "sample-exp-1", name: "Dad", phone: "+12025559999", role: 'host' },
-    { id: "sample-exp-2", name: "Sue", phone: "+12025558888", role: 'listener' },
+    { id: "sample-exp-1", name: "Mom", phone: "+12025551234", role: 'host' },
+    { id: "sample-exp-2", name: "Jake", phone: "+13105559876", role: 'participant' },
+    { id: "sample-exp-3", name: "Sue", phone: "+12025558888", role: 'listener' },
+    { id: "sample-exp-4", name: "Dad", phone: "+12025559999", role: 'participant' },
   ];
   
   const updateRole = useMutation({
