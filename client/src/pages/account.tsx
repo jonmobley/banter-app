@@ -75,22 +75,20 @@ export default function Account() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      <div className="px-6 py-4 border-b border-slate-800">
-        <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          <span className="text-sm">Back</span>
-        </Link>
-      </div>
+      <div className="flex-1 flex flex-col items-center px-6 py-8">
+        <div className="w-full max-w-xs">
+          <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8">
+            <ArrowLeft className="w-4 h-4" />
+            <span className="text-sm">Back</span>
+          </Link>
 
-      <div className="flex-1 px-6 py-8">
-        <h1 className="text-2xl font-bold mb-8" data-testid="text-title">Account</h1>
+          <h1 className="text-2xl font-bold mb-8 text-center" data-testid="text-title">Account</h1>
 
-        {/* Contacts Section */}
-        <div className="max-w-md">
+          {/* Contacts Section */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-slate-400" />
-              <h2 className="text-lg font-semibold">Contacts</h2>
+              <h2 className="font-semibold">Contacts</h2>
               <span className="text-sm text-slate-500">({contacts.length})</span>
             </div>
             <button 
@@ -171,7 +169,7 @@ export default function Account() {
           ) : (
             <div className="text-center py-12">
               <p className="text-slate-500 mb-2">No contacts yet</p>
-              <p className="text-sm text-slate-600">Add contacts to see their names when they call in</p>
+              <p className="text-sm text-slate-600">Add contacts to see names when they call</p>
             </div>
           )}
         </div>
