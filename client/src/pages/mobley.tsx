@@ -200,8 +200,27 @@ export default function Mobley() {
   if (hasActiveCall) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col relative">
-        <header className="flex items-center justify-between px-4 py-4">
-          <h1 className="text-xl font-bold" data-testid="text-title">Banter</h1>
+        <header className="relative flex items-center justify-between px-4 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-emerald-500/20 rounded-full pl-3 pr-4 py-2">
+              <Phone className="w-5 h-5 text-emerald-400" />
+              <span className="text-lg font-medium text-emerald-400" data-testid="text-duration">
+                {formatDuration(callDuration)}
+              </span>
+              <div className="w-6 h-6 rounded-full bg-emerald-400/30 flex items-center justify-center">
+                <span className="text-sm font-medium text-emerald-400">
+                  {participantCount}
+                </span>
+              </div>
+            </div>
+            {isPreviewMode && (
+              <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">
+                Preview
+              </span>
+            )}
+          </div>
+          
+          <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold" data-testid="text-title">Banter</h1>
           
           <button
             onClick={() => {
@@ -223,35 +242,7 @@ export default function Mobley() {
           </button>
         </header>
 
-        <div className="flex flex-col items-center py-4">
-          <div className="flex items-center gap-2 bg-emerald-500/20 rounded-full pl-3 pr-4 py-2">
-            <Phone className="w-5 h-5 text-emerald-400" />
-            <span className="text-lg font-medium text-emerald-400" data-testid="text-duration">
-              {formatDuration(callDuration)}
-            </span>
-            <div className="w-6 h-6 rounded-full bg-emerald-400/30 flex items-center justify-center">
-              <span className="text-sm font-medium text-emerald-400">
-                {participantCount}
-              </span>
-            </div>
-          </div>
-          {isPreviewMode && (
-            <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full mt-2">
-              Preview
-            </span>
-          )}
-        </div>
-
         <div className="flex-1 overflow-auto px-6 pb-48">
-          <div className="flex items-center gap-2 mb-4">
-            <Users className="w-4 h-4 text-emerald-400" />
-            <span className="text-sm text-slate-300" data-testid="text-participant-count">
-              {participantCount === 1 
-                ? '1 person on the call'
-                : `${participantCount} people on the call`
-              }
-            </span>
-          </div>
 
           <div className="space-y-2">
             {participants.map((p, i) => (
