@@ -283,7 +283,7 @@ export default function Schedule() {
 
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/70 flex items-end justify-center z-50">
-          <div className="bg-slate-900 rounded-t-3xl w-full max-w-lg max-h-[90vh] overflow-auto">
+          <div className="bg-slate-900 rounded-t-3xl w-full max-w-lg max-h-[90vh] max-h-[90dvh] overflow-auto">
             <div className="sticky top-0 bg-slate-900 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
               <h2 className="text-xl font-bold">Schedule a Banter</h2>
               <button
@@ -297,15 +297,20 @@ export default function Schedule() {
               </button>
             </div>
 
-            <div className="px-6 py-6 space-y-6">
+            <div className="px-6 py-6 pb-safe space-y-6">
               <div>
                 <label className="text-sm text-slate-400 mb-2 block">Name</label>
                 <input
                   type="text"
+                  inputMode="text"
+                  autoComplete="off"
+                  autoCapitalize="words"
+                  autoCorrect="off"
                   value={banterName}
                   onChange={(e) => setBanterName(e.target.value)}
                   placeholder="Weekly sync"
-                  className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                  className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                  style={{ fontSize: '16px' }}
                   data-testid="input-banter-name"
                 />
               </div>
@@ -317,7 +322,8 @@ export default function Schedule() {
                     type="date"
                     value={banterDate}
                     onChange={(e) => setBanterDate(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                    className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors appearance-none"
+                    style={{ fontSize: '16px' }}
                     data-testid="input-banter-date"
                   />
                 </div>
@@ -327,7 +333,8 @@ export default function Schedule() {
                     type="time"
                     value={banterTime}
                     onChange={(e) => setBanterTime(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                    className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors appearance-none"
+                    style={{ fontSize: '16px' }}
                     data-testid="input-banter-time"
                   />
                 </div>
@@ -417,8 +424,8 @@ export default function Schedule() {
       )}
       
       {confirmDeleteId && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
-          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-2">Cancel Banter?</h2>
             <p className="text-sm text-slate-400 text-center mb-6">
               This scheduled call will be cancelled. This action cannot be undone.
@@ -426,14 +433,14 @@ export default function Schedule() {
             <div className="space-y-3">
               <button
                 onClick={handleConfirmDelete}
-                className="w-full bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
+                className="w-full bg-red-500 hover:bg-red-400 text-white font-medium py-3.5 rounded-full transition-colors"
                 data-testid="button-confirm-delete"
               >
                 Cancel Banter
               </button>
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3.5 rounded-full transition-colors"
                 data-testid="button-cancel-delete"
               >
                 Keep

@@ -726,8 +726,8 @@ export default function Mobley() {
   }, [callStartTime]);
 
   const pinModal = (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
-      <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
         <h2 className="text-xl font-bold text-center mb-2">Admin Access</h2>
         <p className="text-sm text-slate-400 text-center mb-6">Enter 4-digit PIN</p>
         
@@ -769,8 +769,8 @@ export default function Mobley() {
   );
 
   const loginModal = (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
-      <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
         <h2 className="text-xl font-bold text-center mb-2">Sign In</h2>
         <p className="text-sm text-slate-400 text-center mb-6">
           {loginStep === 'phone' ? 'Enter your phone number' : 'Enter the code we texted you'}
@@ -780,10 +780,14 @@ export default function Mobley() {
           <div className="space-y-4 mb-6">
             <input
               type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              autoCorrect="off"
               placeholder="(555) 555-5555"
               value={loginPhone}
               onChange={(e) => setLoginPhone(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors text-center text-lg"
+              className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors text-center text-base"
+              style={{ fontSize: '16px' }}
               data-testid="input-login-phone"
             />
           </div>
@@ -791,11 +795,15 @@ export default function Mobley() {
           <div className="space-y-4 mb-6">
             <input
               type="tel"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoCorrect="off"
               placeholder="000000"
               value={loginCode}
               onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               maxLength={6}
-              className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors text-center text-2xl tracking-widest"
+              className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors text-center text-2xl tracking-widest"
+              style={{ fontSize: '24px' }}
               data-testid="input-login-code"
             />
           </div>
@@ -841,27 +849,36 @@ export default function Mobley() {
   );
 
   const addExpectedModal = (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
-      <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
         <h2 className="text-xl font-bold text-center mb-2">Add Expected</h2>
         <p className="text-sm text-slate-400 text-center mb-6">Who should join the call?</p>
         
         <div className="space-y-4 mb-6">
           <input
             type="text"
+            inputMode="text"
+            autoComplete="name"
+            autoCapitalize="words"
+            autoCorrect="off"
             placeholder="Name"
             value={newExpectedName}
             onChange={(e) => setNewExpectedName(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-slate-800 border-2 border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+            className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+            style={{ fontSize: '16px' }}
             data-testid="input-expected-name"
           />
           <div>
             <input
               type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              autoCorrect="off"
               placeholder="Phone number"
               value={newExpectedPhone}
               onChange={(e) => handleExpectedPhoneChange(e.target.value)}
-              className={`w-full px-4 py-3 rounded-lg bg-slate-800 border-2 ${newExpectedPhoneError ? 'border-red-500' : 'border-slate-700 focus:border-emerald-500'} outline-none transition-colors`}
+              className={`w-full px-4 py-3.5 rounded-xl bg-slate-800 border ${newExpectedPhoneError ? 'border-red-500' : 'border-slate-700 focus:border-emerald-500'} outline-none transition-colors`}
+              style={{ fontSize: '16px' }}
               data-testid="input-expected-phone"
             />
             {newExpectedPhoneError && (
@@ -901,12 +918,12 @@ export default function Mobley() {
         className="absolute inset-0 bg-black/50"
         onClick={() => setShowProfileDrawer(false)}
       />
-      <div className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl animate-in slide-in-from-bottom duration-300">
-        <div className="flex justify-center pt-3 pb-2">
+      <div className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl animate-in slide-in-from-bottom duration-300 max-h-[85vh] max-h-[85dvh] overflow-y-auto">
+        <div className="sticky top-0 bg-slate-900 z-10 flex justify-center pt-3 pb-2">
           <div className="w-10 h-1 bg-slate-600 rounded-full" />
         </div>
         
-        <div className="px-6 pb-8">
+        <div className="px-6 pb-8 pb-safe">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold">Edit Profile</h2>
             <button
@@ -928,33 +945,47 @@ export default function Mobley() {
           
           <div className="space-y-4">
             <div>
-              <label className="text-sm text-slate-400 mb-1 block">Name</label>
+              <label className="text-sm text-slate-400 mb-1.5 block">Name</label>
               <input
                 type="text"
+                inputMode="text"
+                autoComplete="name"
+                autoCapitalize="words"
+                autoCorrect="off"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                style={{ fontSize: '16px' }}
                 data-testid="input-edit-name"
               />
             </div>
             <div>
-              <label className="text-sm text-slate-400 mb-1 block">Phone</label>
+              <label className="text-sm text-slate-400 mb-1.5 block">Phone</label>
               <input
                 type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                autoCorrect="off"
                 value={editPhone}
                 onChange={(e) => setEditPhone(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                style={{ fontSize: '16px' }}
                 data-testid="input-edit-phone"
               />
             </div>
             <div>
-              <label className="text-sm text-slate-400 mb-1 block">Email</label>
+              <label className="text-sm text-slate-400 mb-1.5 block">Email</label>
               <input
                 type="email"
+                inputMode="email"
+                autoComplete="email"
+                autoCorrect="off"
+                autoCapitalize="none"
                 value={editEmail}
                 onChange={(e) => setEditEmail(e.target.value)}
                 placeholder="Optional"
-                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+                style={{ fontSize: '16px' }}
                 data-testid="input-edit-email"
               />
             </div>
@@ -1554,8 +1585,8 @@ export default function Mobley() {
       </div>
       
       {confirmDeleteId && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
-          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-2">Remove Participant?</h2>
             <p className="text-sm text-slate-400 text-center mb-6">
               This person will be removed from the expected list.
@@ -1563,14 +1594,14 @@ export default function Mobley() {
             <div className="space-y-3">
               <button
                 onClick={handleConfirmDelete}
-                className="w-full bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
+                className="w-full bg-red-500 hover:bg-red-400 text-white font-medium py-3.5 rounded-full transition-colors"
                 data-testid="button-confirm-delete"
               >
                 Remove
               </button>
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3.5 rounded-full transition-colors"
                 data-testid="button-cancel-delete"
               >
                 Cancel

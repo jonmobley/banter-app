@@ -389,3 +389,49 @@
     inset: -1px;
   }
 }
+
+/* iOS Safe Area and Mobile Keyboard Support */
+@supports (padding: env(safe-area-inset-top)) {
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+  
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  
+  .pb-safe {
+    padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 1.5rem));
+  }
+  
+  .pt-safe {
+    padding-top: max(1rem, env(safe-area-inset-top, 1rem));
+  }
+}
+
+/* Mobile drawer/modal keyboard handling */
+@media (max-width: 640px) {
+  /* Ensure modals don't zoom on input focus */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  
+  /* Bottom sheet drawer styling for iOS */
+  .drawer-content {
+    max-height: calc(100vh - env(safe-area-inset-top, 0) - 2rem);
+    max-height: calc(100dvh - env(safe-area-inset-top, 0) - 2rem);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Smooth keyboard transitions */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Prevent overscroll on iOS */
+body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}

@@ -141,22 +141,31 @@ export default function Contacts() {
           </div>
 
           {showAddContact && (
-            <form onSubmit={handleAddContact} className="bg-slate-800/50 rounded-lg p-4 mb-4 space-y-3">
+            <form onSubmit={handleAddContact} className="bg-slate-800/50 rounded-xl p-4 mb-4 space-y-3">
               <input
                 type="text"
+                inputMode="text"
+                autoComplete="name"
+                autoCapitalize="words"
+                autoCorrect="off"
                 placeholder="Name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="w-full bg-slate-900 rounded-lg px-4 py-3 text-sm outline-none focus:ring-2 ring-emerald-500"
+                className="w-full bg-slate-900 rounded-xl px-4 py-3.5 outline-none focus:ring-2 ring-emerald-500"
+                style={{ fontSize: '16px' }}
                 data-testid="input-contact-name"
               />
               <div>
                 <input
                   type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  autoCorrect="off"
                   placeholder="Phone number"
                   value={newPhone}
                   onChange={(e) => handlePhoneChange(e.target.value)}
-                  className={`w-full bg-slate-900 rounded-lg px-4 py-3 text-sm outline-none focus:ring-2 ${phoneError ? 'ring-2 ring-red-500' : 'ring-emerald-500'}`}
+                  className={`w-full bg-slate-900 rounded-xl px-4 py-3.5 outline-none focus:ring-2 ${phoneError ? 'ring-2 ring-red-500' : 'ring-emerald-500'}`}
+                  style={{ fontSize: '16px' }}
                   data-testid="input-contact-phone"
                 />
                 {phoneError && (
@@ -232,8 +241,8 @@ export default function Contacts() {
       </div>
       
       {confirmDeleteId && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
-          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-2">Delete Contact?</h2>
             <p className="text-sm text-slate-400 text-center mb-6">
               This contact will be removed. This action cannot be undone.
@@ -241,14 +250,14 @@ export default function Contacts() {
             <div className="space-y-3">
               <button
                 onClick={handleConfirmDelete}
-                className="w-full bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
+                className="w-full bg-red-500 hover:bg-red-400 text-white font-medium py-3.5 rounded-full transition-colors"
                 data-testid="button-confirm-delete"
               >
                 Delete
               </button>
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3.5 rounded-full transition-colors"
                 data-testid="button-cancel-delete"
               >
                 Cancel
