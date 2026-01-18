@@ -207,9 +207,11 @@ export default function Mobley() {
               <span className="text-lg font-medium text-emerald-400" data-testid="text-duration">
                 {formatDuration(callDuration)}
               </span>
-              <span className="text-sm text-emerald-400/70">
-                ({participantCount})
-              </span>
+              <div className="w-6 h-6 rounded-full bg-emerald-400/30 flex items-center justify-center">
+                <span className="text-sm font-medium text-emerald-400">
+                  {participantCount}
+                </span>
+              </div>
             </div>
             {isPreviewMode && (
               <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">
