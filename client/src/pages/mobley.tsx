@@ -273,25 +273,21 @@ export default function Mobley() {
                     <p className="text-xs text-slate-500 truncate">{formatPhone(p.phone)}</p>
                   )}
                 </div>
-                {isAdmin ? (
-                  <button
-                    onClick={() => toggleMute.mutate({ callSid: p.callSid, muted: !p.muted })}
-                    className={`p-2 rounded-lg transition-colors ${
-                      p.muted 
-                        ? 'bg-red-500/20 hover:bg-red-500/30' 
-                        : 'bg-emerald-500/20 hover:bg-emerald-500/30'
-                    }`}
-                    data-testid={`button-mute-${i}`}
-                  >
-                    {p.muted ? (
-                      <VolumeX className="w-5 h-5 text-red-400" />
-                    ) : (
-                      <Volume2 className="w-5 h-5 text-emerald-400" />
-                    )}
-                  </button>
-                ) : (
-                  <div className={`w-2 h-2 rounded-full ${p.muted ? 'bg-slate-500' : 'bg-emerald-400 animate-pulse'}`} />
-                )}
+                <button
+                  onClick={() => isAdmin && toggleMute.mutate({ callSid: p.callSid, muted: !p.muted })}
+                  className={`p-2 rounded-lg transition-colors ${
+                    p.muted 
+                      ? 'bg-red-500/20 hover:bg-red-500/30' 
+                      : 'bg-emerald-500/20 hover:bg-emerald-500/30'
+                  } ${!isAdmin ? 'cursor-default' : ''}`}
+                  data-testid={`button-mute-${i}`}
+                >
+                  {p.muted ? (
+                    <VolumeX className="w-5 h-5 text-red-400" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 text-emerald-400" />
+                  )}
+                </button>
               </div>
             ))}
           </div>
