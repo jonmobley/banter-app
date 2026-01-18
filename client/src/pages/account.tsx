@@ -29,14 +29,14 @@ export default function Account() {
 
           <h1 className="text-2xl font-bold mb-8 text-center" data-testid="text-title">Account</h1>
 
-          <Link
-            href="/mobley"
+          <a
+            href="tel:+12202423245"
             className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors mb-3"
             data-testid="button-join"
           >
             <Phone className="w-5 h-5" />
             Join the Banter
-          </Link>
+          </a>
 
           <button
             onClick={() => {
