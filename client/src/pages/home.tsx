@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Phone, Radio } from "lucide-react";
+import { Radio } from "lucide-react";
 
 export default function Home() {
   const { data: health } = useQuery({
@@ -56,16 +56,6 @@ export default function Home() {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="px-6 py-6 border-t border-slate-800">
-        <div className="flex items-center gap-2 text-slate-500 text-xs">
-          <Phone className="w-4 h-4" />
-          <span>Webhook:</span>
-        </div>
-        <code className="text-xs text-cyan-400 break-all" data-testid="text-webhook">
-          {window.location.origin}/voice/incoming
-        </code>
       </div>
     </div>
   );
