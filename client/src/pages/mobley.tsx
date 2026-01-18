@@ -653,9 +653,6 @@ export default function Mobley() {
         </div>
 
         <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8 pb-8 px-6">
-          <p className="text-slate-400 text-center mb-4">
-            Instant group call, anytime.
-          </p>
           <div className="flex flex-col gap-3 max-w-xs mx-auto">
             <a
               href="tel:+12202423245"
@@ -703,10 +700,7 @@ export default function Mobley() {
           <Phone className="w-10 h-10 text-emerald-400" />
         </div>
         
-        <h1 className="text-5xl font-bold mb-3 text-center" data-testid="text-title">Banter</h1>
-        <p className="text-xl text-slate-400 text-center mb-8 max-w-sm">
-          Instant group call, anytime.
-        </p>
+        <h1 className="text-5xl font-bold mb-8 text-center" data-testid="text-title">Banter</h1>
 
         <div className="flex flex-col gap-4 w-full max-w-xs">
           <a
