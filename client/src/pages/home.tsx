@@ -1,5 +1,4 @@
-import { Radio, Phone, Ban } from "lucide-react";
-import { Link } from "wouter";
+import { Radio, Ban } from "lucide-react";
 
 export default function Home() {
   return (
@@ -14,26 +13,7 @@ export default function Home() {
           Instant walkie-talkie for your team.
         </p>
 
-        <div className="flex flex-col gap-4 w-full max-w-xs">
-          <Link
-            href="/mobley"
-            className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-            data-testid="button-join"
-          >
-            <Phone className="w-5 h-5" />
-            Join the Call
-          </Link>
-          
-          <Link
-            href="/account"
-            className="flex items-center justify-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-6 rounded-full transition-colors"
-            data-testid="button-account"
-          >
-            Manage Account
-          </Link>
-        </div>
-
-        <div className="mt-16 grid grid-cols-3 gap-8 text-center max-w-sm">
+        <div className="mt-8 grid grid-cols-3 gap-8 text-center max-w-sm">
           <div className="flex flex-col items-center">
             <Ban className="w-6 h-6 text-emerald-400 mb-1" />
             <p className="text-xs text-slate-400 uppercase tracking-wide">PIN</p>
