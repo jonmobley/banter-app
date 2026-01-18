@@ -1,4 +1,4 @@
-import { Radio, Phone } from "lucide-react";
+import { Radio, Phone, Ban } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Home() {
@@ -34,17 +34,17 @@ export default function Home() {
         </div>
 
         <div className="mt-16 grid grid-cols-3 gap-8 text-center max-w-sm">
-          <div>
-            <p className="text-2xl font-bold text-emerald-400">No</p>
-            <p className="text-xs text-slate-500">PINs</p>
+          <div className="flex flex-col items-center">
+            <Ban className="w-6 h-6 text-emerald-400 mb-1" />
+            <p className="text-xs text-slate-400 uppercase tracking-wide">PIN</p>
           </div>
-          <div>
-            <p className="text-2xl font-bold text-emerald-400">No</p>
-            <p className="text-xs text-slate-500">Apps</p>
+          <div className="flex flex-col items-center">
+            <Ban className="w-6 h-6 text-emerald-400 mb-1" />
+            <p className="text-xs text-slate-400 uppercase tracking-wide">APP</p>
           </div>
-          <div>
-            <p className="text-2xl font-bold text-emerald-400">No</p>
-            <p className="text-xs text-slate-500">Waiting</p>
+          <div className="flex flex-col items-center">
+            <Ban className="w-6 h-6 text-emerald-400 mb-1" />
+            <p className="text-xs text-slate-400 uppercase tracking-wide">WAITING</p>
           </div>
         </div>
       </div>
