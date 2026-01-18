@@ -46,9 +46,10 @@ function formatDuration(seconds: number): string {
 
 export default function Mobley() {
   const queryClient = useQueryClient();
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(true); // Admin enabled by default for now
   const [adminPin, setAdminPin] = useState("");
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showDemoPreview, setShowDemoPreview] = useState(false); // Toggle for demo preview
   const [pinError, setPinError] = useState(false);
   const [pinDigits, setPinDigits] = useState(["", "", "", ""]);
   const [callDuration, setCallDuration] = useState(0);
@@ -434,10 +435,10 @@ export default function Mobley() {
   const realCount = participantsData?.count || 0;
   const conferenceActive = participantsData?.conferenceActive || false;
   
-  const isPreviewMode = realCount === 0;
-  const unsortedParticipants = isPreviewMode ? sampleParticipants : realParticipants;
-  const participantCount = isPreviewMode ? sampleParticipants.length : realCount;
-  const unsortedExpected = isPreviewMode ? sampleExpected : (expectedData || []);
+  const isPreviewMode = showDemoPreview;
+  const unsortedParticipants = showDemoPreview ? sampleParticipants : realParticipants;
+  const participantCount = showDemoPreview ? sampleParticipants.length : realCount;
+  const unsortedExpected = showDemoPreview ? sampleExpected : (expectedData || []);
   
   const expectedParticipants = [...unsortedExpected].sort((a, b) => {
     return roleOrder[a.role] - roleOrder[b.role];
@@ -449,7 +450,7 @@ export default function Mobley() {
     return roleOrder[roleA] - roleOrder[roleB];
   });
   
-  const hasActiveCall = conferenceActive || isPreviewMode;
+  const hasActiveCall = conferenceActive || showDemoPreview;
 
   useEffect(() => {
     if (hasActiveCall && !callStartTime) {
@@ -731,7 +732,7 @@ export default function Mobley() {
           </div>
           
           <button 
-            onClick={() => setShowPinModal(true)}
+            onClick={() => setShowDemoPreview(!showDemoPreview)}
             className="absolute left-1/2 -translate-x-1/2 text-xl font-bold hover:text-emerald-400 transition-colors" 
             data-testid="text-title"
           >
@@ -1121,7 +1122,7 @@ export default function Mobley() {
         </div>
         
         <button 
-          onClick={() => setShowPinModal(true)}
+          onClick={() => setShowDemoPreview(true)}
           className="text-5xl font-bold mb-8 text-center hover:text-emerald-400 transition-colors" 
           data-testid="text-title"
         >
