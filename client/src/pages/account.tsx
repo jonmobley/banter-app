@@ -48,11 +48,11 @@ export default function Account() {
                 });
               }
             }}
-            className="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-4 px-6 rounded-full transition-colors mb-6"
+            className="flex items-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-4 px-6 rounded-full transition-colors mb-6"
             data-testid="button-share"
           >
-            <Share className="w-5 h-5" />
-            Share
+            <Share className="w-5 h-5 text-emerald-400" />
+            <span className="ml-3">Share</span>
           </button>
 
           <div className="flex flex-col gap-3">
