@@ -425,15 +425,27 @@ export default function Mobley() {
   };
   
   const canShowControls = isAdmin || isUserHost();
+  
+  const roleOrder = { host: 0, participant: 1, listener: 2 };
 
   const realParticipants = participantsData?.participants || [];
   const realCount = participantsData?.count || 0;
   const conferenceActive = participantsData?.conferenceActive || false;
   
   const isPreviewMode = realCount === 0;
-  const participants = isPreviewMode ? sampleParticipants : realParticipants;
+  const unsortedParticipants = isPreviewMode ? sampleParticipants : realParticipants;
   const participantCount = isPreviewMode ? sampleParticipants.length : realCount;
-  const expectedParticipants = isPreviewMode ? sampleExpected : (expectedData || []);
+  const unsortedExpected = isPreviewMode ? sampleExpected : (expectedData || []);
+  
+  const expectedParticipants = [...unsortedExpected].sort((a, b) => {
+    return roleOrder[a.role] - roleOrder[b.role];
+  });
+  
+  const participants = [...unsortedParticipants].sort((a, b) => {
+    const roleA = getParticipantRole(a.phone) || 'participant';
+    const roleB = getParticipantRole(b.phone) || 'participant';
+    return roleOrder[roleA] - roleOrder[roleB];
+  });
   
   const hasActiveCall = conferenceActive || isPreviewMode;
 
