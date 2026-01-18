@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical } from "lucide-react";
 import { Link } from "wouter";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface Participant {
   callSid: string;
@@ -137,6 +137,18 @@ export default function Mobley() {
   });
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (openDropdown && dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openDropdown]);
+
   const [showAddExpectedModal, setShowAddExpectedModal] = useState(false);
   const [newExpectedName, setNewExpectedName] = useState("");
   const [newExpectedPhone, setNewExpectedPhone] = useState("");
@@ -441,7 +453,7 @@ export default function Mobley() {
                     </p>
                     <p className="text-xs text-slate-500 truncate">{formatPhone(ep.phone)}</p>
                   </div>
-                  <div className="relative">
+                  <div className="relative" ref={openDropdown === ep.id ? dropdownRef : undefined}>
                     <button
                       onClick={() => setOpenDropdown(openDropdown === ep.id ? null : ep.id)}
                       className="p-2 rounded-lg bg-slate-600/30 hover:bg-slate-600/50 transition-colors"
