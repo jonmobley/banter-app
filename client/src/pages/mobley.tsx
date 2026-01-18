@@ -730,26 +730,15 @@ export default function Mobley() {
             </div>
           </div>
           
-          <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold" data-testid="text-title">Banter</h1>
+          <button 
+            onClick={() => setShowPinModal(true)}
+            className="absolute left-1/2 -translate-x-1/2 text-xl font-bold hover:text-emerald-400 transition-colors" 
+            data-testid="text-title"
+          >
+            Banter
+          </button>
           
           <div className="flex items-center gap-2">
-            {verifiedPhone ? (
-              <button
-                onClick={handleLogout}
-                className="px-3 py-2 rounded-full bg-blue-500/20 hover:bg-blue-500/30 transition-colors flex items-center gap-2"
-                data-testid="button-logout"
-              >
-                <span className="text-xs text-blue-400">Signed in</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => setShowLoginModal(true)}
-                className="px-3 py-2 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
-                data-testid="button-login"
-              >
-                <span className="text-xs text-slate-400">Sign in</span>
-              </button>
-            )}
             {isAdmin && (
               <Link
                 href="/account"
@@ -759,7 +748,7 @@ export default function Mobley() {
                 <Settings className="w-5 h-5 text-slate-400" />
               </Link>
             )}
-            {isAdmin ? (
+            {isAdmin && (
               <button
                 onClick={() => setShowAddExpectedModal(true)}
                 className="p-3 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 transition-colors"
@@ -767,15 +756,18 @@ export default function Mobley() {
               >
                 <Plus className="w-5 h-5 text-emerald-400" />
               </button>
-            ) : (
-              <button
-                onClick={() => setShowPinModal(true)}
-                className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
-                data-testid="button-admin"
-              >
-                <User className="w-5 h-5 text-slate-400" />
-              </button>
             )}
+            <button
+              onClick={() => verifiedPhone ? handleLogout() : setShowLoginModal(true)}
+              className={`p-3 rounded-full transition-colors ${
+                verifiedPhone 
+                  ? 'bg-blue-500/20 hover:bg-blue-500/30' 
+                  : 'bg-slate-800/50 hover:bg-slate-700'
+              }`}
+              data-testid="button-profile"
+            >
+              <User className={`w-5 h-5 ${verifiedPhone ? 'text-blue-400' : 'text-slate-400'}`} />
+            </button>
           </div>
         </header>
 
@@ -1107,40 +1099,16 @@ export default function Mobley() {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col relative">
       <div className="absolute top-4 right-4 flex items-center gap-2">
-        {verifiedPhone ? (
-          <button
-            onClick={handleLogout}
-            className="px-3 py-2 rounded-full bg-blue-500/20 hover:bg-blue-500/30 transition-colors"
-            data-testid="button-logout"
-          >
-            <span className="text-xs text-blue-400">Signed in</span>
-          </button>
-        ) : (
-          <button
-            onClick={() => setShowLoginModal(true)}
-            className="px-3 py-2 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
-            data-testid="button-login"
-          >
-            <span className="text-xs text-slate-400">Sign in</span>
-          </button>
-        )}
         <button
-          onClick={() => {
-            if (isAdmin) {
-              setIsAdmin(false);
-              setAdminPin("");
-            } else {
-              setShowPinModal(true);
-            }
-          }}
-          className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
-          data-testid="button-admin"
+          onClick={() => verifiedPhone ? handleLogout() : setShowLoginModal(true)}
+          className={`p-3 rounded-full transition-colors ${
+            verifiedPhone 
+              ? 'bg-blue-500/20 hover:bg-blue-500/30' 
+              : 'bg-slate-800/50 hover:bg-slate-700'
+          }`}
+          data-testid="button-profile"
         >
-          {isAdmin ? (
-            <User className="w-5 h-5 text-emerald-400" />
-          ) : (
-            <User className="w-5 h-5 text-slate-400" />
-          )}
+          <User className={`w-5 h-5 ${verifiedPhone ? 'text-blue-400' : 'text-slate-400'}`} />
         </button>
       </div>
 
@@ -1152,16 +1120,21 @@ export default function Mobley() {
           <Phone className="w-10 h-10 text-emerald-400" />
         </div>
         
-        <h1 className="text-5xl font-bold mb-8 text-center" data-testid="text-title">Banter</h1>
+        <button 
+          onClick={() => setShowPinModal(true)}
+          className="text-5xl font-bold mb-8 text-center hover:text-emerald-400 transition-colors" 
+          data-testid="text-title"
+        >
+          Banter
+        </button>
 
         <div className="flex flex-col gap-4 w-full max-w-xs">
           <a
             href="tel:+12202423245"
-            className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+            className="flex items-center justify-center w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
             data-testid="button-join"
           >
-            <Phone className="w-5 h-5" />
-            Banter
+            Join
           </a>
           
           {isAdmin && (
