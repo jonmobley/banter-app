@@ -52,6 +52,56 @@ export default function Mobley() {
   const [pinDigits, setPinDigits] = useState(["", "", "", ""]);
   const [callDuration, setCallDuration] = useState(0);
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
+  const [speakingState, setSpeakingState] = useState<Record<string, boolean>>({});
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    
+    const connect = () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        return;
+      }
+      
+      const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+      wsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'speaking') {
+            setSpeakingState(msg.data);
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      };
+
+      ws.onclose = () => {
+        wsRef.current = null;
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+        }
+        reconnectTimeoutRef.current = setTimeout(connect, 2000);
+      };
+      
+      ws.onerror = () => {
+        ws.close();
+      };
+    };
+    
+    connect();
+
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
 
   const { data: participantsData } = useQuery<ParticipantsData>({
     queryKey: ["/api/participants"],
@@ -500,13 +550,21 @@ export default function Mobley() {
 
         <div className="flex-1 overflow-auto px-4 pb-48">
           <div className="space-y-2">
-            {participants.map((p, i) => (
+            {participants.map((p, i) => {
+              const isSpeaking = speakingState[p.callSid] || false;
+              return (
               <div 
                 key={p.callSid} 
-                className="flex items-center gap-3 bg-slate-800/50 rounded-lg px-4 py-3"
+                className={`flex items-center gap-3 rounded-lg px-4 py-3 transition-colors duration-200 ${
+                  isSpeaking 
+                    ? 'bg-emerald-500/30 ring-2 ring-emerald-400/50' 
+                    : 'bg-slate-800/50'
+                }`}
                 data-testid={`participant-${i}`}
               >
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-200 ${
+                  isSpeaking ? 'bg-emerald-400/40' : 'bg-emerald-500/20'
+                }`}>
                   <span className="text-base font-medium text-emerald-400">
                     {p.name ? p.name.charAt(0).toUpperCase() : '?'}
                   </span>
@@ -570,7 +628,8 @@ export default function Mobley() {
                   )}
                 </div>
               </div>
-            ))}
+            );
+            })}
             
             {expectedParticipants
               .filter(ep => {

@@ -182,7 +182,9 @@ export async function registerRoutes(
     
     // Get the host for the media stream WebSocket URL
     const host = req.headers.host || 'localhost:5000';
-    const protocol = host.includes('replit') ? 'wss' : 'ws';
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const isSecure = forwardedProto === 'https' || req.protocol === 'https' || host.includes('replit');
+    const protocol = isSecure ? 'wss' : 'ws';
     
     // Start media stream for voice activity detection
     const start = twiml.start();
