@@ -25,6 +25,83 @@ import { getTwilioClient, getTwilioFromPhoneNumber, getTwilioCredentials, getTwi
 import twilio_jwt from "twilio/lib/jwt/AccessToken";
 import { WebSocketServer, WebSocket } from "ws";
 import { normalizePhone } from "@shared/schema";
+import crypto from "crypto";
+
+// Secret key for signing auth tokens - must be a strong, persistent secret
+// In production, AUTH_TOKEN_SECRET must be set to a 64+ character random string
+const getAuthSecret = (): string => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  // Dedicated auth secret (required in production)
+  if (process.env.AUTH_TOKEN_SECRET && process.env.AUTH_TOKEN_SECRET.length >= 32) {
+    return process.env.AUTH_TOKEN_SECRET;
+  }
+  
+  if (isProduction) {
+    // In production, fail fast if AUTH_TOKEN_SECRET is missing
+    throw new Error(
+      'FATAL: AUTH_TOKEN_SECRET environment variable is required in production. ' +
+      'Please set AUTH_TOKEN_SECRET to a random 64+ character string.'
+    );
+  }
+  
+  // Development only: use a derived key for convenience
+  // This allows testing without setting up secrets
+  console.warn('WARNING: Using derived auth secret. Set AUTH_TOKEN_SECRET in production!');
+  const sources = [
+    process.env.DATABASE_URL || '',
+    process.env.REPLIT_DEV_DOMAIN || 'localhost',
+    'banter-auth-dev-v1-2024'
+  ];
+  return crypto.createHash('sha256').update(sources.join('|')).digest('hex');
+};
+const AUTH_SECRET = getAuthSecret();
+
+/**
+ * Create a signed auth token for a verified phone number.
+ * Token format: phone:expiry:signature
+ */
+function createAuthToken(phone: string): string {
+  const normalizedPhone = normalizePhone(phone);
+  const expiry = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+  const data = `${normalizedPhone}:${expiry}`;
+  const signature = crypto.createHmac('sha256', AUTH_SECRET).update(data).digest('hex');
+  return Buffer.from(`${data}:${signature}`).toString('base64');
+}
+
+/**
+ * Verify an auth token and extract the phone number.
+ * Returns the phone number if valid, null if invalid or expired.
+ */
+function verifyAuthToken(token: string): string | null {
+  try {
+    const decoded = Buffer.from(token, 'base64').toString('utf8');
+    const parts = decoded.split(':');
+    if (parts.length !== 3) return null;
+    
+    const [phone, expiryStr, signature] = parts;
+    const expiry = parseInt(expiryStr, 10);
+    
+    // Check expiry
+    if (Date.now() > expiry) {
+      log(`Auth token expired for ${phone}`, "auth");
+      return null;
+    }
+    
+    // Verify signature
+    const data = `${phone}:${expiryStr}`;
+    const expectedSignature = crypto.createHmac('sha256', AUTH_SECRET).update(data).digest('hex');
+    
+    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+      log(`Invalid auth token signature for ${phone}`, "auth");
+      return null;
+    }
+    
+    return phone;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Get the public base URL for webhook callbacks
@@ -446,8 +523,11 @@ export async function registerRoutes(
       // Clean up used code
       await storage.deleteVerificationCodes(normalizedPhone);
 
+      // Create signed auth token for this phone
+      const authToken = createAuthToken(normalizedPhone);
+
       log(`✅ Verified phone ${normalizedPhone}`, "auth");
-      res.json({ success: true, phone: normalizedPhone });
+      res.json({ success: true, phone: normalizedPhone, authToken });
     } catch (error: any) {
       log(`Error verifying code: ${error.message}`, "auth");
       res.status(500).json({ error: "Failed to verify code" });
@@ -582,6 +662,160 @@ export async function registerRoutes(
         participants: [],
         conferenceActive: false
       });
+    }
+  });
+
+  // Rate limiting for sensitive endpoints
+  const disconnectRateLimiter = new Map<string, { count: number; lastReset: number }>();
+  const DISCONNECT_RATE_LIMIT = 3; // Max 3 disconnect attempts per minute
+  const DISCONNECT_RATE_WINDOW = 60000; // 1 minute
+
+  /**
+   * POST /api/participants/check
+   * 
+   * Checks if the authenticated user's phone is already in the active conference.
+   * Requires a valid auth token from phone verification.
+   */
+  app.post("/api/participants/check", async (req, res) => {
+    try {
+      const { authToken } = req.body;
+      
+      if (!authToken) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      
+      // Verify the auth token and extract the phone
+      const verifiedPhone = verifyAuthToken(authToken);
+      if (!verifiedPhone) {
+        return res.status(401).json({ error: "Invalid or expired authentication" });
+      }
+      
+      const client = await getTwilioClient();
+      const phoneToCheck = verifiedPhone; // Use the verified phone from token, not client input
+      
+      // Find active conference
+      const conferences = await client.conferences.list({
+        friendlyName: 'banter-main',
+        status: 'in-progress',
+        limit: 1
+      });
+
+      if (conferences.length === 0) {
+        return res.json({ inConference: false, conferenceActive: false });
+      }
+
+      const conference = conferences[0];
+      const participants = await client.conferences(conference.sid).participants.list();
+
+      // Check each participant's phone number (both from and to for outbound calls)
+      for (const p of participants) {
+        try {
+          const call = await client.calls(p.callSid).fetch();
+          const fromPhone = normalizePhone(call.from);
+          const toPhone = normalizePhone(call.to);
+          
+          // Match against both from and to (handles inbound and outbound/auto-dial)
+          if (fromPhone === phoneToCheck || toPhone === phoneToCheck) {
+            return res.json({ 
+              inConference: true, 
+              conferenceActive: true
+            });
+          }
+        } catch {
+          // Skip if we can't fetch call details
+        }
+      }
+
+      return res.json({ inConference: false, conferenceActive: true });
+    } catch (error: any) {
+      log(`Error checking participant: ${error.message}`, "twilio");
+      res.status(500).json({ error: "Failed to check participant status" });
+    }
+  });
+
+  /**
+   * POST /api/participants/disconnect-self
+   * 
+   * Disconnects the authenticated user's phone connection from the conference.
+   * Requires a valid auth token from phone verification.
+   * Rate limited to prevent abuse.
+   */
+  app.post("/api/participants/disconnect-self", async (req, res) => {
+    try {
+      const { authToken } = req.body;
+      
+      if (!authToken) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      
+      // Verify the auth token and extract the phone
+      const verifiedPhone = verifyAuthToken(authToken);
+      if (!verifiedPhone) {
+        return res.status(401).json({ error: "Invalid or expired authentication" });
+      }
+      
+      const phoneToDisconnect = verifiedPhone; // Use verified phone from token, not client input
+      
+      // Rate limiting to prevent abuse
+      const now = Date.now();
+      const rateKey = phoneToDisconnect;
+      const rateData = disconnectRateLimiter.get(rateKey);
+      
+      if (rateData) {
+        if (now - rateData.lastReset > DISCONNECT_RATE_WINDOW) {
+          // Reset window
+          disconnectRateLimiter.set(rateKey, { count: 1, lastReset: now });
+        } else if (rateData.count >= DISCONNECT_RATE_LIMIT) {
+          log(`Rate limit exceeded for disconnect: ${phoneToDisconnect}`, "twilio");
+          return res.status(429).json({ error: "Too many requests. Please wait a moment." });
+        } else {
+          rateData.count++;
+        }
+      } else {
+        disconnectRateLimiter.set(rateKey, { count: 1, lastReset: now });
+      }
+      
+      const client = await getTwilioClient();
+      
+      // Find active conference
+      const conferences = await client.conferences.list({
+        friendlyName: 'banter-main',
+        status: 'in-progress',
+        limit: 1
+      });
+
+      if (conferences.length === 0) {
+        return res.status(404).json({ error: "No active conference" });
+      }
+
+      const conference = conferences[0];
+      const participants = await client.conferences(conference.sid).participants.list();
+
+      // Find and disconnect the participant's call
+      for (const p of participants) {
+        try {
+          const call = await client.calls(p.callSid).fetch();
+          const fromPhone = normalizePhone(call.from);
+          const toPhone = normalizePhone(call.to);
+          
+          // Match against both from and to (handles inbound and outbound/auto-dial)
+          if (fromPhone === phoneToDisconnect || toPhone === phoneToDisconnect) {
+            await client.conferences(conference.sid)
+              .participants(p.callSid)
+              .remove();
+            
+            log(`Participant ${phoneToDisconnect} disconnected self for method switch`, "twilio");
+            return res.json({ success: true });
+          }
+        } catch {
+          // Skip if we can't fetch call details
+        }
+      }
+      
+      return res.status(404).json({ error: "Participant not found in conference" });
+    } catch (error: any) {
+      log(`Error disconnecting participant: ${error.message}`, "twilio");
+      res.status(500).json({ error: "Failed to disconnect participant" });
     }
   });
 

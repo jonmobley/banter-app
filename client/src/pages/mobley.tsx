@@ -451,12 +451,20 @@ export default function Mobley() {
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(() => {
     return localStorage.getItem('banter_verified_phone');
   });
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    return localStorage.getItem('banter_auth_token');
+  });
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginPhone, setLoginPhone] = useState("");
   const [loginCode, setLoginCode] = useState("");
   const [loginStep, setLoginStep] = useState<'phone' | 'code'>('phone');
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  
+  // Duplicate join detection state
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [duplicateCallSid, setDuplicateCallSid] = useState<string | null>(null);
+  const [duplicateCheckLoading, setDuplicateCheckLoading] = useState(false);
 
   const sendVerificationCode = async () => {
     setLoginLoading(true);
@@ -494,7 +502,9 @@ export default function Mobley() {
       }
       const data = await res.json();
       setVerifiedPhone(data.phone);
+      setAuthToken(data.authToken);
       localStorage.setItem('banter_verified_phone', data.phone);
+      localStorage.setItem('banter_auth_token', data.authToken);
       setShowLoginModal(false);
       resetLoginModal();
     } catch (err: any) {
@@ -538,7 +548,9 @@ export default function Mobley() {
 
   const handleLogout = () => {
     setVerifiedPhone(null);
+    setAuthToken(null);
     localStorage.removeItem('banter_verified_phone');
+    localStorage.removeItem('banter_auth_token');
   };
 
   // Normalize phone to E.164 format (same as server-side)
@@ -710,9 +722,30 @@ export default function Mobley() {
     return roleOrder[roleA] - roleOrder[roleB];
   });
   
-  // Browser call join function (defined after verifiedPhone and expectedData)
-  const joinFromBrowser = useCallback(() => {
-    // Get user identity - use verified phone name or guest
+  // Check for duplicate join before connecting
+  const checkForDuplicateJoin = useCallback(async (): Promise<{ isDuplicate: boolean }> => {
+    if (!authToken) {
+      return { isDuplicate: false };
+    }
+    
+    try {
+      const res = await fetch('/api/participants/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken })
+      });
+      if (!res.ok) {
+        return { isDuplicate: false };
+      }
+      const data = await res.json();
+      return { isDuplicate: data.inConference };
+    } catch {
+      return { isDuplicate: false };
+    }
+  }, [authToken]);
+
+  // The actual browser join logic
+  const proceedWithBrowserJoin = useCallback(() => {
     let identity = 'Web User';
     if (verifiedPhone) {
       const matchingParticipant = expectedData?.find(p => {
@@ -728,6 +761,49 @@ export default function Mobley() {
     }
     initTwilioDevice(identity);
   }, [verifiedPhone, expectedData, initTwilioDevice]);
+
+  // Disconnect phone call and connect via browser
+  const switchToBrowser = useCallback(async () => {
+    if (!authToken) return;
+    
+    try {
+      await fetch('/api/participants/disconnect-self', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken })
+      });
+    } catch {
+      // Continue anyway - the phone will hang up
+    }
+    
+    setShowDuplicateWarning(false);
+    setDuplicateCallSid(null);
+    
+    // Wait a moment for the disconnect to process
+    setTimeout(() => {
+      proceedWithBrowserJoin();
+    }, 1000);
+  }, [authToken, proceedWithBrowserJoin]);
+
+  // Browser call join function (defined after verifiedPhone and expectedData)
+  const joinFromBrowser = useCallback(async () => {
+    // Check if user is already in conference via phone
+    setDuplicateCheckLoading(true);
+    
+    try {
+      const { isDuplicate } = await checkForDuplicateJoin();
+      
+      if (isDuplicate) {
+        setShowDuplicateWarning(true);
+        return;
+      }
+    } finally {
+      setDuplicateCheckLoading(false);
+    }
+    
+    // No duplicate, proceed with join
+    proceedWithBrowserJoin();
+  }, [checkForDuplicateJoin, proceedWithBrowserJoin]);
   
   const hasActiveCall = conferenceActive || showDemoPreview;
 
@@ -883,6 +959,42 @@ export default function Mobley() {
             data-testid="button-login-cancel"
           >
             Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const duplicateWarningModal = (
+    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+        <div className="flex justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center">
+            <Phone className="w-8 h-8 text-amber-400" />
+          </div>
+        </div>
+        <h2 className="text-xl font-bold text-center mb-2">Already Connected</h2>
+        <p className="text-sm text-slate-400 text-center mb-6">
+          You're already in this call on your phone. Would you like to switch to your browser instead?
+        </p>
+        
+        <div className="space-y-3">
+          <button
+            onClick={switchToBrowser}
+            className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
+            data-testid="button-switch-to-browser"
+          >
+            Switch to Browser
+          </button>
+          <button
+            onClick={() => {
+              setShowDuplicateWarning(false);
+              setDuplicateCallSid(null);
+            }}
+            className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+            data-testid="button-stay-on-phone"
+          >
+            Stay on Phone
           </button>
         </div>
       </div>
@@ -1464,11 +1576,12 @@ export default function Mobley() {
                 </a>
                 <button
                   onClick={joinFromBrowser}
-                  className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  disabled={duplicateCheckLoading}
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
                   data-testid="button-join-browser"
                 >
                   <Globe className="w-5 h-5" />
-                  Browser
+                  {duplicateCheckLoading ? 'Checking...' : 'Browser'}
                 </button>
               </div>
             )}
@@ -1482,6 +1595,7 @@ export default function Mobley() {
         {showAddExpectedModal && addExpectedModal}
         {showProfileDrawer && profileDrawer}
         {showLoginModal && loginModal}
+        {showDuplicateWarning && duplicateWarningModal}
       </div>
     );
   }
@@ -1518,6 +1632,7 @@ export default function Mobley() {
 
       {showPinModal && pinModal}
       {showLoginModal && loginModal}
+      {showDuplicateWarning && duplicateWarningModal}
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-8">
@@ -1585,11 +1700,12 @@ export default function Mobley() {
                 </a>
                 <button
                   onClick={joinFromBrowser}
-                  className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  disabled={duplicateCheckLoading}
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
                   data-testid="button-join-browser-home"
                 >
                   <Globe className="w-5 h-5" />
-                  Browser
+                  {duplicateCheckLoading ? 'Checking...' : 'Browser'}
                 </button>
               </div>
               
