@@ -191,6 +191,10 @@ export default function Mobley() {
     { callSid: "sample-3", phone: "+14155550000", name: null, muted: false, hold: false },
   ];
 
+  const sampleExpected: ExpectedParticipant[] = [
+    { id: "sample-exp-1", name: "Dad", phone: "+12025559999" },
+  ];
+
   const realParticipants = participantsData?.participants || [];
   const realCount = participantsData?.count || 0;
   const conferenceActive = participantsData?.conferenceActive || false;
@@ -198,6 +202,7 @@ export default function Mobley() {
   const isPreviewMode = realCount === 0;
   const participants = isPreviewMode ? sampleParticipants : realParticipants;
   const participantCount = isPreviewMode ? sampleParticipants.length : realCount;
+  const expectedParticipants = isPreviewMode ? sampleExpected : (expectedData || []);
   
   const hasActiveCall = conferenceActive || isPreviewMode;
 
@@ -406,7 +411,7 @@ export default function Mobley() {
               </div>
             ))}
             
-            {(expectedData || [])
+            {expectedParticipants
               .filter(ep => {
                 const normalizedExpected = ep.phone.replace(/\D/g, '');
                 return !participants.some(p => {
