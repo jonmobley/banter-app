@@ -363,6 +363,38 @@ export async function registerRoutes(
   });
 
   /**
+   * PATCH /api/expected/:id
+   * 
+   * Updates an expected participant's details. Requires admin PIN.
+   */
+  app.patch("/api/expected/:id", async (req, res) => {
+    try {
+      const { pin, name, phone, email } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      const updateData: { name?: string; phone?: string; email?: string } = {};
+      if (name !== undefined) updateData.name = name;
+      if (phone !== undefined) updateData.phone = phone;
+      if (email !== undefined) updateData.email = email;
+      
+      const updated = await storage.updateExpectedParticipant(req.params.id, updateData);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Participant not found" });
+      }
+      
+      res.json(updated);
+    } catch (error: any) {
+      log(`Error updating expected participant: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to update expected participant" });
+    }
+  });
+
+  /**
    * POST /api/expected/:id/remind
    * 
    * Sends an SMS reminder to an expected participant. Requires admin PIN.
