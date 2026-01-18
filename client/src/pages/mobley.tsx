@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Ban, Users, Lock, Unlock, Volume2, VolumeX, Settings } from "lucide-react";
+import { Phone, Ban, Users, Lock, Unlock, Volume2, VolumeX, Settings, MoreVertical } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
 
@@ -9,6 +9,12 @@ interface Participant {
   name: string | null;
   muted: boolean;
   hold: boolean;
+}
+
+interface ExpectedParticipant {
+  id: string;
+  name: string;
+  phone: string;
 }
 
 interface ParticipantsData {
@@ -92,6 +98,45 @@ export default function Mobley() {
       queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
     },
   });
+
+  const { data: expectedData } = useQuery<ExpectedParticipant[]>({
+    queryKey: ["/api/expected"],
+    queryFn: async () => {
+      const res = await fetch("/api/expected");
+      if (!res.ok) throw new Error("Failed to fetch expected");
+      return res.json();
+    },
+    refetchInterval: 5000,
+  });
+
+  const removeExpected = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/expected/${id}`, { 
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin }),
+      });
+      if (!res.ok) throw new Error("Failed to remove");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
+    },
+  });
+
+  const remindExpected = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/expected/${id}/remind`, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin }),
+      });
+      if (!res.ok) throw new Error("Failed to remind");
+      return res.json();
+    },
+  });
+
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
 
   const handlePinDigit = (index: number, value: string) => {
     if (value.length > 1) return;
@@ -290,6 +335,69 @@ export default function Mobley() {
                 </button>
               </div>
             ))}
+            
+            {(expectedData || [])
+              .filter(ep => {
+                const normalizedExpected = ep.phone.replace(/\D/g, '');
+                return !participants.some(p => {
+                  const normalizedActive = p.phone.replace(/\D/g, '');
+                  return normalizedActive === normalizedExpected || 
+                         normalizedActive.endsWith(normalizedExpected) ||
+                         normalizedExpected.endsWith(normalizedActive);
+                });
+              })
+              .map((ep, i) => (
+                <div 
+                  key={ep.id} 
+                  className="flex items-center gap-3 bg-slate-700/30 rounded-lg px-4 py-3"
+                  data-testid={`expected-${i}`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-slate-600/30 flex items-center justify-center">
+                    <span className="text-base font-medium text-slate-400">
+                      {ep.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-400 truncate">
+                      {ep.name}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">{formatPhone(ep.phone)}</p>
+                  </div>
+                  <div className="relative">
+                    <button
+                      onClick={() => setOpenDropdown(openDropdown === ep.id ? null : ep.id)}
+                      className="p-2 rounded-lg bg-slate-600/30 hover:bg-slate-600/50 transition-colors"
+                      data-testid={`button-menu-${i}`}
+                    >
+                      <MoreVertical className="w-5 h-5 text-slate-400" />
+                    </button>
+                    {openDropdown === ep.id && (
+                      <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[120px]">
+                        <button
+                          onClick={() => {
+                            remindExpected.mutate(ep.id);
+                            setOpenDropdown(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                          data-testid={`button-remind-${i}`}
+                        >
+                          Remind
+                        </button>
+                        <button
+                          onClick={() => {
+                            removeExpected.mutate(ep.id);
+                            setOpenDropdown(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700"
+                          data-testid={`button-remove-${i}`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
           </div>
         </div>
 

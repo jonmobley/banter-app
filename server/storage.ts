@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Contact, type InsertContact, contacts } from "@shared/schema";
+import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, expectedParticipants } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
@@ -20,6 +20,11 @@ export interface IStorage {
   getContactByPhone(phone: string): Promise<Contact | undefined>;
   createContact(contact: InsertContact): Promise<Contact>;
   deleteContact(id: string): Promise<void>;
+  
+  // Expected Participants
+  getExpectedParticipants(): Promise<ExpectedParticipant[]>;
+  addExpectedParticipant(participant: InsertExpectedParticipant): Promise<ExpectedParticipant>;
+  removeExpectedParticipant(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -56,6 +61,19 @@ export class DatabaseStorage implements IStorage {
 
   async deleteContact(id: string): Promise<void> {
     await db.delete(contacts).where(eq(contacts.id, id));
+  }
+
+  async getExpectedParticipants(): Promise<ExpectedParticipant[]> {
+    return await db.select().from(expectedParticipants);
+  }
+
+  async addExpectedParticipant(participant: InsertExpectedParticipant): Promise<ExpectedParticipant> {
+    const [newParticipant] = await db.insert(expectedParticipants).values(participant).returning();
+    return newParticipant;
+  }
+
+  async removeExpectedParticipant(id: string): Promise<void> {
+    await db.delete(expectedParticipants).where(eq(expectedParticipants.id, id));
   }
 }
 

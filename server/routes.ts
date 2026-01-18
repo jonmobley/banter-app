@@ -300,5 +300,105 @@ export async function registerRoutes(
     }
   });
 
+  /**
+   * GET /api/expected
+   * 
+   * Lists all expected participants.
+   */
+  app.get("/api/expected", async (_req, res) => {
+    try {
+      const expected = await storage.getExpectedParticipants();
+      res.json(expected);
+    } catch (error: any) {
+      log(`Error fetching expected participants: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to fetch expected participants" });
+    }
+  });
+
+  /**
+   * POST /api/expected
+   * 
+   * Adds an expected participant. Requires admin PIN.
+   */
+  app.post("/api/expected", async (req, res) => {
+    try {
+      const { pin, name, phone } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      if (!name || !phone) {
+        return res.status(400).json({ error: "Name and phone are required" });
+      }
+      const participant = await storage.addExpectedParticipant({ name, phone });
+      res.json(participant);
+    } catch (error: any) {
+      log(`Error adding expected participant: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to add expected participant" });
+    }
+  });
+
+  /**
+   * DELETE /api/expected/:id
+   * 
+   * Removes an expected participant. Requires admin PIN.
+   */
+  app.delete("/api/expected/:id", async (req, res) => {
+    try {
+      const { pin } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      await storage.removeExpectedParticipant(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      log(`Error removing expected participant: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to remove expected participant" });
+    }
+  });
+
+  /**
+   * POST /api/expected/:id/remind
+   * 
+   * Sends an SMS reminder to an expected participant. Requires admin PIN.
+   */
+  app.post("/api/expected/:id/remind", async (req, res) => {
+    try {
+      const { pin } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      const expected = await storage.getExpectedParticipants();
+      const participant = expected.find(p => p.id === req.params.id);
+      
+      if (!participant) {
+        return res.status(404).json({ error: "Participant not found" });
+      }
+      
+      const client = await getTwilioClient();
+      const twilioNumber = process.env.TWILIO_PHONE_NUMBER || '+12202423245';
+      
+      await client.messages.create({
+        body: `Hey ${participant.name}! Join the Banter call now: (220) 242-3245`,
+        to: participant.phone,
+        from: twilioNumber
+      });
+      
+      log(`SMS reminder sent to ${participant.name} at ${participant.phone}`, "twilio");
+      res.json({ success: true });
+    } catch (error: any) {
+      log(`Error sending reminder: ${error.message}`, "twilio");
+      res.status(500).json({ error: "Failed to send reminder" });
+    }
+  });
+
   return httpServer;
 }
