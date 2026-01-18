@@ -99,6 +99,55 @@ export async function registerRoutes(
   });
 
   /**
+   * GET /api/contacts
+   * 
+   * Lists all saved contacts.
+   */
+  app.get("/api/contacts", async (_req, res) => {
+    try {
+      const contacts = await storage.getContacts();
+      res.json(contacts);
+    } catch (error: any) {
+      log(`Error fetching contacts: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to fetch contacts" });
+    }
+  });
+
+  /**
+   * POST /api/contacts
+   * 
+   * Creates a new contact.
+   */
+  app.post("/api/contacts", async (req, res) => {
+    try {
+      const { name, phone } = req.body;
+      if (!name || !phone) {
+        return res.status(400).json({ error: "Name and phone are required" });
+      }
+      const contact = await storage.createContact({ name, phone });
+      res.json(contact);
+    } catch (error: any) {
+      log(`Error creating contact: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to create contact" });
+    }
+  });
+
+  /**
+   * DELETE /api/contacts/:id
+   * 
+   * Deletes a contact by ID.
+   */
+  app.delete("/api/contacts/:id", async (req, res) => {
+    try {
+      await storage.deleteContact(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      log(`Error deleting contact: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to delete contact" });
+    }
+  });
+
+  /**
    * GET /api/participants
    * 
    * Fetches current participants in the "team-main" conference.
@@ -137,14 +186,16 @@ export async function registerRoutes(
         label: p.label || 'Caller'
       }));
 
-      // Get phone numbers for each participant
+      // Get phone numbers for each participant and match to contacts
       const detailedParticipants = await Promise.all(
         participants.map(async (p) => {
           try {
             const call = await client.calls(p.callSid).fetch();
+            const contact = await storage.getContactByPhone(call.from);
             return {
               callSid: p.callSid,
               phone: call.from,
+              name: contact?.name || null,
               muted: p.muted,
               hold: p.hold,
               duration: call.duration
@@ -153,6 +204,7 @@ export async function registerRoutes(
             return {
               callSid: p.callSid,
               phone: 'Unknown',
+              name: null,
               muted: p.muted,
               hold: p.hold
             };
