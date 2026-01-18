@@ -35,7 +35,7 @@ export default function Account() {
             data-testid="button-join"
           >
             <Phone className="w-5 h-5" />
-            Join the Banter
+            Banter
           </a>
 
           <button

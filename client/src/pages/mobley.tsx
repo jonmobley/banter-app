@@ -1,4 +1,4 @@
-import { Radio, Phone, Ban } from "lucide-react";
+import { Phone, Ban } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Mobley() {
@@ -6,7 +6,7 @@ export default function Mobley() {
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-8">
-          <Radio className="w-10 h-10 text-emerald-400" />
+          <Phone className="w-10 h-10 text-emerald-400" />
         </div>
         
         <h1 className="text-5xl font-bold mb-3 text-center" data-testid="text-title">Banter</h1>
@@ -15,14 +15,14 @@ export default function Mobley() {
         </p>
 
         <div className="flex flex-col gap-4 w-full max-w-xs">
-          <Link
-            href="/mobley"
+          <a
+            href="tel:+12202423245"
             className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
             data-testid="button-join"
           >
             <Phone className="w-5 h-5" />
-            Join the Banter
-          </Link>
+            Banter
+          </a>
           
           <Link
             href="/account"
