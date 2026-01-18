@@ -360,6 +360,9 @@ export default function Mobley() {
       call.on('accept', () => {
         console.log('Browser call connected');
         setBrowserCallStatus('connected');
+        // Default to muted when joining to prevent accidental background noise
+        call.mute(true);
+        setIsBrowserMuted(true);
       });
       
       call.on('disconnect', () => {
@@ -434,6 +437,10 @@ export default function Mobley() {
       const newMuted = !isBrowserMuted;
       activeCall.mute(newMuted);
       setIsBrowserMuted(newMuted);
+      // Haptic feedback for tactile confirmation
+      if (navigator.vibrate) {
+        navigator.vibrate(newMuted ? 50 : [50, 30, 50]); // Short pulse for mute, double pulse for unmute
+      }
     }
   }, [activeCall, isBrowserMuted]);
   
@@ -1536,23 +1543,22 @@ export default function Mobley() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={toggleBrowserMute}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full transition-colors ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all active:scale-95 ${
                     isBrowserMuted 
-                      ? 'bg-red-500 hover:bg-red-400 text-white' 
-                      : 'bg-slate-700 hover:bg-slate-600 text-white'
+                      ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border-2 border-red-500/50' 
+                      : 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25'
                   }`}
                   data-testid="button-browser-mute"
                 >
                   {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {isBrowserMuted ? 'Unmute' : 'Mute'}
+                  {isBrowserMuted ? 'Tap to Unmute' : 'Live'}
                 </button>
                 <button
                   onClick={hangupBrowserCall}
-                  className="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
                   data-testid="button-browser-hangup"
                 >
                   <PhoneOff className="w-5 h-5" />
-                  Leave
                 </button>
               </div>
             ) : browserCallStatus === 'connecting' ? (
@@ -1658,23 +1664,22 @@ export default function Mobley() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={toggleBrowserMute}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full transition-colors ${
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all active:scale-95 ${
                     isBrowserMuted 
-                      ? 'bg-red-500 hover:bg-red-400 text-white' 
-                      : 'bg-slate-700 hover:bg-slate-600 text-white'
+                      ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border-2 border-red-500/50' 
+                      : 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25'
                   }`}
                   data-testid="button-browser-mute-home"
                 >
                   {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {isBrowserMuted ? 'Unmute' : 'Mute'}
+                  {isBrowserMuted ? 'Tap to Unmute' : 'Live'}
                 </button>
                 <button
                   onClick={hangupBrowserCall}
-                  className="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
                   data-testid="button-browser-hangup-home"
                 >
                   <PhoneOff className="w-5 h-5" />
-                  Leave
                 </button>
               </div>
             </div>
