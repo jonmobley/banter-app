@@ -498,7 +498,7 @@ export default function Mobley() {
           </div>
         )}
 
-        <div className="flex-1 overflow-auto px-6 pb-48">
+        <div className="flex-1 overflow-auto px-4 pb-48">
           <div className="space-y-2">
             {participants.map((p, i) => (
               <div 
