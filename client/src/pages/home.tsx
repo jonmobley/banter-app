@@ -13,6 +13,17 @@ export default function Home() {
           Instant group call, anytime.
         </p>
 
+        <div className="flex flex-col gap-2 w-full max-w-xs mb-8">
+          <div
+            className="flex items-center justify-center gap-2 w-full bg-emerald-500/50 text-white/70 font-semibold py-4 px-6 rounded-full cursor-not-allowed"
+            data-testid="button-coming-soon"
+          >
+            <Phone className="w-5 h-5" />
+            Banter
+          </div>
+          <p className="text-center text-sm text-slate-500">Coming Soon</p>
+        </div>
+
         <div className="mt-8 grid grid-cols-3 gap-8 text-center max-w-sm">
           <div className="flex flex-col items-center">
             <Ban className="w-6 h-6 text-emerald-400 mb-1" />
