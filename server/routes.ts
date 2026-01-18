@@ -22,13 +22,140 @@ import { storage } from "./storage";
 import twilio from "twilio";
 import { log } from "./index";
 import { getTwilioClient } from "./twilio";
+import { WebSocketServer, WebSocket } from "ws";
 
 const VoiceResponse = twilio.twiml.VoiceResponse;
+
+// Track speaking state for each participant
+const speakingState: Map<string, boolean> = new Map();
+// Track callSid to streamSid mapping
+const streamToCall: Map<string, string> = new Map();
+// Frontend WebSocket clients for real-time updates
+const frontendClients: Set<WebSocket> = new Set();
+
+// Broadcast speaking state to all frontend clients
+function broadcastSpeakingState() {
+  const stateObj: Record<string, boolean> = {};
+  speakingState.forEach((speaking, callSid) => {
+    stateObj[callSid] = speaking;
+  });
+  
+  const message = JSON.stringify({ type: 'speaking', data: stateObj });
+  frontendClients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+}
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  
+  // Set up WebSocket server for frontend clients
+  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  
+  wss.on('connection', (ws) => {
+    log('Frontend WebSocket client connected', 'ws');
+    frontendClients.add(ws);
+    
+    // Send current speaking state on connect
+    const stateObj: Record<string, boolean> = {};
+    speakingState.forEach((speaking, callSid) => {
+      stateObj[callSid] = speaking;
+    });
+    ws.send(JSON.stringify({ type: 'speaking', data: stateObj }));
+    
+    ws.on('close', () => {
+      frontendClients.delete(ws);
+      log('Frontend WebSocket client disconnected', 'ws');
+    });
+  });
+  
+  // Set up WebSocket server for Twilio Media Streams
+  const mediaWss = new WebSocketServer({ server: httpServer, path: '/media-stream' });
+  
+  mediaWss.on('connection', (ws) => {
+    log('Twilio Media Stream connected', 'media');
+    
+    let streamSid: string | null = null;
+    let callSid: string | null = null;
+    let lastSpeakingTime = 0;
+    let isSpeaking = false;
+    
+    // Track audio energy to detect speaking
+    ws.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        
+        if (msg.event === 'start') {
+          streamSid = msg.streamSid;
+          callSid = msg.start?.callSid;
+          if (callSid && streamSid) {
+            streamToCall.set(streamSid, callSid);
+            speakingState.set(callSid, false);
+            log(`Media stream started for call ${callSid}`, 'media');
+          }
+        } else if (msg.event === 'media' && callSid) {
+          // Analyze audio payload for voice activity
+          // Twilio sends base64-encoded mulaw audio
+          const payload = msg.media?.payload;
+          if (payload) {
+            const audioBuffer = Buffer.from(payload, 'base64');
+            
+            // Calculate simple energy level from audio samples
+            let energy = 0;
+            for (let i = 0; i < audioBuffer.length; i++) {
+              // Convert mulaw to linear approximation
+              const sample = Math.abs(audioBuffer[i] - 128);
+              energy += sample * sample;
+            }
+            energy = energy / audioBuffer.length;
+            
+            // Voice activity threshold (adjust as needed)
+            const threshold = 50;
+            const nowSpeaking = energy > threshold;
+            
+            if (nowSpeaking) {
+              lastSpeakingTime = Date.now();
+              if (!isSpeaking) {
+                isSpeaking = true;
+                speakingState.set(callSid, true);
+                broadcastSpeakingState();
+              }
+            } else if (isSpeaking && Date.now() - lastSpeakingTime > 300) {
+              // Stop speaking after 300ms of silence
+              isSpeaking = false;
+              speakingState.set(callSid, false);
+              broadcastSpeakingState();
+            }
+          }
+        } else if (msg.event === 'stop') {
+          if (callSid) {
+            speakingState.delete(callSid);
+            broadcastSpeakingState();
+            log(`Media stream stopped for call ${callSid}`, 'media');
+          }
+          if (streamSid) {
+            streamToCall.delete(streamSid);
+          }
+        }
+      } catch (err) {
+        // Ignore parse errors
+      }
+    });
+    
+    ws.on('close', () => {
+      if (callSid) {
+        speakingState.delete(callSid);
+        broadcastSpeakingState();
+      }
+      if (streamSid) {
+        streamToCall.delete(streamSid);
+      }
+    });
+  });
   
   /**
    * POST /voice/incoming
@@ -53,8 +180,16 @@ export async function registerRoutes(
     // Create TwiML response
     const twiml = new VoiceResponse();
     
-    // Optional: Brief greeting (uncomment if desired)
-    // twiml.say({ voice: 'alice' }, 'Welcome to the team channel.');
+    // Get the host for the media stream WebSocket URL
+    const host = req.headers.host || 'localhost:5000';
+    const protocol = host.includes('replit') ? 'wss' : 'ws';
+    
+    // Start media stream for voice activity detection
+    const start = twiml.start();
+    start.stream({
+      url: `${protocol}://${host}/media-stream`,
+      track: 'inbound_track'
+    });
     
     // Join the caller to the conference
     const dial = twiml.dial();
@@ -83,6 +218,19 @@ export async function registerRoutes(
     res.send(twiml.toString());
     
     log(`✅ Connected ${callerNumber} to conference "banter-main"`, "twilio");
+  });
+  
+  /**
+   * GET /api/speaking
+   * 
+   * Returns current speaking state for all participants.
+   */
+  app.get("/api/speaking", (_req, res) => {
+    const stateObj: Record<string, boolean> = {};
+    speakingState.forEach((speaking, callSid) => {
+      stateObj[callSid] = speaking;
+    });
+    res.json(stateObj);
   });
 
   /**
