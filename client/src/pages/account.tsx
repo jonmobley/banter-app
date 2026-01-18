@@ -58,7 +58,7 @@ export default function Account() {
           <div className="flex flex-col gap-3">
             <Link
               href="/contacts"
-              className="flex items-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-4 px-5 rounded-xl transition-colors"
+              className="flex items-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-4 px-6 rounded-full transition-colors"
               data-testid="button-contacts"
             >
               <Users className="w-5 h-5 text-emerald-400" />
