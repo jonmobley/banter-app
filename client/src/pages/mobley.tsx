@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Ban, Users, Lock, Unlock, Volume2, VolumeX } from "lucide-react";
+import { Phone, Ban, Users, Lock, Unlock, Volume2, VolumeX, Settings } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
 
@@ -221,24 +221,32 @@ export default function Mobley() {
           
           <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold" data-testid="text-title">Banter</h1>
           
-          <button
-            onClick={() => {
-              if (isAdmin) {
-                setIsAdmin(false);
-                setAdminPin("");
-              } else {
-                setShowPinModal(true);
-              }
-            }}
-            className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
-            data-testid="button-admin"
-          >
-            {isAdmin ? (
-              <Unlock className="w-5 h-5 text-emerald-400" />
-            ) : (
-              <Lock className="w-5 h-5 text-slate-400" />
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
+              data-testid="button-settings"
+            >
+              <Settings className="w-5 h-5 text-slate-400" />
+            </button>
+            <button
+              onClick={() => {
+                if (isAdmin) {
+                  setIsAdmin(false);
+                  setAdminPin("");
+                } else {
+                  setShowPinModal(true);
+                }
+              }}
+              className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
+              data-testid="button-admin"
+            >
+              {isAdmin ? (
+                <Unlock className="w-5 h-5 text-emerald-400" />
+              ) : (
+                <Lock className="w-5 h-5 text-slate-400" />
+              )}
+            </button>
+          </div>
         </header>
 
         <div className="flex-1 overflow-auto px-6 pb-48">
