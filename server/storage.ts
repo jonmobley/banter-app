@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, expectedParticipants } from "@shared/schema";
+import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq } from "drizzle-orm";
@@ -23,7 +23,9 @@ export interface IStorage {
   
   // Expected Participants
   getExpectedParticipants(): Promise<ExpectedParticipant[]>;
+  getExpectedParticipant(id: string): Promise<ExpectedParticipant | undefined>;
   addExpectedParticipant(participant: InsertExpectedParticipant): Promise<ExpectedParticipant>;
+  updateExpectedParticipant(id: string, data: UpdateExpectedParticipant): Promise<ExpectedParticipant | undefined>;
   removeExpectedParticipant(id: string): Promise<void>;
 }
 
@@ -67,9 +69,19 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(expectedParticipants);
   }
 
+  async getExpectedParticipant(id: string): Promise<ExpectedParticipant | undefined> {
+    const [participant] = await db.select().from(expectedParticipants).where(eq(expectedParticipants.id, id));
+    return participant;
+  }
+
   async addExpectedParticipant(participant: InsertExpectedParticipant): Promise<ExpectedParticipant> {
     const [newParticipant] = await db.insert(expectedParticipants).values(participant).returning();
     return newParticipant;
+  }
+
+  async updateExpectedParticipant(id: string, data: UpdateExpectedParticipant): Promise<ExpectedParticipant | undefined> {
+    const [updated] = await db.update(expectedParticipants).set(data).where(eq(expectedParticipants.id, id)).returning();
+    return updated;
   }
 
   async removeExpectedParticipant(id: string): Promise<void> {

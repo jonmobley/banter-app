@@ -35,12 +35,21 @@ export const expectedParticipants = pgTable("expected_participants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   phone: text("phone").notNull(),
+  email: text("email"),
 });
 
 export const insertExpectedParticipantSchema = createInsertSchema(expectedParticipants).pick({
   name: true,
   phone: true,
+  email: true,
 });
 
+export const updateExpectedParticipantSchema = createInsertSchema(expectedParticipants).pick({
+  name: true,
+  phone: true,
+  email: true,
+}).partial();
+
 export type InsertExpectedParticipant = z.infer<typeof insertExpectedParticipantSchema>;
+export type UpdateExpectedParticipant = z.infer<typeof updateExpectedParticipantSchema>;
 export type ExpectedParticipant = typeof expectedParticipants.$inferSelect;
