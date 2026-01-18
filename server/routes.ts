@@ -21,6 +21,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import twilio from "twilio";
 import { log } from "./index";
+import { getTwilioClient } from "./twilio";
 
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
@@ -95,6 +96,85 @@ export async function registerRoutes(
       service: "banter",
       timestamp: new Date().toISOString()
     });
+  });
+
+  /**
+   * GET /api/participants
+   * 
+   * Fetches current participants in the "team-main" conference.
+   * Returns participant count and phone numbers.
+   */
+  app.get("/api/participants", async (_req, res) => {
+    try {
+      const client = await getTwilioClient();
+      
+      // Find active conferences named "team-main"
+      const conferences = await client.conferences.list({
+        friendlyName: 'team-main',
+        status: 'in-progress',
+        limit: 1
+      });
+
+      if (conferences.length === 0) {
+        return res.json({ 
+          count: 0, 
+          participants: [],
+          conferenceActive: false
+        });
+      }
+
+      const conference = conferences[0];
+      
+      // Get participants in the conference
+      const participants = await client.conferences(conference.sid)
+        .participants.list();
+
+      const participantList = participants.map(p => ({
+        callSid: p.callSid,
+        muted: p.muted,
+        hold: p.hold,
+        // Phone number is in the call, we need to fetch it
+        label: p.label || 'Caller'
+      }));
+
+      // Get phone numbers for each participant
+      const detailedParticipants = await Promise.all(
+        participants.map(async (p) => {
+          try {
+            const call = await client.calls(p.callSid).fetch();
+            return {
+              callSid: p.callSid,
+              phone: call.from,
+              muted: p.muted,
+              hold: p.hold,
+              duration: call.duration
+            };
+          } catch {
+            return {
+              callSid: p.callSid,
+              phone: 'Unknown',
+              muted: p.muted,
+              hold: p.hold
+            };
+          }
+        })
+      );
+
+      res.json({ 
+        count: participants.length, 
+        participants: detailedParticipants,
+        conferenceActive: true,
+        conferenceSid: conference.sid
+      });
+    } catch (error: any) {
+      log(`Error fetching participants: ${error.message}`, "twilio");
+      res.status(500).json({ 
+        error: "Failed to fetch participants",
+        count: 0,
+        participants: [],
+        conferenceActive: false
+      });
+    }
   });
 
   return httpServer;
