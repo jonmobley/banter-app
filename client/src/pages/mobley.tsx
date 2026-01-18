@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Ban, Users, Lock, Unlock, Volume2, VolumeX, Settings, MoreVertical } from "lucide-react";
+import { Phone, Ban, Users, Lock, Unlock, Plus, Volume2, VolumeX, Settings, MoreVertical } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
 
@@ -137,6 +137,27 @@ export default function Mobley() {
   });
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [showAddExpectedModal, setShowAddExpectedModal] = useState(false);
+  const [newExpectedName, setNewExpectedName] = useState("");
+  const [newExpectedPhone, setNewExpectedPhone] = useState("");
+
+  const addExpected = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/expected", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin, name: newExpectedName, phone: newExpectedPhone }),
+      });
+      if (!res.ok) throw new Error("Failed to add");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
+      setShowAddExpectedModal(false);
+      setNewExpectedName("");
+      setNewExpectedPhone("");
+    },
+  });
 
   const handlePinDigit = (index: number, value: string) => {
     if (value.length > 1) return;
@@ -242,6 +263,56 @@ export default function Mobley() {
     </div>
   );
 
+  const addExpectedModal = (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
+      <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+        <h2 className="text-xl font-bold text-center mb-2">Add Expected</h2>
+        <p className="text-sm text-slate-400 text-center mb-6">Who should join the call?</p>
+        
+        <div className="space-y-4 mb-6">
+          <input
+            type="text"
+            placeholder="Name"
+            value={newExpectedName}
+            onChange={(e) => setNewExpectedName(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg bg-slate-800 border-2 border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+            data-testid="input-expected-name"
+          />
+          <input
+            type="tel"
+            placeholder="Phone number"
+            value={newExpectedPhone}
+            onChange={(e) => setNewExpectedPhone(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg bg-slate-800 border-2 border-slate-700 focus:border-emerald-500 outline-none transition-colors"
+            data-testid="input-expected-phone"
+          />
+        </div>
+        
+        <div className="space-y-3">
+          <button
+            onClick={() => addExpected.mutate()}
+            disabled={!newExpectedName || !newExpectedPhone}
+            className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium py-3 rounded-full transition-colors"
+            data-testid="button-add-expected-confirm"
+          >
+            Add
+          </button>
+          <button
+            onClick={() => {
+              setShowAddExpectedModal(false);
+              setNewExpectedName("");
+              setNewExpectedPhone("");
+            }}
+            className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+            data-testid="button-add-expected-cancel"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (hasActiveCall) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col relative">
@@ -268,24 +339,23 @@ export default function Mobley() {
             >
               <Settings className="w-5 h-5 text-slate-400" />
             </button>
-            <button
-              onClick={() => {
-                if (isAdmin) {
-                  setIsAdmin(false);
-                  setAdminPin("");
-                } else {
-                  setShowPinModal(true);
-                }
-              }}
-              className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
-              data-testid="button-admin"
-            >
-              {isAdmin ? (
-                <Unlock className="w-5 h-5 text-emerald-400" />
-              ) : (
+            {isAdmin ? (
+              <button
+                onClick={() => setShowAddExpectedModal(true)}
+                className="p-3 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 transition-colors"
+                data-testid="button-add-expected"
+              >
+                <Plus className="w-5 h-5 text-emerald-400" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowPinModal(true)}
+                className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
+                data-testid="button-admin"
+              >
                 <Lock className="w-5 h-5 text-slate-400" />
-              )}
-            </button>
+              </button>
+            )}
           </div>
         </header>
 
@@ -412,7 +482,7 @@ export default function Mobley() {
               data-testid="button-join"
             >
               <Phone className="w-5 h-5" />
-              Banter
+              Join Banter
             </a>
             {isAdmin && (
               <Link
@@ -427,6 +497,7 @@ export default function Mobley() {
         </div>
 
         {showPinModal && pinModal}
+        {showAddExpectedModal && addExpectedModal}
       </div>
     );
   }
@@ -471,7 +542,7 @@ export default function Mobley() {
             data-testid="button-join"
           >
             <Phone className="w-5 h-5" />
-            Banter
+            Join Banter
           </a>
           
           {isAdmin && (
