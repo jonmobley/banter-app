@@ -338,12 +338,15 @@ export default function Mobley() {
           <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold" data-testid="text-title">Banter</h1>
           
           <div className="flex items-center gap-2">
-            <button
-              className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
-              data-testid="button-settings"
-            >
-              <Settings className="w-5 h-5 text-slate-400" />
-            </button>
+            {isAdmin && (
+              <Link
+                href="/account"
+                className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
+                data-testid="button-settings"
+              >
+                <Settings className="w-5 h-5 text-slate-400" />
+              </Link>
+            )}
             {isAdmin ? (
               <button
                 onClick={() => setShowAddExpectedModal(true)}
@@ -489,15 +492,6 @@ export default function Mobley() {
               <Phone className="w-5 h-5" />
               Join Banter
             </a>
-            {isAdmin && (
-              <Link
-                href="/account"
-                className="flex items-center justify-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-6 rounded-full transition-colors"
-                data-testid="button-account"
-              >
-                Manage Account
-              </Link>
-            )}
           </div>
         </div>
 
