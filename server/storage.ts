@@ -1,14 +1,29 @@
 import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, and, gt, lt, lte } from "drizzle-orm";
+import { eq, and, gt, lt, lte, sql } from "drizzle-orm";
 import pg from "pg";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
+pool.on('error', (err) => {
+  console.error('Unexpected database pool error:', err);
+});
+
 export const db = drizzle(pool);
+
+export async function testDatabaseConnection(): Promise<boolean> {
+  try {
+    const result = await db.execute(sql`SELECT 1 as test`);
+    console.log("Database connection test successful");
+    return true;
+  } catch (error) {
+    console.error("Database connection test failed:", error);
+    return false;
+  }
+}
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
