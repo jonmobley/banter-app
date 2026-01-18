@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Plus, Calendar, Clock, Phone, Bell, X, Trash2, Users } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface ExpectedParticipant {
   id: string;
@@ -36,6 +37,7 @@ function formatDateTime(dateStr: string): string {
 export default function Schedule() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [adminPin] = useState(() => localStorage.getItem('banter_admin_pin') || '');
   
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -45,6 +47,14 @@ export default function Schedule() {
   const [autoCallEnabled, setAutoCallEnabled] = useState(false);
   const [reminderEnabled, setReminderEnabled] = useState(true);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  
+  const handleConfirmDelete = () => {
+    if (confirmDeleteId) {
+      deleteBanter.mutate(confirmDeleteId);
+      setConfirmDeleteId(null);
+    }
+  };
 
   useEffect(() => {
     if (!adminPin) {
@@ -52,7 +62,7 @@ export default function Schedule() {
     }
   }, [adminPin, navigate]);
 
-  const { data: banters = [] } = useQuery<ScheduledBanter[]>({
+  const { data: banters = [], isLoading: bantersLoading } = useQuery<ScheduledBanter[]>({
     queryKey: ["/api/banters"],
     queryFn: async () => {
       const res = await fetch("/api/banters");
@@ -93,6 +103,10 @@ export default function Schedule() {
       queryClient.invalidateQueries({ queryKey: ["/api/banters"] });
       resetModal();
       setShowCreateModal(false);
+      toast({ title: "Banter scheduled", description: "Your call has been scheduled." });
+    },
+    onError: () => {
+      toast({ title: "Failed to schedule", description: "Please try again.", variant: "destructive" });
     },
   });
 
@@ -108,6 +122,10 @@ export default function Schedule() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/banters"] });
+      toast({ title: "Banter cancelled" });
+    },
+    onError: () => {
+      toast({ title: "Failed to cancel", description: "Please try again.", variant: "destructive" });
     },
   });
 
@@ -153,7 +171,20 @@ export default function Schedule() {
       </header>
 
       <div className="flex-1 overflow-auto px-4 py-6">
-        {pendingBanters.length === 0 && pastBanters.length === 0 ? (
+        {bantersLoading ? (
+          <div className="space-y-3">
+            {[1, 2].map((i) => (
+              <div key={i} className="bg-slate-800/50 rounded-xl p-4 animate-pulse">
+                <div className="h-5 bg-slate-700 rounded w-32 mb-3" />
+                <div className="h-4 bg-slate-700/50 rounded w-48 mb-3" />
+                <div className="flex gap-2">
+                  <div className="h-6 bg-slate-700/30 rounded-full w-20" />
+                  <div className="h-6 bg-slate-700/30 rounded-full w-24" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : pendingBanters.length === 0 && pastBanters.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Calendar className="w-16 h-16 text-slate-600 mb-4" />
             <h2 className="text-lg font-medium text-slate-400 mb-2">No Scheduled Banters</h2>
@@ -188,7 +219,7 @@ export default function Schedule() {
                           </div>
                         </div>
                         <button
-                          onClick={() => deleteBanter.mutate(banter.id)}
+                          onClick={() => setConfirmDeleteId(banter.id)}
                           className="p-2 rounded-lg hover:bg-slate-700 transition-colors"
                           data-testid={`button-delete-${banter.id}`}
                         >
@@ -379,6 +410,33 @@ export default function Schedule() {
                 data-testid="button-schedule"
               >
                 Schedule Banter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {confirmDeleteId && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
+          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+            <h2 className="text-xl font-bold text-center mb-2">Cancel Banter?</h2>
+            <p className="text-sm text-slate-400 text-center mb-6">
+              This scheduled call will be cancelled. This action cannot be undone.
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={handleConfirmDelete}
+                className="w-full bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-confirm-delete"
+              >
+                Cancel Banter
+              </button>
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-cancel-delete"
+              >
+                Keep
               </button>
             </div>
           </div>

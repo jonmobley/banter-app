@@ -3,6 +3,7 @@ import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Device, Call } from "@twilio/voice-sdk";
+import { useToast } from "@/hooks/use-toast";
 
 interface Participant {
   callSid: string;
@@ -47,6 +48,7 @@ function formatDuration(seconds: number): string {
 
 export default function Mobley() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [isAdmin, setIsAdmin] = useState(true); // Admin enabled by default for now
   const [adminPin, setAdminPin] = useState("");
   const [showPinModal, setShowPinModal] = useState(false);
@@ -56,6 +58,7 @@ export default function Mobley() {
   const [callDuration, setCallDuration] = useState(0);
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
   const [speakingState, setSpeakingState] = useState<Record<string, boolean>>({});
+  const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -67,8 +70,13 @@ export default function Mobley() {
         return;
       }
       
+      setWsConnected(false);
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
       wsRef.current = ws;
+      
+      ws.onopen = () => {
+        setWsConnected(true);
+      };
 
       ws.onmessage = (event) => {
         try {
@@ -83,6 +91,7 @@ export default function Mobley() {
 
       ws.onclose = () => {
         wsRef.current = null;
+        setWsConnected(false);
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
         }
@@ -106,7 +115,7 @@ export default function Mobley() {
     };
   }, []);
 
-  const { data: participantsData } = useQuery<ParticipantsData>({
+  const { data: participantsData, isLoading: participantsLoading } = useQuery<ParticipantsData>({
     queryKey: ["/api/participants"],
     queryFn: async () => {
       const res = await fetch("/api/participants");
@@ -152,9 +161,12 @@ export default function Mobley() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
     },
+    onError: () => {
+      toast({ title: "Failed to change mute status", description: "Please try again.", variant: "destructive" });
+    },
   });
 
-  const { data: expectedData } = useQuery<ExpectedParticipant[]>({
+  const { data: expectedData, isLoading: expectedLoading } = useQuery<ExpectedParticipant[]>({
     queryKey: ["/api/expected"],
     queryFn: async () => {
       const res = await fetch("/api/expected");
@@ -176,6 +188,10 @@ export default function Mobley() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
+      toast({ title: "Participant removed" });
+    },
+    onError: () => {
+      toast({ title: "Failed to remove participant", description: "Please try again.", variant: "destructive" });
     },
   });
 
@@ -188,6 +204,12 @@ export default function Mobley() {
       });
       if (!res.ok) throw new Error("Failed to remind");
       return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Reminder sent", description: "Text message sent successfully." });
+    },
+    onError: () => {
+      toast({ title: "Failed to send reminder", description: "Please try again.", variant: "destructive" });
     },
   });
 
@@ -203,6 +225,10 @@ export default function Mobley() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      toast({ title: "Calling participant", description: "Phone call initiated." });
+    },
+    onError: () => {
+      toast({ title: "Failed to call participant", description: "Please try again.", variant: "destructive" });
     },
   });
 
@@ -222,6 +248,37 @@ export default function Mobley() {
   const [showAddExpectedModal, setShowAddExpectedModal] = useState(false);
   const [newExpectedName, setNewExpectedName] = useState("");
   const [newExpectedPhone, setNewExpectedPhone] = useState("");
+  const [newExpectedPhoneError, setNewExpectedPhoneError] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  
+  // Phone validation helper
+  const validatePhone = (phone: string): { valid: boolean; error?: string } => {
+    if (!phone) return { valid: false };
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length < 10) {
+      return { valid: false, error: "Phone number must be at least 10 digits" };
+    }
+    if (cleaned.length > 11) {
+      return { valid: false, error: "Phone number is too long" };
+    }
+    if (cleaned.length === 11 && !cleaned.startsWith('1')) {
+      return { valid: false, error: "11-digit numbers must start with 1" };
+    }
+    return { valid: true };
+  };
+  
+  const handleExpectedPhoneChange = (value: string) => {
+    setNewExpectedPhone(value);
+    const validation = validatePhone(value);
+    setNewExpectedPhoneError(value && !validation.valid ? (validation.error || null) : null);
+  };
+  
+  const handleConfirmDelete = () => {
+    if (confirmDeleteId) {
+      removeExpected.mutate(confirmDeleteId);
+      setConfirmDeleteId(null);
+    }
+  };
   
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   
@@ -246,7 +303,8 @@ export default function Mobley() {
       });
       
       if (!res.ok) {
-        throw new Error('Failed to get voice token');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Unable to connect. Please try again.');
       }
       
       const { token, voiceUrl } = await res.json();
@@ -263,7 +321,15 @@ export default function Mobley() {
       
       device.on('error', (error) => {
         console.error('Twilio Device error:', error);
-        setBrowserCallError(error.message || 'Device error');
+        let userMessage = 'Connection issue. Please try again.';
+        if (error.message?.includes('permission') || error.message?.includes('NotAllowedError')) {
+          userMessage = 'Please allow microphone access to join the call.';
+        } else if (error.message?.includes('NotFoundError')) {
+          userMessage = 'No microphone found. Please check your audio settings.';
+        } else if (error.message?.includes('network') || error.message?.includes('offline')) {
+          userMessage = 'Network issue. Please check your internet connection.';
+        }
+        setBrowserCallError(userMessage);
         setBrowserCallStatus('disconnected');
       });
       
@@ -320,7 +386,13 @@ export default function Mobley() {
       
       call.on('error', (error) => {
         console.error('Browser call error:', error);
-        setBrowserCallError(error.message || 'Call error');
+        let userMessage = 'Call failed. Please try again.';
+        if (error.message?.includes('permission') || error.message?.includes('NotAllowedError')) {
+          userMessage = 'Please allow microphone access to join the call.';
+        } else if (error.message?.includes('busy')) {
+          userMessage = 'The line is busy. Please try again in a moment.';
+        }
+        setBrowserCallError(userMessage);
         setBrowserCallStatus('disconnected');
         setActiveCall(null);
         setIsBrowserMuted(false);
@@ -330,7 +402,15 @@ export default function Mobley() {
       
     } catch (error: any) {
       console.error('Failed to initialize Twilio device:', error);
-      setBrowserCallError(error.message || 'Failed to connect');
+      let userMessage = 'Unable to connect. Please try again.';
+      if (error.message?.includes('permission') || error.name === 'NotAllowedError') {
+        userMessage = 'Please allow microphone access in your browser to join the call.';
+      } else if (error.name === 'NotFoundError') {
+        userMessage = 'No microphone found. Please connect a microphone and try again.';
+      } else if (!navigator.onLine) {
+        userMessage = 'You appear to be offline. Please check your internet connection.';
+      }
+      setBrowserCallError(userMessage);
       setBrowserCallStatus('disconnected');
     }
   }, [queryClient]);
@@ -470,6 +550,10 @@ export default function Mobley() {
       setShowAddExpectedModal(false);
       setNewExpectedName("");
       setNewExpectedPhone("");
+      toast({ title: "Participant added", description: "New participant has been added to the list." });
+    },
+    onError: () => {
+      toast({ title: "Failed to add participant", description: "Please try again.", variant: "destructive" });
     },
   });
 
@@ -488,6 +572,10 @@ export default function Mobley() {
       queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
       setShowProfileDrawer(false);
       setEditingParticipant(null);
+      toast({ title: "Profile updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update profile", description: "Please try again.", variant: "destructive" });
     },
   });
 
@@ -550,6 +638,10 @@ export default function Mobley() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
+      toast({ title: "Role updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update role", description: "Please try again.", variant: "destructive" });
     },
   });
   
@@ -763,20 +855,25 @@ export default function Mobley() {
             className="w-full px-4 py-3 rounded-lg bg-slate-800 border-2 border-slate-700 focus:border-emerald-500 outline-none transition-colors"
             data-testid="input-expected-name"
           />
-          <input
-            type="tel"
-            placeholder="Phone number"
-            value={newExpectedPhone}
-            onChange={(e) => setNewExpectedPhone(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-slate-800 border-2 border-slate-700 focus:border-emerald-500 outline-none transition-colors"
-            data-testid="input-expected-phone"
-          />
+          <div>
+            <input
+              type="tel"
+              placeholder="Phone number"
+              value={newExpectedPhone}
+              onChange={(e) => handleExpectedPhoneChange(e.target.value)}
+              className={`w-full px-4 py-3 rounded-lg bg-slate-800 border-2 ${newExpectedPhoneError ? 'border-red-500' : 'border-slate-700 focus:border-emerald-500'} outline-none transition-colors`}
+              data-testid="input-expected-phone"
+            />
+            {newExpectedPhoneError && (
+              <p className="text-red-400 text-xs mt-1">{newExpectedPhoneError}</p>
+            )}
+          </div>
         </div>
         
         <div className="space-y-3">
           <button
             onClick={() => addExpected.mutate()}
-            disabled={!newExpectedName || !newExpectedPhone}
+            disabled={!newExpectedName || !newExpectedPhone || !validatePhone(newExpectedPhone).valid}
             className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium py-3 rounded-full transition-colors"
             data-testid="button-add-expected-confirm"
           >
@@ -895,10 +992,15 @@ export default function Mobley() {
           
           <button 
             onClick={() => setShowDemoPreview(!showDemoPreview)}
-            className="absolute left-1/2 -translate-x-1/2 text-xl font-bold hover:text-emerald-400 transition-colors" 
+            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 text-xl font-bold hover:text-emerald-400 transition-colors" 
             data-testid="text-title"
           >
             Banter
+            <span 
+              className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`}
+              title={wsConnected ? 'Connected' : 'Reconnecting...'}
+              data-testid="ws-status-indicator"
+            />
           </button>
           
           <div className="flex items-center gap-2">
@@ -1225,7 +1327,7 @@ export default function Mobley() {
                         <div className="border-t border-slate-700 my-1" />
                         <button
                           onClick={() => {
-                            removeExpected.mutate(ep.id);
+                            setConfirmDeleteId(ep.id);
                             setOpenDropdown(null);
                           }}
                           className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-slate-700"
@@ -1352,10 +1454,15 @@ export default function Mobley() {
         
         <button 
           onClick={() => setShowDemoPreview(true)}
-          className="text-5xl font-bold mb-8 text-center hover:text-emerald-400 transition-colors" 
+          className="flex items-center gap-3 text-5xl font-bold mb-8 text-center hover:text-emerald-400 transition-colors" 
           data-testid="text-title"
         >
           Banter
+          <span 
+            className={`w-3 h-3 rounded-full ${wsConnected ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`}
+            title={wsConnected ? 'Connected' : 'Reconnecting...'}
+            data-testid="ws-status-indicator-home"
+          />
         </button>
 
         <div className="flex flex-col gap-4 w-full max-w-xs">
@@ -1445,6 +1552,33 @@ export default function Mobley() {
           </div>
         </div>
       </div>
+      
+      {confirmDeleteId && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
+          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+            <h2 className="text-xl font-bold text-center mb-2">Remove Participant?</h2>
+            <p className="text-sm text-slate-400 text-center mb-6">
+              This person will be removed from the expected list.
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={handleConfirmDelete}
+                className="w-full bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-confirm-delete"
+              >
+                Remove
+              </button>
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-cancel-delete"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
