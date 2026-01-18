@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical } from "lucide-react";
+import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef } from "react";
 
@@ -468,9 +468,10 @@ export default function Mobley() {
                             remindExpected.mutate(ep.id);
                             setOpenDropdown(null);
                           }}
-                          className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
                           data-testid={`button-remind-${i}`}
                         >
+                          <MessageSquare className="w-4 h-4" />
                           Remind
                         </button>
                         <button
@@ -478,9 +479,10 @@ export default function Mobley() {
                             removeExpected.mutate(ep.id);
                             setOpenDropdown(null);
                           }}
-                          className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700"
+                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-slate-700"
                           data-testid={`button-remove-${i}`}
                         >
+                          <Trash2 className="w-4 h-4" />
                           Remove
                         </button>
                       </div>
