@@ -53,6 +53,7 @@ export default function Account() {
           >
             <Share className="w-5 h-5 text-emerald-400" />
             <span className="ml-3">Share</span>
+            <span className="ml-auto text-slate-400">(220) 242-3245</span>
           </button>
 
           <div className="flex flex-col gap-3">
