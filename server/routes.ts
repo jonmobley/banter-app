@@ -21,8 +21,9 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import twilio from "twilio";
 import { log } from "./index";
-import { getTwilioClient } from "./twilio";
+import { getTwilioClient, getTwilioFromPhoneNumber } from "./twilio";
 import { WebSocketServer, WebSocket } from "ws";
+import { normalizePhone } from "@shared/schema";
 
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
@@ -246,6 +247,77 @@ export async function registerRoutes(
       service: "banter",
       timestamp: new Date().toISOString()
     });
+  });
+
+  /**
+   * POST /api/auth/send-code
+   * 
+   * Send a verification code via SMS to the provided phone number.
+   */
+  app.post("/api/auth/send-code", async (req, res) => {
+    try {
+      const { phone } = req.body;
+      if (!phone) {
+        return res.status(400).json({ error: "Phone number is required" });
+      }
+
+      const normalizedPhone = normalizePhone(phone);
+
+      // Generate 6-digit code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      // Store code with 5-minute expiration
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      await storage.createVerificationCode(normalizedPhone, code, expiresAt);
+
+      // Send SMS via Twilio
+      const client = await getTwilioClient();
+      const fromNumber = await getTwilioFromPhoneNumber();
+      
+      await client.messages.create({
+        body: `Your Banter verification code is: ${code}`,
+        from: fromNumber,
+        to: normalizedPhone
+      });
+
+      log(`📱 Sent verification code to ${normalizedPhone}`, "auth");
+      res.json({ success: true, message: "Verification code sent" });
+    } catch (error: any) {
+      log(`Error sending verification code: ${error.message}`, "auth");
+      res.status(500).json({ error: "Failed to send verification code" });
+    }
+  });
+
+  /**
+   * POST /api/auth/verify-code
+   * 
+   * Verify the code and return the authenticated phone number.
+   */
+  app.post("/api/auth/verify-code", async (req, res) => {
+    try {
+      const { phone, code } = req.body;
+      if (!phone || !code) {
+        return res.status(400).json({ error: "Phone and code are required" });
+      }
+
+      const normalizedPhone = normalizePhone(phone);
+
+      // Check code
+      const valid = await storage.verifyCode(normalizedPhone, code);
+      
+      if (!valid) {
+        return res.status(401).json({ error: "Invalid or expired code" });
+      }
+
+      // Clean up used code
+      await storage.deleteVerificationCodes(normalizedPhone);
+
+      log(`✅ Verified phone ${normalizedPhone}`, "auth");
+      res.json({ success: true, phone: normalizedPhone });
+    } catch (error: any) {
+      log(`Error verifying code: ${error.message}`, "auth");
+      res.status(500).json({ error: "Failed to verify code" });
+    }
   });
 
   /**

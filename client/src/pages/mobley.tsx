@@ -205,6 +205,90 @@ export default function Mobley() {
   const [newExpectedPhone, setNewExpectedPhone] = useState("");
   
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+  
+  // Auth state
+  const [verifiedPhone, setVerifiedPhone] = useState<string | null>(() => {
+    return localStorage.getItem('banter_verified_phone');
+  });
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginPhone, setLoginPhone] = useState("");
+  const [loginCode, setLoginCode] = useState("");
+  const [loginStep, setLoginStep] = useState<'phone' | 'code'>('phone');
+  const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const sendVerificationCode = async () => {
+    setLoginLoading(true);
+    setLoginError("");
+    try {
+      const res = await fetch("/api/auth/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: loginPhone }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to send code");
+      }
+      setLoginStep('code');
+    } catch (err: any) {
+      setLoginError(err.message);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const verifyLoginCode = async () => {
+    setLoginLoading(true);
+    setLoginError("");
+    try {
+      const res = await fetch("/api/auth/verify-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: loginPhone, code: loginCode }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Invalid code");
+      }
+      const data = await res.json();
+      setVerifiedPhone(data.phone);
+      localStorage.setItem('banter_verified_phone', data.phone);
+      setShowLoginModal(false);
+      resetLoginModal();
+    } catch (err: any) {
+      setLoginError(err.message);
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const resetLoginModal = () => {
+    setLoginPhone("");
+    setLoginCode("");
+    setLoginStep('phone');
+    setLoginError("");
+  };
+
+  const handleLogout = () => {
+    setVerifiedPhone(null);
+    localStorage.removeItem('banter_verified_phone');
+  };
+
+  // Normalize phone to E.164 format (same as server-side)
+  const normalizePhone = (phone: string): string => {
+    let digits = phone.replace(/\D/g, '');
+    if (digits.length === 10) {
+      digits = '1' + digits;
+    }
+    return '+' + digits;
+  };
+
+  const isMyParticipant = (phone: string): boolean => {
+    if (!verifiedPhone) return false;
+    // Use exact E.164 comparison
+    return normalizePhone(verifiedPhone) === normalizePhone(phone);
+  };
   const [editingParticipant, setEditingParticipant] = useState<ExpectedParticipant | null>(null);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -363,6 +447,78 @@ export default function Mobley() {
     </div>
   );
 
+  const loginModal = (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
+      <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+        <h2 className="text-xl font-bold text-center mb-2">Sign In</h2>
+        <p className="text-sm text-slate-400 text-center mb-6">
+          {loginStep === 'phone' ? 'Enter your phone number' : 'Enter the code we texted you'}
+        </p>
+        
+        {loginStep === 'phone' ? (
+          <div className="space-y-4 mb-6">
+            <input
+              type="tel"
+              placeholder="(555) 555-5555"
+              value={loginPhone}
+              onChange={(e) => setLoginPhone(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors text-center text-lg"
+              data-testid="input-login-phone"
+            />
+          </div>
+        ) : (
+          <div className="space-y-4 mb-6">
+            <input
+              type="tel"
+              placeholder="000000"
+              value={loginCode}
+              onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              maxLength={6}
+              className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors text-center text-2xl tracking-widest"
+              data-testid="input-login-code"
+            />
+          </div>
+        )}
+        
+        {loginError && (
+          <p className="text-red-400 text-sm text-center mb-4">{loginError}</p>
+        )}
+        
+        <div className="space-y-3">
+          <button
+            onClick={loginStep === 'phone' ? sendVerificationCode : verifyLoginCode}
+            disabled={loginLoading || (loginStep === 'phone' ? !loginPhone : loginCode.length !== 6)}
+            className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium py-3 rounded-full transition-colors"
+            data-testid="button-login-submit"
+          >
+            {loginLoading ? 'Loading...' : loginStep === 'phone' ? 'Send Code' : 'Verify'}
+          </button>
+          
+          {loginStep === 'code' && (
+            <button
+              onClick={() => setLoginStep('phone')}
+              className="w-full text-slate-400 hover:text-white text-sm transition-colors"
+              data-testid="button-login-back"
+            >
+              Use a different number
+            </button>
+          )}
+          
+          <button
+            onClick={() => {
+              setShowLoginModal(false);
+              resetLoginModal();
+            }}
+            className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+            data-testid="button-login-cancel"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const addExpectedModal = (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
       <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
@@ -511,6 +667,23 @@ export default function Mobley() {
           <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold" data-testid="text-title">Banter</h1>
           
           <div className="flex items-center gap-2">
+            {verifiedPhone ? (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-2 rounded-full bg-blue-500/20 hover:bg-blue-500/30 transition-colors flex items-center gap-2"
+                data-testid="button-logout"
+              >
+                <span className="text-xs text-blue-400">Signed in</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowLoginModal(true)}
+                className="px-3 py-2 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
+                data-testid="button-login"
+              >
+                <span className="text-xs text-slate-400">Sign in</span>
+              </button>
+            )}
             {isAdmin && (
               <Link
                 href="/account"
@@ -570,9 +743,14 @@ export default function Mobley() {
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">
-                    {p.name || formatPhone(p.phone)}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium truncate">
+                      {p.name || formatPhone(p.phone)}
+                    </p>
+                    {isMyParticipant(p.phone) && (
+                      <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">You</span>
+                    )}
+                  </div>
                   {p.name && (
                     <p className="text-xs text-slate-500 truncate">{formatPhone(p.phone)}</p>
                   )}
@@ -727,32 +905,53 @@ export default function Mobley() {
         {showPinModal && pinModal}
         {showAddExpectedModal && addExpectedModal}
         {showProfileDrawer && profileDrawer}
+        {showLoginModal && loginModal}
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col relative">
-      <button
-        onClick={() => {
-          if (isAdmin) {
-            setIsAdmin(false);
-            setAdminPin("");
-          } else {
-            setShowPinModal(true);
-          }
-        }}
-        className="absolute top-4 right-4 p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
-        data-testid="button-admin"
-      >
-        {isAdmin ? (
-          <User className="w-5 h-5 text-emerald-400" />
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        {verifiedPhone ? (
+          <button
+            onClick={handleLogout}
+            className="px-3 py-2 rounded-full bg-blue-500/20 hover:bg-blue-500/30 transition-colors"
+            data-testid="button-logout"
+          >
+            <span className="text-xs text-blue-400">Signed in</span>
+          </button>
         ) : (
-          <User className="w-5 h-5 text-slate-400" />
+          <button
+            onClick={() => setShowLoginModal(true)}
+            className="px-3 py-2 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
+            data-testid="button-login"
+          >
+            <span className="text-xs text-slate-400">Sign in</span>
+          </button>
         )}
-      </button>
+        <button
+          onClick={() => {
+            if (isAdmin) {
+              setIsAdmin(false);
+              setAdminPin("");
+            } else {
+              setShowPinModal(true);
+            }
+          }}
+          className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
+          data-testid="button-admin"
+        >
+          {isAdmin ? (
+            <User className="w-5 h-5 text-emerald-400" />
+          ) : (
+            <User className="w-5 h-5 text-slate-400" />
+          )}
+        </button>
+      </div>
 
       {showPinModal && pinModal}
+      {showLoginModal && loginModal}
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-8">

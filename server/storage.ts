@@ -1,7 +1,7 @@
-import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants } from "@shared/schema";
+import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq } from "drizzle-orm";
+import { eq, and, gt } from "drizzle-orm";
 import pg from "pg";
 
 const pool = new pg.Pool({
@@ -27,6 +27,11 @@ export interface IStorage {
   addExpectedParticipant(participant: InsertExpectedParticipant): Promise<ExpectedParticipant>;
   updateExpectedParticipant(id: string, data: UpdateExpectedParticipant): Promise<ExpectedParticipant | undefined>;
   removeExpectedParticipant(id: string): Promise<void>;
+  
+  // Verification codes
+  createVerificationCode(phone: string, code: string, expiresAt: Date): Promise<void>;
+  verifyCode(phone: string, code: string): Promise<boolean>;
+  deleteVerificationCodes(phone: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -86,6 +91,29 @@ export class DatabaseStorage implements IStorage {
 
   async removeExpectedParticipant(id: string): Promise<void> {
     await db.delete(expectedParticipants).where(eq(expectedParticipants.id, id));
+  }
+
+  async createVerificationCode(phone: string, code: string, expiresAt: Date): Promise<void> {
+    // Delete any existing codes for this phone first
+    await db.delete(verificationCodes).where(eq(verificationCodes.phone, phone));
+    // Insert new code
+    await db.insert(verificationCodes).values({ phone, code, expiresAt });
+  }
+
+  async verifyCode(phone: string, code: string): Promise<boolean> {
+    const now = new Date();
+    const [match] = await db.select().from(verificationCodes).where(
+      and(
+        eq(verificationCodes.phone, phone),
+        eq(verificationCodes.code, code),
+        gt(verificationCodes.expiresAt, now)
+      )
+    );
+    return !!match;
+  }
+
+  async deleteVerificationCodes(phone: string): Promise<void> {
+    await db.delete(verificationCodes).where(eq(verificationCodes.phone, phone));
   }
 }
 

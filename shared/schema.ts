@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -53,3 +53,31 @@ export const updateExpectedParticipantSchema = createInsertSchema(expectedPartic
 export type InsertExpectedParticipant = z.infer<typeof insertExpectedParticipantSchema>;
 export type UpdateExpectedParticipant = z.infer<typeof updateExpectedParticipantSchema>;
 export type ExpectedParticipant = typeof expectedParticipants.$inferSelect;
+
+export const verificationCodes = pgTable("verification_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  phone: text("phone").notNull(),
+  code: text("code").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export const insertVerificationCodeSchema = createInsertSchema(verificationCodes).pick({
+  phone: true,
+  code: true,
+  expiresAt: true,
+});
+
+export type InsertVerificationCode = z.infer<typeof insertVerificationCodeSchema>;
+export type VerificationCode = typeof verificationCodes.$inferSelect;
+
+// Utility function for normalizing phone numbers to E.164 format
+export function normalizePhone(phone: string): string {
+  let digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) {
+    digits = '1' + digits;
+  }
+  if (!digits.startsWith('1') && digits.length === 10) {
+    digits = '1' + digits;
+  }
+  return '+' + digits;
+}
