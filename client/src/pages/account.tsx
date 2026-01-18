@@ -1,4 +1,4 @@
-import { ArrowLeft, Users, Phone, Share } from "lucide-react";
+import { ArrowLeft, Users, Phone, Share, Calendar } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 
@@ -65,6 +65,14 @@ export default function Account() {
               <Users className="w-5 h-5 text-emerald-400" />
               <span className="ml-3">Contacts</span>
               <span className="ml-auto text-slate-400">{contacts.length}</span>
+            </Link>
+            <Link
+              href="/schedule"
+              className="flex items-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-4 px-6 rounded-full transition-colors"
+              data-testid="button-schedule"
+            >
+              <Calendar className="w-5 h-5 text-emerald-400" />
+              <span className="ml-3">Scheduled Banters</span>
             </Link>
           </div>
         </div>

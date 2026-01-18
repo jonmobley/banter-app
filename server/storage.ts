@@ -1,7 +1,7 @@
-import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes } from "@shared/schema";
+import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, and, gt } from "drizzle-orm";
+import { eq, and, gt, lt, lte } from "drizzle-orm";
 import pg from "pg";
 
 const pool = new pg.Pool({
@@ -32,6 +32,15 @@ export interface IStorage {
   createVerificationCode(phone: string, code: string, expiresAt: Date): Promise<void>;
   verifyCode(phone: string, code: string): Promise<boolean>;
   deleteVerificationCodes(phone: string): Promise<void>;
+  
+  // Scheduled Banters
+  getScheduledBanters(): Promise<ScheduledBanter[]>;
+  getScheduledBanter(id: string): Promise<ScheduledBanter | undefined>;
+  createScheduledBanter(banter: InsertScheduledBanter): Promise<ScheduledBanter>;
+  updateScheduledBanter(id: string, data: UpdateScheduledBanter): Promise<ScheduledBanter | undefined>;
+  deleteScheduledBanter(id: string): Promise<void>;
+  getPendingBantersForTime(time: Date): Promise<ScheduledBanter[]>;
+  getBantersNeedingReminder(time: Date): Promise<ScheduledBanter[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -114,6 +123,52 @@ export class DatabaseStorage implements IStorage {
 
   async deleteVerificationCodes(phone: string): Promise<void> {
     await db.delete(verificationCodes).where(eq(verificationCodes.phone, phone));
+  }
+
+  async getScheduledBanters(): Promise<ScheduledBanter[]> {
+    return await db.select().from(scheduledBanters);
+  }
+
+  async getScheduledBanter(id: string): Promise<ScheduledBanter | undefined> {
+    const [banter] = await db.select().from(scheduledBanters).where(eq(scheduledBanters.id, id));
+    return banter;
+  }
+
+  async createScheduledBanter(banter: InsertScheduledBanter): Promise<ScheduledBanter> {
+    const [newBanter] = await db.insert(scheduledBanters).values(banter).returning();
+    return newBanter;
+  }
+
+  async updateScheduledBanter(id: string, data: UpdateScheduledBanter): Promise<ScheduledBanter | undefined> {
+    const [updated] = await db.update(scheduledBanters).set(data).where(eq(scheduledBanters.id, id)).returning();
+    return updated;
+  }
+
+  async deleteScheduledBanter(id: string): Promise<void> {
+    await db.delete(scheduledBanters).where(eq(scheduledBanters.id, id));
+  }
+
+  async getPendingBantersForTime(time: Date): Promise<ScheduledBanter[]> {
+    // Get banters that are pending and scheduled at or before the given time
+    return await db.select().from(scheduledBanters).where(
+      and(
+        eq(scheduledBanters.status, 'pending'),
+        lte(scheduledBanters.scheduledAt, time)
+      )
+    );
+  }
+
+  async getBantersNeedingReminder(time: Date): Promise<ScheduledBanter[]> {
+    // Get banters that need a reminder (5 min before start, reminder enabled, still pending)
+    const fiveMinutesFromNow = new Date(time.getTime() + 5 * 60 * 1000);
+    return await db.select().from(scheduledBanters).where(
+      and(
+        eq(scheduledBanters.status, 'pending'),
+        eq(scheduledBanters.reminderEnabled, 'true'),
+        lte(scheduledBanters.scheduledAt, fiveMinutesFromNow),
+        gt(scheduledBanters.scheduledAt, time)
+      )
+    );
   }
 }
 

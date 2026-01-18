@@ -654,5 +654,157 @@ export async function registerRoutes(
     }
   });
 
+  /**
+   * POST /api/expected/:id/call
+   * 
+   * Initiates an outbound call to an expected participant and connects them to the conference.
+   * Requires admin PIN.
+   */
+  app.post("/api/expected/:id/call", async (req, res) => {
+    try {
+      const { pin } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      const participant = await storage.getExpectedParticipant(req.params.id);
+      
+      if (!participant) {
+        return res.status(404).json({ error: "Participant not found" });
+      }
+      
+      const client = await getTwilioClient();
+      const fromNumber = await getTwilioFromPhoneNumber();
+      
+      // Get the webhook URL for the call
+      const host = req.headers.host || 'localhost:5000';
+      const forwardedProto = req.headers['x-forwarded-proto'];
+      const isSecure = forwardedProto === 'https' || req.protocol === 'https' || host.includes('replit');
+      const protocol = isSecure ? 'https' : 'http';
+      
+      // Initiate outbound call to participant
+      const call = await client.calls.create({
+        to: normalizePhone(participant.phone),
+        from: fromNumber,
+        url: `${protocol}://${host}/voice/incoming`,
+        method: 'POST'
+      });
+      
+      log(`📞 Outbound call initiated to ${participant.name} (${participant.phone}), callSid: ${call.sid}`, "twilio");
+      res.json({ success: true, callSid: call.sid });
+    } catch (error: any) {
+      log(`Error initiating call: ${error.message}`, "twilio");
+      res.status(500).json({ error: "Failed to initiate call" });
+    }
+  });
+
+  /**
+   * GET /api/banters
+   * 
+   * Lists all scheduled banters.
+   */
+  app.get("/api/banters", async (_req, res) => {
+    try {
+      const banters = await storage.getScheduledBanters();
+      res.json(banters);
+    } catch (error: any) {
+      log(`Error fetching scheduled banters: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to fetch scheduled banters" });
+    }
+  });
+
+  /**
+   * POST /api/banters
+   * 
+   * Creates a new scheduled banter. Requires admin PIN.
+   */
+  app.post("/api/banters", async (req, res) => {
+    try {
+      const { pin, name, scheduledAt, autoCallEnabled, reminderEnabled, participantIds } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      if (!name || !scheduledAt) {
+        return res.status(400).json({ error: "Name and scheduled time are required" });
+      }
+      
+      const banter = await storage.createScheduledBanter({
+        name,
+        scheduledAt: new Date(scheduledAt),
+        autoCallEnabled: autoCallEnabled ? 'true' : 'false',
+        reminderEnabled: reminderEnabled ? 'true' : 'false',
+        participantIds: participantIds || []
+      });
+      
+      log(`📅 Scheduled banter "${name}" at ${scheduledAt}`, "api");
+      res.json(banter);
+    } catch (error: any) {
+      log(`Error creating scheduled banter: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to create scheduled banter" });
+    }
+  });
+
+  /**
+   * PATCH /api/banters/:id
+   * 
+   * Updates a scheduled banter. Requires admin PIN.
+   */
+  app.patch("/api/banters/:id", async (req, res) => {
+    try {
+      const { pin, name, scheduledAt, autoCallEnabled, reminderEnabled, participantIds, status } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (scheduledAt !== undefined) updateData.scheduledAt = new Date(scheduledAt);
+      if (autoCallEnabled !== undefined) updateData.autoCallEnabled = autoCallEnabled ? 'true' : 'false';
+      if (reminderEnabled !== undefined) updateData.reminderEnabled = reminderEnabled ? 'true' : 'false';
+      if (participantIds !== undefined) updateData.participantIds = participantIds;
+      if (status !== undefined) updateData.status = status;
+      
+      const updated = await storage.updateScheduledBanter(req.params.id, updateData);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Scheduled banter not found" });
+      }
+      
+      res.json(updated);
+    } catch (error: any) {
+      log(`Error updating scheduled banter: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to update scheduled banter" });
+    }
+  });
+
+  /**
+   * DELETE /api/banters/:id
+   * 
+   * Deletes a scheduled banter. Requires admin PIN.
+   */
+  app.delete("/api/banters/:id", async (req, res) => {
+    try {
+      const { pin } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      await storage.deleteScheduledBanter(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      log(`Error deleting scheduled banter: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to delete scheduled banter" });
+    }
+  });
+
   return httpServer;
 }

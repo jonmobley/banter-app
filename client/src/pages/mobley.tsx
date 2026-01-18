@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil } from "lucide-react";
+import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef } from "react";
 
@@ -123,10 +123,11 @@ export default function Mobley() {
       if (!res.ok) throw new Error("Invalid PIN");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, pin) => {
       setIsAdmin(true);
       setShowPinModal(false);
       setPinError(false);
+      localStorage.setItem('banter_admin_pin', pin);
       setPinDigits(["", "", "", ""]);
     },
     onError: () => {
@@ -184,6 +185,21 @@ export default function Mobley() {
       });
       if (!res.ok) throw new Error("Failed to remind");
       return res.json();
+    },
+  });
+
+  const callExpected = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/expected/${id}/call`, { 
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin }),
+      });
+      if (!res.ok) throw new Error("Failed to call");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
     },
   });
 
@@ -846,6 +862,19 @@ export default function Mobley() {
                     </button>
                     {openDropdown === ep.id && (
                       <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[120px]">
+                        {isAdmin && (
+                          <button
+                            onClick={() => {
+                              callExpected.mutate(ep.id);
+                              setOpenDropdown(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-emerald-400 hover:bg-slate-700"
+                            data-testid={`button-call-${i}`}
+                          >
+                            <PhoneOutgoing className="w-4 h-4" />
+                            Call
+                          </button>
+                        )}
                         {isAdmin && (
                           <button
                             onClick={() => {

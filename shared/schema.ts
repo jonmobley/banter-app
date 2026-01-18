@@ -81,3 +81,38 @@ export function normalizePhone(phone: string): string {
   }
   return '+' + digits;
 }
+
+// Scheduled Banters
+export const scheduledBanters = pgTable("scheduled_banters", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  autoCallEnabled: text("auto_call_enabled").notNull().default('false'),
+  reminderEnabled: text("reminder_enabled").notNull().default('false'),
+  reminderSentAt: timestamp("reminder_sent_at"),
+  status: text("status").notNull().default('pending'), // pending, active, completed, cancelled
+  participantIds: text("participant_ids").array().notNull().default(sql`ARRAY[]::text[]`),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertScheduledBanterSchema = createInsertSchema(scheduledBanters).pick({
+  name: true,
+  scheduledAt: true,
+  autoCallEnabled: true,
+  reminderEnabled: true,
+  participantIds: true,
+});
+
+export const updateScheduledBanterSchema = createInsertSchema(scheduledBanters).pick({
+  name: true,
+  scheduledAt: true,
+  autoCallEnabled: true,
+  reminderEnabled: true,
+  reminderSentAt: true,
+  status: true,
+  participantIds: true,
+}).partial();
+
+export type InsertScheduledBanter = z.infer<typeof insertScheduledBanterSchema>;
+export type UpdateScheduledBanter = z.infer<typeof updateScheduledBanterSchema>;
+export type ScheduledBanter = typeof scheduledBanters.$inferSelect;
