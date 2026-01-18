@@ -777,13 +777,6 @@ export default function Mobley() {
           </div>
         </header>
 
-        {isPreviewMode && (
-          <div className="flex justify-center py-2">
-            <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">
-              Preview
-            </span>
-          </div>
-        )}
 
         <div className="flex-1 overflow-auto px-4 pb-48">
           <div className="space-y-2">
