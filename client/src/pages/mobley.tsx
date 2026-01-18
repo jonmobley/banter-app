@@ -198,13 +198,15 @@ export default function Mobley() {
             Banter
           </a>
           
-          <Link
-            href="/account"
-            className="flex items-center justify-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-6 rounded-full transition-colors"
-            data-testid="button-account"
-          >
-            Manage Account
-          </Link>
+          {isAdmin && (
+            <Link
+              href="/account"
+              className="flex items-center justify-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-6 rounded-full transition-colors"
+              data-testid="button-account"
+            >
+              Manage Account
+            </Link>
+          )}
         </div>
 
         <div className="mt-16 grid grid-cols-3 gap-8 text-center max-w-sm">
