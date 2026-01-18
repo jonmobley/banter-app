@@ -519,6 +519,21 @@ export default function Mobley() {
                     <p className="text-xs text-slate-500 truncate">{formatPhone(p.phone)}</p>
                   )}
                 </div>
+                <button
+                  onClick={() => isAdmin && toggleMute.mutate({ callSid: p.callSid, muted: !p.muted })}
+                  className={`p-2 rounded-lg transition-colors ${
+                    p.muted 
+                      ? 'bg-red-500/20 hover:bg-red-500/30' 
+                      : 'bg-emerald-500/20 hover:bg-emerald-500/30'
+                  } ${!isAdmin ? 'cursor-default' : ''}`}
+                  data-testid={`button-mute-${i}`}
+                >
+                  {p.muted ? (
+                    <VolumeX className="w-5 h-5 text-red-400" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 text-emerald-400" />
+                  )}
+                </button>
                 <div className="relative" ref={openDropdown === `active-${p.callSid}` ? dropdownRef : undefined}>
                   <button
                     onClick={() => setOpenDropdown(openDropdown === `active-${p.callSid}` ? null : `active-${p.callSid}`)}
@@ -529,19 +544,6 @@ export default function Mobley() {
                   </button>
                   {openDropdown === `active-${p.callSid}` && (
                     <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[120px]">
-                      <button
-                        onClick={() => {
-                          if (isAdmin) {
-                            toggleMute.mutate({ callSid: p.callSid, muted: !p.muted });
-                          }
-                          setOpenDropdown(null);
-                        }}
-                        className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${!isAdmin ? 'opacity-50' : ''} ${p.muted ? 'text-red-400' : 'text-slate-300'}`}
-                        data-testid={`button-mute-${i}`}
-                      >
-                        {p.muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                        {p.muted ? 'Unmute' : 'Mute'}
-                      </button>
                       {isAdmin && (
                         <button
                           onClick={() => {
