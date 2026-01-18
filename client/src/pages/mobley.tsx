@@ -212,14 +212,16 @@ export default function Mobley() {
                 {formatDuration(callDuration)}
               </span>
             </div>
+          </div>
+          
+          <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
+            <h1 className="text-xl font-bold" data-testid="text-title">Banter</h1>
             {isPreviewMode && (
-              <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">
+              <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full mt-1">
                 Preview
               </span>
             )}
           </div>
-          
-          <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold" data-testid="text-title">Banter</h1>
           
           <div className="flex items-center gap-2">
             <button
