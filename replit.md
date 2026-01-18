@@ -2,11 +2,44 @@
 
 ## Overview
 
-Banter is a phone-based walkie-talkie/audio conference application that allows users to join voice conferences by calling a Twilio phone number. The system automatically connects callers to a shared conference room without requiring PINs or complex setup. It includes a contact management system to identify callers by name.
+Banter is a phone-based walkie-talkie/audio conference application that allows users to join voice conferences by calling a Twilio phone number or from a web browser. The system automatically connects callers to a shared conference room without requiring PINs or complex setup. It includes a contact management system, scheduled events, role-based access, and real-time speaking indicators.
 
 ## User Preferences
 
-Preferred communication style: Simple, everyday language.
+- Preferred communication style: Simple, everyday language
+- Mobile-first design following Apple Human Interface Guidelines
+- Default to muted when joining calls (prevents accidental noise)
+
+## Product Taxonomy
+
+### Banter Types
+
+| Type | Description | Status |
+|------|-------------|--------|
+| **Banter** | Always-on single room, 24/7 drop-in | ✅ Implemented |
+| **Banter Scheduled** | Planned call with time, invites, reminders, auto-call | ✅ Implemented |
+| **Banter Channels** | Multi-room walkie-talkie with host controls, monitoring | 🔮 Future |
+| **Banter Broadcast** | One speaker, unlimited listeners | 🔮 Future |
+
+### Supporting Concepts
+
+| Concept | Description | Status |
+|---------|-------------|--------|
+| **Banter Groups** | Saved lists of contacts for quick invites | 🔮 Future |
+| **Admin** | Can create any Banter type, manage settings | ✅ Implemented |
+| **Host** | Runs a specific session (controls participants) | ✅ Implemented |
+| **Participant** | Can speak and listen | ✅ Implemented |
+| **Listener** | Can only hear (read-only) | ✅ Implemented |
+
+### SaaS Considerations (Future)
+
+When implementing pricing tiers, the database and features should support:
+- Participant limits per tier
+- Admin seat limits
+- Feature gating (Channels/Broadcast for paid tiers)
+- Usage analytics and quotas
+
+See `next-steps.md` for the full feature roadmap.
 
 ## System Architecture
 
