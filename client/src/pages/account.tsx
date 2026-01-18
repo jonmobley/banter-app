@@ -52,7 +52,7 @@ export default function Account() {
             data-testid="button-share"
           >
             <Share className="w-5 h-5" />
-            Share Number
+            Share
           </button>
 
           <div className="flex flex-col gap-3">
