@@ -92,7 +92,7 @@ export async function registerRoutes(
   app.get("/api/health", (_req, res) => {
     res.json({ 
       status: "ok", 
-      service: "phone-walkie-talkie",
+      service: "banter",
       timestamp: new Date().toISOString()
     });
   });
