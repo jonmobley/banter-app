@@ -871,7 +871,7 @@ export default function Mobley() {
                     <MoreVertical className="w-5 h-5 text-slate-400" />
                   </button>
                   {openDropdown === `active-${p.callSid}` && (
-                    <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[160px]">
+                    <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-xl py-1 z-50 min-w-[160px]">
                       {matchingExpected && (
                         <>
                           <button
@@ -989,7 +989,7 @@ export default function Mobley() {
                       <MoreVertical className="w-5 h-5 text-slate-400" />
                     </button>
                     {openDropdown === ep.id && (
-                      <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[160px]">
+                      <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-xl py-1 z-50 min-w-[160px]">
                         <button
                           onClick={() => {
                             callExpected.mutate(ep.id);
