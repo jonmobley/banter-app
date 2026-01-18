@@ -6,7 +6,7 @@ export default function Account() {
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <div className="flex-1 flex flex-col items-center px-6 py-8">
         <div className="w-full max-w-xs">
-          <Link href="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8">
+          <Link href="/mobley" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8">
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">Back</span>
           </Link>
