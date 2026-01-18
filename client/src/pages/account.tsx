@@ -1,7 +1,23 @@
 import { ArrowLeft, Users } from "lucide-react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+
+interface Contact {
+  id: string;
+  name: string;
+  phone: string;
+}
 
 export default function Account() {
+  const { data: contacts = [] } = useQuery<Contact[]>({
+    queryKey: ["/api/contacts"],
+    queryFn: async () => {
+      const res = await fetch("/api/contacts");
+      if (!res.ok) throw new Error("Failed to fetch contacts");
+      return res.json();
+    },
+  });
+
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <div className="flex-1 flex flex-col items-center px-6 py-8">
@@ -16,11 +32,12 @@ export default function Account() {
           <div className="flex flex-col gap-3">
             <Link
               href="/contacts"
-              className="flex items-center gap-3 w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-4 px-5 rounded-xl transition-colors"
+              className="flex items-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-4 px-5 rounded-xl transition-colors"
               data-testid="button-contacts"
             >
               <Users className="w-5 h-5 text-emerald-400" />
-              <span>Contacts</span>
+              <span className="ml-3">Contacts</span>
+              <span className="ml-auto text-slate-400">{contacts.length}</span>
             </Link>
           </div>
         </div>
