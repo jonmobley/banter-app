@@ -31,23 +31,29 @@ export const insertContactSchema = createInsertSchema(contacts).pick({
 export type InsertContact = z.infer<typeof insertContactSchema>;
 export type Contact = typeof contacts.$inferSelect;
 
+export const participantRoles = ['host', 'participant', 'listener'] as const;
+export type ParticipantRole = typeof participantRoles[number];
+
 export const expectedParticipants = pgTable("expected_participants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   phone: text("phone").notNull(),
   email: text("email"),
+  role: text("role").notNull().default('participant'),
 });
 
 export const insertExpectedParticipantSchema = createInsertSchema(expectedParticipants).pick({
   name: true,
   phone: true,
   email: true,
+  role: true,
 });
 
 export const updateExpectedParticipantSchema = createInsertSchema(expectedParticipants).pick({
   name: true,
   phone: true,
   email: true,
+  role: true,
 }).partial();
 
 export type InsertExpectedParticipant = z.infer<typeof insertExpectedParticipantSchema>;

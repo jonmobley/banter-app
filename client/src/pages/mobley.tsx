@@ -16,6 +16,7 @@ interface ExpectedParticipant {
   name: string;
   phone: string;
   email?: string | null;
+  role: 'host' | 'participant' | 'listener';
 }
 
 interface ParticipantsData {
@@ -387,8 +388,43 @@ export default function Mobley() {
   ];
 
   const sampleExpected: ExpectedParticipant[] = [
-    { id: "sample-exp-1", name: "Dad", phone: "+12025559999" },
+    { id: "sample-exp-1", name: "Dad", phone: "+12025559999", role: 'host' },
+    { id: "sample-exp-2", name: "Sue", phone: "+12025558888", role: 'listener' },
   ];
+  
+  const updateRole = useMutation({
+    mutationFn: async ({ id, role }: { id: string; role: string }) => {
+      const res = await fetch(`/api/expected/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin, role }),
+      });
+      if (!res.ok) throw new Error("Failed to update role");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
+    },
+  });
+  
+  const getParticipantRole = (phone: string): ExpectedParticipant['role'] | null => {
+    const normalizedPhone = phone.replace(/\D/g, '');
+    const ep = expectedParticipants.find(e => {
+      const normalizedExpected = e.phone.replace(/\D/g, '');
+      return normalizedPhone === normalizedExpected || 
+             normalizedPhone.endsWith(normalizedExpected) ||
+             normalizedExpected.endsWith(normalizedPhone);
+    });
+    return ep?.role || null;
+  };
+  
+  const isUserHost = (): boolean => {
+    if (!verifiedPhone) return false;
+    const role = getParticipantRole(verifiedPhone);
+    return role === 'host';
+  };
+  
+  const canShowControls = isAdmin || isUserHost();
 
   const realParticipants = participantsData?.participants || [];
   const realCount = participantsData?.count || 0;
@@ -741,20 +777,53 @@ export default function Mobley() {
           <div className="space-y-2">
             {participants.map((p, i) => {
               const isSpeaking = speakingState[p.callSid] || false;
+              const role = getParticipantRole(p.phone);
+              const matchingExpected = expectedParticipants.find(ep => {
+                const normalizedExpected = ep.phone.replace(/\D/g, '');
+                const normalizedActive = p.phone.replace(/\D/g, '');
+                return normalizedActive === normalizedExpected || 
+                       normalizedActive.endsWith(normalizedExpected) ||
+                       normalizedExpected.endsWith(normalizedActive);
+              });
+              
+              const getCardStyle = () => {
+                if (role === 'host') {
+                  return isSpeaking 
+                    ? 'bg-amber-500/30 ring-2 ring-amber-400/50' 
+                    : 'bg-amber-500/20';
+                }
+                if (role === 'listener') {
+                  return 'bg-blue-500/20';
+                }
+                return isSpeaking 
+                  ? 'bg-emerald-500/30 ring-2 ring-emerald-400/50' 
+                  : 'bg-slate-800/50';
+              };
+              
+              const getAvatarStyle = () => {
+                if (role === 'host') {
+                  return isSpeaking ? 'bg-amber-400/40' : 'bg-amber-500/30';
+                }
+                if (role === 'listener') {
+                  return 'bg-blue-500/30';
+                }
+                return isSpeaking ? 'bg-emerald-400/40' : 'bg-emerald-500/20';
+              };
+              
+              const getTextColor = () => {
+                if (role === 'host') return 'text-amber-400';
+                if (role === 'listener') return 'text-blue-400';
+                return 'text-emerald-400';
+              };
+              
               return (
               <div 
                 key={p.callSid} 
-                className={`flex items-center gap-3 rounded-lg px-4 py-3 transition-colors duration-200 ${
-                  isSpeaking 
-                    ? 'bg-emerald-500/30 ring-2 ring-emerald-400/50' 
-                    : 'bg-slate-800/50'
-                }`}
+                className={`flex items-center gap-3 rounded-lg px-4 py-3 transition-colors duration-200 ${getCardStyle()}`}
                 data-testid={`participant-${i}`}
               >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-200 ${
-                  isSpeaking ? 'bg-emerald-400/40' : 'bg-emerald-500/20'
-                }`}>
-                  <span className="text-base font-medium text-emerald-400">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-200 ${getAvatarStyle()}`}>
+                  <span className={`text-base font-medium ${getTextColor()}`}>
                     {p.name ? p.name.charAt(0).toUpperCase() : '?'}
                   </span>
                 </div>
@@ -766,18 +835,24 @@ export default function Mobley() {
                     {isMyParticipant(p.phone) && (
                       <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">You</span>
                     )}
+                    {role === 'host' && (
+                      <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">Host</span>
+                    )}
+                    {role === 'listener' && (
+                      <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">Listener</span>
+                    )}
                   </div>
                   {p.name && (
                     <p className="text-xs text-slate-500 truncate">{formatPhone(p.phone)}</p>
                   )}
                 </div>
                 <button
-                  onClick={() => isAdmin && toggleMute.mutate({ callSid: p.callSid, muted: !p.muted })}
+                  onClick={() => canShowControls && toggleMute.mutate({ callSid: p.callSid, muted: !p.muted })}
                   className={`p-2 rounded-lg transition-colors ${
                     p.muted 
                       ? 'bg-red-500/20 hover:bg-red-500/30' 
                       : 'bg-emerald-500/20 hover:bg-emerald-500/30'
-                  } ${!isAdmin ? 'cursor-default' : ''}`}
+                  } ${!canShowControls ? 'cursor-default opacity-50' : ''}`}
                   data-testid={`button-mute-${i}`}
                 >
                   {p.muted ? (
@@ -786,6 +861,7 @@ export default function Mobley() {
                     <Volume2 className="w-5 h-5 text-emerald-400" />
                   )}
                 </button>
+                {canShowControls && (
                 <div className="relative" ref={openDropdown === `active-${p.callSid}` ? dropdownRef : undefined}>
                   <button
                     onClick={() => setOpenDropdown(openDropdown === `active-${p.callSid}` ? null : `active-${p.callSid}`)}
@@ -795,32 +871,58 @@ export default function Mobley() {
                     <MoreVertical className="w-5 h-5 text-slate-400" />
                   </button>
                   {openDropdown === `active-${p.callSid}` && (
-                    <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[120px]">
-                      {isAdmin && (
-                        <button
-                          onClick={() => {
-                            const matchingExpected = expectedParticipants.find(ep => {
-                              const normalizedExpected = ep.phone.replace(/\D/g, '');
-                              const normalizedActive = p.phone.replace(/\D/g, '');
-                              return normalizedActive === normalizedExpected || 
-                                     normalizedActive.endsWith(normalizedExpected) ||
-                                     normalizedExpected.endsWith(normalizedActive);
-                            });
-                            if (matchingExpected) {
+                    <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[160px]">
+                      {matchingExpected && (
+                        <>
+                          <button
+                            onClick={() => {
                               openProfileDrawer(matchingExpected);
-                            }
-                            setOpenDropdown(null);
-                          }}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
-                          data-testid={`button-edit-active-${i}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                          Edit
-                        </button>
+                              setOpenDropdown(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                            data-testid={`button-edit-active-${i}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                            Edit
+                          </button>
+                          <div className="border-t border-slate-700 my-1" />
+                          <div className="px-4 py-1 text-xs text-slate-500 uppercase">Change Role</div>
+                          <button
+                            onClick={() => {
+                              updateRole.mutate({ id: matchingExpected.id, role: 'host' });
+                              setOpenDropdown(null);
+                            }}
+                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${role === 'host' ? 'text-amber-400' : 'text-slate-300'}`}
+                            data-testid={`button-role-host-${i}`}
+                          >
+                            Host
+                          </button>
+                          <button
+                            onClick={() => {
+                              updateRole.mutate({ id: matchingExpected.id, role: 'participant' });
+                              setOpenDropdown(null);
+                            }}
+                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${role === 'participant' ? 'text-emerald-400' : 'text-slate-300'}`}
+                            data-testid={`button-role-participant-${i}`}
+                          >
+                            Participant
+                          </button>
+                          <button
+                            onClick={() => {
+                              updateRole.mutate({ id: matchingExpected.id, role: 'listener' });
+                              setOpenDropdown(null);
+                            }}
+                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${role === 'listener' ? 'text-blue-400' : 'text-slate-300'}`}
+                            data-testid={`button-role-listener-${i}`}
+                          >
+                            Listener
+                          </button>
+                        </>
                       )}
                     </div>
                   )}
                 </div>
+                )}
               </div>
             );
             })}
@@ -835,23 +937,49 @@ export default function Mobley() {
                          normalizedExpected.endsWith(normalizedActive);
                 });
               })
-              .map((ep, i) => (
+              .map((ep, i) => {
+                const getExpectedCardStyle = () => {
+                  if (ep.role === 'host') return 'bg-amber-500/10 border border-amber-500/30';
+                  if (ep.role === 'listener') return 'bg-blue-500/10 border border-blue-500/30';
+                  return 'bg-slate-700/30';
+                };
+                const getExpectedAvatarStyle = () => {
+                  if (ep.role === 'host') return 'bg-amber-500/20';
+                  if (ep.role === 'listener') return 'bg-blue-500/20';
+                  return 'bg-slate-600/30';
+                };
+                const getExpectedTextColor = () => {
+                  if (ep.role === 'host') return 'text-amber-400';
+                  if (ep.role === 'listener') return 'text-blue-400';
+                  return 'text-slate-400';
+                };
+                
+                return (
                 <div 
                   key={ep.id} 
-                  className="flex items-center gap-3 bg-slate-700/30 rounded-lg px-4 py-3"
+                  className={`flex items-center gap-3 rounded-lg px-4 py-3 ${getExpectedCardStyle()}`}
                   data-testid={`expected-${i}`}
                 >
-                  <div className="w-10 h-10 rounded-full bg-slate-600/30 flex items-center justify-center">
-                    <span className="text-base font-medium text-slate-400">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getExpectedAvatarStyle()}`}>
+                    <span className={`text-base font-medium ${getExpectedTextColor()}`}>
                       {ep.name.charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-400 truncate">
-                      {ep.name}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className={`font-medium truncate ${getExpectedTextColor()}`}>
+                        {ep.name}
+                      </p>
+                      {ep.role === 'host' && (
+                        <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">Host</span>
+                      )}
+                      {ep.role === 'listener' && (
+                        <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">Listener</span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-500 truncate">{formatPhone(ep.phone)}</p>
                   </div>
+                  {canShowControls && (
                   <div className="relative" ref={openDropdown === ep.id ? dropdownRef : undefined}>
                     <button
                       onClick={() => setOpenDropdown(openDropdown === ep.id ? null : ep.id)}
@@ -861,33 +989,29 @@ export default function Mobley() {
                       <MoreVertical className="w-5 h-5 text-slate-400" />
                     </button>
                     {openDropdown === ep.id && (
-                      <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[120px]">
-                        {isAdmin && (
-                          <button
-                            onClick={() => {
-                              callExpected.mutate(ep.id);
-                              setOpenDropdown(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-emerald-400 hover:bg-slate-700"
-                            data-testid={`button-call-${i}`}
-                          >
-                            <PhoneOutgoing className="w-4 h-4" />
-                            Call
-                          </button>
-                        )}
-                        {isAdmin && (
-                          <button
-                            onClick={() => {
-                              openProfileDrawer(ep);
-                              setOpenDropdown(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
-                            data-testid={`button-edit-${i}`}
-                          >
-                            <Pencil className="w-4 h-4" />
-                            Edit
-                          </button>
-                        )}
+                      <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[160px]">
+                        <button
+                          onClick={() => {
+                            callExpected.mutate(ep.id);
+                            setOpenDropdown(null);
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-emerald-400 hover:bg-slate-700"
+                          data-testid={`button-call-${i}`}
+                        >
+                          <PhoneOutgoing className="w-4 h-4" />
+                          Call
+                        </button>
+                        <button
+                          onClick={() => {
+                            openProfileDrawer(ep);
+                            setOpenDropdown(null);
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                          data-testid={`button-edit-${i}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                          Edit
+                        </button>
                         <button
                           onClick={() => {
                             remindExpected.mutate(ep.id);
@@ -899,6 +1023,39 @@ export default function Mobley() {
                           <MessageSquare className="w-4 h-4" />
                           Remind
                         </button>
+                        <div className="border-t border-slate-700 my-1" />
+                        <div className="px-4 py-1 text-xs text-slate-500 uppercase">Change Role</div>
+                        <button
+                          onClick={() => {
+                            updateRole.mutate({ id: ep.id, role: 'host' });
+                            setOpenDropdown(null);
+                          }}
+                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'host' ? 'text-amber-400' : 'text-slate-300'}`}
+                          data-testid={`button-role-host-exp-${i}`}
+                        >
+                          Host
+                        </button>
+                        <button
+                          onClick={() => {
+                            updateRole.mutate({ id: ep.id, role: 'participant' });
+                            setOpenDropdown(null);
+                          }}
+                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'participant' ? 'text-emerald-400' : 'text-slate-300'}`}
+                          data-testid={`button-role-participant-exp-${i}`}
+                        >
+                          Participant
+                        </button>
+                        <button
+                          onClick={() => {
+                            updateRole.mutate({ id: ep.id, role: 'listener' });
+                            setOpenDropdown(null);
+                          }}
+                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'listener' ? 'text-blue-400' : 'text-slate-300'}`}
+                          data-testid={`button-role-listener-exp-${i}`}
+                        >
+                          Listener
+                        </button>
+                        <div className="border-t border-slate-700 my-1" />
                         <button
                           onClick={() => {
                             removeExpected.mutate(ep.id);
@@ -913,8 +1070,10 @@ export default function Mobley() {
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
-              ))}
+              );
+              })}
           </div>
         </div>
 

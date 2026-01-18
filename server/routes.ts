@@ -171,12 +171,26 @@ export async function registerRoutes(
    * - Continues even if everyone leaves temporarily
    * - Not recorded by default
    */
-  app.post("/voice/incoming", (req, res) => {
+  app.post("/voice/incoming", async (req, res) => {
     const callerNumber = req.body.From || "Unknown";
     const timestamp = new Date().toISOString();
     
     // Log incoming call details
     log(`📞 Incoming call from ${callerNumber} at ${timestamp}`, "twilio");
+    
+    // Check if caller is a listener (should be muted)
+    let shouldMute = false;
+    try {
+      const participants = await storage.getExpectedParticipants();
+      const normalizedCaller = normalizePhone(callerNumber);
+      const matchingParticipant = participants.find(p => normalizePhone(p.phone) === normalizedCaller);
+      if (matchingParticipant?.role === 'listener') {
+        shouldMute = true;
+        log(`👂 Caller ${callerNumber} is a listener - joining muted`, "twilio");
+      }
+    } catch (error) {
+      // Continue without role check if it fails
+    }
     
     // Create TwiML response
     const twiml = new VoiceResponse();
@@ -209,8 +223,8 @@ export async function registerRoutes(
       // Don't record by default (set to 'record-from-start' if needed)
       record: 'do-not-record',
       
-      // Optional: Start participants muted (uncomment if desired)
-      // muted: true,
+      // Mute listeners automatically
+      muted: shouldMute,
       
       // Optional: Wait music while alone (uncomment if desired)
       // waitUrl: 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3'
@@ -591,17 +605,24 @@ export async function registerRoutes(
    */
   app.patch("/api/expected/:id", async (req, res) => {
     try {
-      const { pin, name, phone, email } = req.body;
+      const { pin, name, phone, email, role } = req.body;
       const adminPin = process.env.ADMIN_PIN;
       
       if (!adminPin || pin !== adminPin) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
-      const updateData: { name?: string; phone?: string; email?: string } = {};
+      // Validate role if provided
+      const validRoles = ['host', 'participant', 'listener'];
+      if (role !== undefined && !validRoles.includes(role)) {
+        return res.status(400).json({ error: "Invalid role. Must be host, participant, or listener" });
+      }
+      
+      const updateData: { name?: string; phone?: string; email?: string; role?: string } = {};
       if (name !== undefined) updateData.name = name;
       if (phone !== undefined) updateData.phone = phone;
       if (email !== undefined) updateData.email = email;
+      if (role !== undefined) updateData.role = role;
       
       const updated = await storage.updateExpectedParticipant(req.params.id, updateData);
       
