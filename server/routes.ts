@@ -34,7 +34,7 @@ export async function registerRoutes(
    * POST /voice/incoming
    * 
    * Handles incoming phone calls from Twilio.
-   * Automatically joins the caller to the "team-main" conference room.
+   * Automatically joins the caller to the "banter-main" conference room.
    * 
    * Conference Settings:
    * - No PINs required
@@ -76,13 +76,13 @@ export async function registerRoutes(
       
       // Optional: Wait music while alone (uncomment if desired)
       // waitUrl: 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3'
-    }, 'team-main');
+    }, 'banter-main');
     
     // Send TwiML response
     res.type('text/xml');
     res.send(twiml.toString());
     
-    log(`✅ Connected ${callerNumber} to conference "team-main"`, "twilio");
+    log(`✅ Connected ${callerNumber} to conference "banter-main"`, "twilio");
   });
 
   /**
@@ -157,9 +157,9 @@ export async function registerRoutes(
     try {
       const client = await getTwilioClient();
       
-      // Find active conferences named "team-main"
+      // Find active conferences named "banter-main"
       const conferences = await client.conferences.list({
-        friendlyName: 'team-main',
+        friendlyName: 'banter-main',
         status: 'in-progress',
         limit: 1
       });
