@@ -43,7 +43,14 @@ Key server files:
 - Production: Static files served from `dist/public/`, built with Vite and esbuild
 
 ### Twilio Integration
-The application uses Replit's Twilio connector for authentication. Webhook endpoint `/voice/incoming` handles incoming calls and joins them to a conference room. The Twilio phone number must be configured in the Twilio console to point to this webhook.
+The application uses Replit's Twilio connector for authentication. Two methods to join the conference:
+
+1. **Phone Calling**: Webhook endpoint `/voice/incoming` handles incoming phone calls and joins them to the "banter-main" conference room. The Twilio phone number (220) 242-3245 must be configured in the Twilio console to point to this webhook.
+
+2. **Browser Calling**: Uses Twilio Voice JavaScript SDK (`@twilio/voice-sdk`) for web-based joining:
+   - `POST /api/voice/token` - Generates access tokens for browser clients, automatically creates/updates a TwiML App
+   - `POST /voice/browser` - TwiML endpoint for browser-initiated calls, joins the same "banter-main" conference
+   - Frontend uses `Device` and `Call` from `@twilio/voice-sdk` for WebRTC audio
 
 ## External Dependencies
 
@@ -59,6 +66,7 @@ The application uses Replit's Twilio connector for authentication. Webhook endpo
 
 ### Key NPM Packages
 - `twilio` - Twilio SDK for voice API
+- `@twilio/voice-sdk` - Twilio Voice JavaScript SDK for browser calling
 - `drizzle-orm` / `drizzle-zod` - Database ORM and validation
 - `@tanstack/react-query` - Data fetching and caching
 - `express` - Web server framework

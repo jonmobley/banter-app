@@ -53,3 +53,7 @@ export async function getTwilioFromPhoneNumber() {
   const { phoneNumber } = await getCredentials();
   return phoneNumber;
 }
+
+export async function getTwilioCredentials() {
+  return await getCredentials();
+}

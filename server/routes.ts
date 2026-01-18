@@ -21,7 +21,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import twilio from "twilio";
 import { log } from "./index";
-import { getTwilioClient, getTwilioFromPhoneNumber } from "./twilio";
+import { getTwilioClient, getTwilioFromPhoneNumber, getTwilioCredentials } from "./twilio";
+import twilio_jwt from "twilio/lib/jwt/AccessToken";
 import { WebSocketServer, WebSocket } from "ws";
 import { normalizePhone } from "@shared/schema";
 
@@ -825,6 +826,156 @@ export async function registerRoutes(
       log(`Error deleting scheduled banter: ${error.message}`, "api");
       res.status(500).json({ error: "Failed to delete scheduled banter" });
     }
+  });
+
+  // Cache for TwiML App SID
+  let cachedTwimlAppSid: string | null = null;
+  
+  /**
+   * POST /api/voice/token
+   * 
+   * Generates a Twilio Access Token for browser-based calling.
+   * The token allows the browser client to connect to the Voice SDK.
+   */
+  app.post("/api/voice/token", async (req, res) => {
+    try {
+      const { identity } = req.body;
+      
+      if (!identity) {
+        return res.status(400).json({ error: "Identity is required" });
+      }
+      
+      const credentials = await getTwilioCredentials();
+      const client = await getTwilioClient();
+      
+      // Get the webhook URL for browser calls
+      const host = req.headers.host || 'localhost:5000';
+      const forwardedProto = req.headers['x-forwarded-proto'];
+      const isSecure = forwardedProto === 'https' || req.protocol === 'https' || host.includes('replit');
+      const protocol = isSecure ? 'https' : 'http';
+      const baseUrl = `${protocol}://${host}`;
+      const voiceUrl = `${baseUrl}/voice/browser`;
+      
+      // Get or create TwiML App
+      let twimlAppSid = cachedTwimlAppSid;
+      
+      if (!twimlAppSid) {
+        // Check if we have one stored in env
+        if (process.env.TWILIO_TWIML_APP_SID) {
+          twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
+        } else {
+          // Look for existing app with our name
+          const apps = await client.applications.list({ friendlyName: 'Banter Browser Calling', limit: 1 });
+          
+          if (apps.length > 0) {
+            twimlAppSid = apps[0].sid;
+            // Update the voice URL in case it changed
+            await client.applications(twimlAppSid).update({
+              voiceUrl: voiceUrl,
+              voiceMethod: 'POST'
+            });
+            log(`📱 Updated existing TwiML App: ${twimlAppSid}`, "twilio");
+          } else {
+            // Create new TwiML App
+            const app = await client.applications.create({
+              friendlyName: 'Banter Browser Calling',
+              voiceUrl: voiceUrl,
+              voiceMethod: 'POST'
+            });
+            twimlAppSid = app.sid;
+            log(`📱 Created new TwiML App: ${twimlAppSid}`, "twilio");
+          }
+        }
+        cachedTwimlAppSid = twimlAppSid;
+      }
+      
+      // Create access token
+      const accessToken = new twilio_jwt(
+        credentials.accountSid,
+        credentials.apiKey,
+        credentials.apiKeySecret,
+        {
+          identity: identity,
+          ttl: 3600 // 1 hour
+        }
+      );
+      
+      // Create voice grant with the TwiML App SID
+      const voiceGrant = new twilio_jwt.VoiceGrant({
+        outgoingApplicationSid: twimlAppSid,
+        incomingAllow: false
+      });
+      
+      accessToken.addGrant(voiceGrant);
+      
+      log(`🎫 Generated voice token for ${identity}`, "twilio");
+      
+      res.json({ 
+        token: accessToken.toJwt(),
+        identity: identity,
+        voiceUrl: voiceUrl
+      });
+    } catch (error: any) {
+      log(`Error generating voice token: ${error.message}`, "twilio");
+      res.status(500).json({ error: "Failed to generate voice token" });
+    }
+  });
+
+  /**
+   * POST /voice/browser
+   * 
+   * TwiML endpoint for browser-initiated calls.
+   * Connects the browser client to the banter-main conference.
+   */
+  app.post("/voice/browser", async (req, res) => {
+    const identity = req.body.From || req.body.Caller || "web-user";
+    const userName = req.body.userName || identity;
+    
+    log(`🌐 Browser client joining: ${userName}`, "twilio");
+    
+    // Check if this user should be muted (listener role)
+    let shouldMute = false;
+    try {
+      const participants = await storage.getExpectedParticipants();
+      const matchingParticipant = participants.find(p => p.name === userName);
+      if (matchingParticipant?.role === 'listener') {
+        shouldMute = true;
+        log(`👂 Browser user ${userName} is a listener - joining muted`, "twilio");
+      }
+    } catch (error) {
+      // Continue without role check
+    }
+    
+    // Get the host for media stream
+    const host = req.headers.host || 'localhost:5000';
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    const isSecure = forwardedProto === 'https' || req.protocol === 'https' || host.includes('replit');
+    const wsProtocol = isSecure ? 'wss' : 'ws';
+    
+    const twiml = new VoiceResponse();
+    
+    // Start media stream for voice activity detection
+    const start = twiml.start();
+    start.stream({
+      url: `${wsProtocol}://${host}/media-stream`,
+      track: 'inbound_track'
+    });
+    
+    // Join the conference
+    const dial = twiml.dial();
+    dial.conference({
+      startConferenceOnEnter: true,
+      endConferenceOnExit: false,
+      beep: 'false',
+      record: 'do-not-record',
+      muted: shouldMute,
+      participantLabel: userName
+    }, 'banter-main');
+    
+    res.type('text/xml');
+    res.send(twiml.toString());
+    
+    log(`✅ Browser client ${userName} connected to conference "banter-main"`, "twilio");
   });
 
   return httpServer;

@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar } from "lucide-react";
+import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, PhoneOff, Mic, MicOff, Globe } from "lucide-react";
 import { Link } from "wouter";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Device, Call } from "@twilio/voice-sdk";
 
 interface Participant {
   callSid: string;
@@ -223,6 +224,148 @@ export default function Mobley() {
   const [newExpectedPhone, setNewExpectedPhone] = useState("");
   
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+  
+  // Browser calling state
+  const [twilioDevice, setTwilioDevice] = useState<Device | null>(null);
+  const [activeCall, setActiveCall] = useState<Call | null>(null);
+  const [browserCallStatus, setBrowserCallStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
+  const [isBrowserMuted, setIsBrowserMuted] = useState(false);
+  const [browserCallError, setBrowserCallError] = useState<string | null>(null);
+  
+  // Initialize Twilio Device
+  const initTwilioDevice = useCallback(async (identity: string) => {
+    try {
+      setBrowserCallError(null);
+      setBrowserCallStatus('connecting');
+      
+      // Get access token from server
+      const res = await fetch('/api/voice/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identity })
+      });
+      
+      if (!res.ok) {
+        throw new Error('Failed to get voice token');
+      }
+      
+      const { token, voiceUrl } = await res.json();
+      
+      // Create new Device
+      const device = new Device(token, {
+        logLevel: 1,
+        codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
+      });
+      
+      device.on('registered', () => {
+        console.log('Twilio Device registered');
+      });
+      
+      device.on('error', (error) => {
+        console.error('Twilio Device error:', error);
+        setBrowserCallError(error.message || 'Device error');
+        setBrowserCallStatus('disconnected');
+      });
+      
+      device.on('tokenWillExpire', async () => {
+        // Refresh the token
+        const refreshRes = await fetch('/api/voice/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identity })
+        });
+        if (refreshRes.ok) {
+          const data = await refreshRes.json();
+          device.updateToken(data.token);
+        }
+      });
+      
+      await device.register();
+      setTwilioDevice(device);
+      
+      // Make the outbound call to join conference
+      const call = await device.connect({
+        params: {
+          To: 'banter-main',
+          userName: identity
+        }
+      });
+      
+      call.on('accept', () => {
+        console.log('Browser call connected');
+        setBrowserCallStatus('connected');
+      });
+      
+      call.on('disconnect', () => {
+        console.log('Browser call ended');
+        setBrowserCallStatus('disconnected');
+        setActiveCall(null);
+        setIsBrowserMuted(false);
+        queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      });
+      
+      call.on('cancel', () => {
+        console.log('Browser call canceled');
+        setBrowserCallStatus('disconnected');
+        setActiveCall(null);
+        setIsBrowserMuted(false);
+      });
+      
+      call.on('reject', () => {
+        console.log('Browser call rejected');
+        setBrowserCallStatus('disconnected');
+        setActiveCall(null);
+        setIsBrowserMuted(false);
+      });
+      
+      call.on('error', (error) => {
+        console.error('Browser call error:', error);
+        setBrowserCallError(error.message || 'Call error');
+        setBrowserCallStatus('disconnected');
+        setActiveCall(null);
+        setIsBrowserMuted(false);
+      });
+      
+      setActiveCall(call);
+      
+    } catch (error: any) {
+      console.error('Failed to initialize Twilio device:', error);
+      setBrowserCallError(error.message || 'Failed to connect');
+      setBrowserCallStatus('disconnected');
+    }
+  }, [queryClient]);
+  
+  const hangupBrowserCall = useCallback(() => {
+    if (activeCall) {
+      activeCall.disconnect();
+    }
+    if (twilioDevice) {
+      twilioDevice.disconnectAll();
+      twilioDevice.unregister();
+      setTwilioDevice(null);
+    }
+    setActiveCall(null);
+    setBrowserCallStatus('disconnected');
+    setIsBrowserMuted(false); // Reset mute state on hangup
+  }, [activeCall, twilioDevice]);
+  
+  const toggleBrowserMute = useCallback(() => {
+    if (activeCall) {
+      const newMuted = !isBrowserMuted;
+      activeCall.mute(newMuted);
+      setIsBrowserMuted(newMuted);
+    }
+  }, [activeCall, isBrowserMuted]);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (twilioDevice) {
+        twilioDevice.disconnectAll();
+        twilioDevice.unregister();
+      }
+    };
+  }, [twilioDevice]);
   
   // Auth state
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(() => {
@@ -449,6 +592,25 @@ export default function Mobley() {
     const roleB = getParticipantRole(b.phone) || 'participant';
     return roleOrder[roleA] - roleOrder[roleB];
   });
+  
+  // Browser call join function (defined after verifiedPhone and expectedData)
+  const joinFromBrowser = useCallback(() => {
+    // Get user identity - use verified phone name or guest
+    let identity = 'Web User';
+    if (verifiedPhone) {
+      const matchingParticipant = expectedData?.find(p => {
+        const normalizedExpected = p.phone.replace(/\D/g, '');
+        const normalizedVerified = verifiedPhone.replace(/\D/g, '');
+        return normalizedExpected === normalizedVerified || 
+               normalizedExpected.endsWith(normalizedVerified) ||
+               normalizedVerified.endsWith(normalizedExpected);
+      });
+      if (matchingParticipant) {
+        identity = matchingParticipant.name;
+      }
+    }
+    initTwilioDevice(identity);
+  }, [verifiedPhone, expectedData, initTwilioDevice]);
   
   const hasActiveCall = conferenceActive || showDemoPreview;
 
@@ -1084,13 +1246,61 @@ export default function Mobley() {
 
         <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8 pb-8 px-6">
           <div className="flex flex-col gap-3 max-w-xs mx-auto">
-            <a
-              href="tel:+12202423245"
-              className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-              data-testid="button-join"
-            >
-              Join
-            </a>
+            {browserCallStatus === 'connected' ? (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={toggleBrowserMute}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full transition-colors ${
+                    isBrowserMuted 
+                      ? 'bg-red-500 hover:bg-red-400 text-white' 
+                      : 'bg-slate-700 hover:bg-slate-600 text-white'
+                  }`}
+                  data-testid="button-browser-mute"
+                >
+                  {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  {isBrowserMuted ? 'Unmute' : 'Mute'}
+                </button>
+                <button
+                  onClick={hangupBrowserCall}
+                  className="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  data-testid="button-browser-hangup"
+                >
+                  <PhoneOff className="w-5 h-5" />
+                  Leave
+                </button>
+              </div>
+            ) : browserCallStatus === 'connecting' ? (
+              <button
+                disabled
+                className="flex items-center justify-center gap-2 w-full bg-slate-600 text-white font-semibold py-4 px-6 rounded-full"
+                data-testid="button-browser-connecting"
+              >
+                <Globe className="w-5 h-5 animate-pulse" />
+                Connecting...
+              </button>
+            ) : (
+              <div className="flex items-center gap-3">
+                <a
+                  href="tel:+12202423245"
+                  className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  data-testid="button-join-phone"
+                >
+                  <Phone className="w-5 h-5" />
+                  Call
+                </a>
+                <button
+                  onClick={joinFromBrowser}
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  data-testid="button-join-browser"
+                >
+                  <Globe className="w-5 h-5" />
+                  Browser
+                </button>
+              </div>
+            )}
+            {browserCallError && (
+              <p className="text-red-400 text-sm text-center">{browserCallError}</p>
+            )}
           </div>
         </div>
 
@@ -1149,22 +1359,74 @@ export default function Mobley() {
         </button>
 
         <div className="flex flex-col gap-4 w-full max-w-xs">
-          <a
-            href="tel:+12202423245"
-            className="flex items-center justify-center w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-            data-testid="button-join"
-          >
-            Join
-          </a>
-          
-          {isAdmin && (
-            <Link
-              href="/account"
-              className="flex items-center justify-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-6 rounded-full transition-colors"
-              data-testid="button-account"
+          {browserCallStatus === 'connected' ? (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={toggleBrowserMute}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full transition-colors ${
+                    isBrowserMuted 
+                      ? 'bg-red-500 hover:bg-red-400 text-white' 
+                      : 'bg-slate-700 hover:bg-slate-600 text-white'
+                  }`}
+                  data-testid="button-browser-mute-home"
+                >
+                  {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  {isBrowserMuted ? 'Unmute' : 'Mute'}
+                </button>
+                <button
+                  onClick={hangupBrowserCall}
+                  className="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  data-testid="button-browser-hangup-home"
+                >
+                  <PhoneOff className="w-5 h-5" />
+                  Leave
+                </button>
+              </div>
+            </div>
+          ) : browserCallStatus === 'connecting' ? (
+            <button
+              disabled
+              className="flex items-center justify-center gap-2 w-full bg-slate-600 text-white font-semibold py-4 px-6 rounded-full"
+              data-testid="button-browser-connecting-home"
             >
-              Manage Account
-            </Link>
+              <Globe className="w-5 h-5 animate-pulse" />
+              Connecting...
+            </button>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <a
+                  href="tel:+12202423245"
+                  className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  data-testid="button-join-phone-home"
+                >
+                  <Phone className="w-5 h-5" />
+                  Call
+                </a>
+                <button
+                  onClick={joinFromBrowser}
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  data-testid="button-join-browser-home"
+                >
+                  <Globe className="w-5 h-5" />
+                  Browser
+                </button>
+              </div>
+              
+              {isAdmin && (
+                <Link
+                  href="/account"
+                  className="flex items-center justify-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-6 rounded-full transition-colors"
+                  data-testid="button-account"
+                >
+                  Manage Account
+                </Link>
+              )}
+            </>
+          )}
+          {browserCallError && (
+            <p className="text-red-400 text-sm text-center">{browserCallError}</p>
           )}
         </div>
 
