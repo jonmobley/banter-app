@@ -1,4 +1,4 @@
-import { ArrowLeft, Users, Phone } from "lucide-react";
+import { ArrowLeft, Users, Phone, Share } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 
@@ -31,12 +31,29 @@ export default function Account() {
 
           <Link
             href="/mobley"
-            className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors mb-6"
+            className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors mb-3"
             data-testid="button-join"
           >
             <Phone className="w-5 h-5" />
             Join the Banter
           </Link>
+
+          <button
+            onClick={() => {
+              if (navigator.share) {
+                navigator.share({
+                  title: 'Join the Banter',
+                  text: 'Call (220) 242-3245 to join the group call!',
+                  url: 'tel:+12202423245'
+                });
+              }
+            }}
+            className="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-4 px-6 rounded-full transition-colors mb-6"
+            data-testid="button-share"
+          >
+            <Share className="w-5 h-5" />
+            Share Number
+          </button>
 
           <div className="flex flex-col gap-3">
             <Link
