@@ -502,7 +502,7 @@ export default function Mobley() {
               data-testid="button-join"
             >
               <Phone className="w-5 h-5" />
-              Join Banter
+              Banter
             </a>
           </div>
         </div>
@@ -553,7 +553,7 @@ export default function Mobley() {
             data-testid="button-join"
           >
             <Phone className="w-5 h-5" />
-            Join Banter
+            Banter
           </a>
           
           {isAdmin && (
