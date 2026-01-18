@@ -214,14 +214,7 @@ export default function Mobley() {
             </div>
           </div>
           
-          <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
-            <h1 className="text-xl font-bold" data-testid="text-title">Banter</h1>
-            {isPreviewMode && (
-              <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full mt-1">
-                Preview
-              </span>
-            )}
-          </div>
+          <h1 className="absolute left-1/2 -translate-x-1/2 text-xl font-bold" data-testid="text-title">Banter</h1>
           
           <div className="flex items-center gap-2">
             <button
@@ -251,8 +244,15 @@ export default function Mobley() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto px-6 pb-48">
+        {isPreviewMode && (
+          <div className="flex justify-center py-2">
+            <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">
+              Preview
+            </span>
+          </div>
+        )}
 
+        <div className="flex-1 overflow-auto px-6 pb-48">
           <div className="space-y-2">
             {participants.map((p, i) => (
               <div 
