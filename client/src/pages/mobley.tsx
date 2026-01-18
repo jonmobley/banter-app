@@ -201,13 +201,16 @@ export default function Mobley() {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col relative">
         <header className="flex items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 bg-emerald-500/20 rounded-full pl-3 pr-4 py-2">
               <Phone className="w-5 h-5 text-emerald-400" />
+              <span className="text-lg font-medium text-emerald-400" data-testid="text-duration">
+                {formatDuration(callDuration)}
+              </span>
+              <span className="text-sm text-emerald-400/70">
+                ({participantCount})
+              </span>
             </div>
-            <span className="text-lg font-medium text-emerald-400" data-testid="text-duration">
-              {formatDuration(callDuration)}
-            </span>
             {isPreviewMode && (
               <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">
                 Preview
