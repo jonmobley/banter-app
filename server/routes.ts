@@ -16,15 +16,88 @@
  * That's it! When someone calls your Twilio number, they'll automatically join the conference.
  */
 
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import twilio from "twilio";
 import { log } from "./index";
-import { getTwilioClient, getTwilioFromPhoneNumber, getTwilioCredentials } from "./twilio";
+import { getTwilioClient, getTwilioFromPhoneNumber, getTwilioCredentials, getTwilioAuthToken, withRetry } from "./twilio";
 import twilio_jwt from "twilio/lib/jwt/AccessToken";
 import { WebSocketServer, WebSocket } from "ws";
 import { normalizePhone } from "@shared/schema";
+
+/**
+ * Get the public base URL for webhook callbacks
+ * Uses REPLIT_DEV_DOMAIN in development or constructs from request headers
+ */
+function getPublicBaseUrl(req: Request): string {
+  // In Replit, use the dev domain for reliable URLs
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+  
+  // Fallback to request-based URL construction
+  const host = req.headers.host || 'localhost:5000';
+  const forwardedProto = req.headers['x-forwarded-proto'] as string;
+  const isSecure = forwardedProto === 'https' || req.protocol === 'https' || host.includes('replit');
+  const protocol = isSecure ? 'https' : 'http';
+  return `${protocol}://${host}`;
+}
+
+/**
+ * Twilio Webhook Signature Validation Middleware
+ * 
+ * Verifies that incoming webhook requests are actually from Twilio
+ * using HMAC-SHA1 signature validation with the auth token.
+ * This prevents spoofed requests from unauthorized sources.
+ */
+async function validateTwilioWebhook(req: Request, res: Response, next: NextFunction) {
+  try {
+    const authToken = await getTwilioAuthToken();
+    
+    if (!authToken) {
+      log("⚠️ Twilio auth token not available, skipping webhook validation", "twilio");
+      return next();
+    }
+    
+    const twilioSignature = req.headers['x-twilio-signature'] as string;
+    
+    if (!twilioSignature) {
+      log("⚠️ Missing Twilio signature header", "twilio");
+      return res.status(403).send('Forbidden: Missing signature');
+    }
+    
+    // Build the full URL that Twilio used to sign the request
+    const baseUrl = getPublicBaseUrl(req);
+    const url = `${baseUrl}${req.originalUrl}`;
+    
+    // For form-urlencoded requests (Twilio webhooks), use the parsed body params
+    // Twilio expects the params as they were sent in the POST body
+    const params = req.body || {};
+    
+    // Validate the request
+    const isValid = twilio.validateRequest(authToken, twilioSignature, url, params);
+    
+    if (!isValid) {
+      log(`⚠️ Invalid Twilio signature for ${req.path} (URL: ${url})`, "twilio");
+      // In development, log more details but still proceed
+      if (process.env.NODE_ENV === 'development') {
+        log(`⚠️ Signature validation failed in dev mode, allowing request`, "twilio");
+        return next();
+      }
+      return res.status(403).send('Forbidden: Invalid signature');
+    }
+    
+    next();
+  } catch (error: any) {
+    log(`Error validating Twilio webhook: ${error.message}`, "twilio");
+    // Allow request to proceed if validation fails due to config issues in development
+    if (process.env.NODE_ENV === 'development') {
+      return next();
+    }
+    return res.status(500).send('Server error during validation');
+  }
+}
 
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
@@ -171,8 +244,10 @@ export async function registerRoutes(
    * - Starts when first person joins
    * - Continues even if everyone leaves temporarily
    * - Not recorded by default
+   * 
+   * Security: Validates Twilio webhook signature
    */
-  app.post("/voice/incoming", async (req, res) => {
+  app.post("/voice/incoming", validateTwilioWebhook, async (req, res) => {
     const callerNumber = req.body.From || "Unknown";
     const timestamp = new Date().toISOString();
     
@@ -209,6 +284,10 @@ export async function registerRoutes(
       track: 'inbound_track'
     });
     
+    // Build status callback URL for participant events using public base URL
+    const baseUrl = getPublicBaseUrl(req);
+    const statusCallbackUrl = `${baseUrl}/voice/conference-status`;
+    
     // Join the caller to the conference
     const dial = twiml.dial();
     dial.conference({
@@ -227,6 +306,10 @@ export async function registerRoutes(
       // Mute listeners automatically
       muted: shouldMute,
       
+      // Status callbacks for real-time participant tracking
+      statusCallback: statusCallbackUrl,
+      statusCallbackEvent: ['join', 'leave', 'mute', 'hold'] as any,
+      
       // Optional: Wait music while alone (uncomment if desired)
       // waitUrl: 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3'
     }, 'banter-main');
@@ -236,6 +319,42 @@ export async function registerRoutes(
     res.send(twiml.toString());
     
     log(`✅ Connected ${callerNumber} to conference "banter-main"`, "twilio");
+  });
+  
+  /**
+   * POST /voice/conference-status
+   * 
+   * Receives conference status callbacks from Twilio.
+   * Tracks participant join/leave/mute events in real-time without polling.
+   * 
+   * Security: Validates Twilio webhook signature
+   */
+  app.post("/voice/conference-status", validateTwilioWebhook, (req, res) => {
+    const { StatusCallbackEvent, CallSid, ConferenceSid, Muted, Hold, FriendlyName } = req.body;
+    
+    log(`📋 Conference status: ${StatusCallbackEvent} for call ${CallSid} in ${FriendlyName}`, "twilio");
+    
+    // Broadcast the event to all frontend clients
+    const message = JSON.stringify({
+      type: 'conference-status',
+      data: {
+        event: StatusCallbackEvent,
+        callSid: CallSid,
+        conferenceSid: ConferenceSid,
+        muted: Muted === 'true',
+        hold: Hold === 'true',
+        timestamp: Date.now()
+      }
+    });
+    
+    frontendClients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(message);
+      }
+    });
+    
+    // Acknowledge receipt (Twilio expects 200 OK)
+    res.status(200).send('OK');
   });
   
   /**
@@ -285,15 +404,15 @@ export async function registerRoutes(
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
       await storage.createVerificationCode(normalizedPhone, code, expiresAt);
 
-      // Send SMS via Twilio
+      // Send SMS via Twilio with retry for rate limiting
       const client = await getTwilioClient();
       const fromNumber = await getTwilioFromPhoneNumber();
       
-      await client.messages.create({
+      await withRetry(() => client.messages.create({
         body: `Your Banter verification code is: ${code}`,
         from: fromNumber,
         to: normalizedPhone
-      });
+      }));
 
       log(`📱 Sent verification code to ${normalizedPhone}`, "auth");
       res.json({ success: true, message: "Verification code sent" });
@@ -662,11 +781,11 @@ export async function registerRoutes(
       const client = await getTwilioClient();
       const twilioNumber = process.env.TWILIO_PHONE_NUMBER || '+12202423245';
       
-      await client.messages.create({
+      await withRetry(() => client.messages.create({
         body: `Hey ${participant.name}! Join the Banter call now: (220) 242-3245`,
         to: participant.phone,
         from: twilioNumber
-      });
+      }));
       
       log(`SMS reminder sent to ${participant.name} at ${participant.phone}`, "twilio");
       res.json({ success: true });
@@ -706,13 +825,14 @@ export async function registerRoutes(
       const isSecure = forwardedProto === 'https' || req.protocol === 'https' || host.includes('replit');
       const protocol = isSecure ? 'https' : 'http';
       
-      // Initiate outbound call to participant
-      const call = await client.calls.create({
+      // Initiate outbound call to participant with retry for rate limiting
+      const baseUrl = getPublicBaseUrl(req);
+      const call = await withRetry(() => client.calls.create({
         to: normalizePhone(participant.phone),
         from: fromNumber,
-        url: `${protocol}://${host}/voice/incoming`,
+        url: `${baseUrl}/voice/incoming`,
         method: 'POST'
-      });
+      }));
       
       log(`📞 Outbound call initiated to ${participant.name} (${participant.phone}), callSid: ${call.sid}`, "twilio");
       res.json({ success: true, callSid: call.sid });
@@ -910,10 +1030,18 @@ export async function registerRoutes(
       
       log(`🎫 Generated voice token for ${identity}`, "twilio");
       
+      // Token TTL and recommended refresh time (30 seconds before expiry)
+      const ttlSeconds = 3600;
+      const expiresAt = Date.now() + (ttlSeconds * 1000);
+      const refreshAt = expiresAt - (30 * 1000); // Refresh 30s before expiry
+      
       res.json({ 
         token: accessToken.toJwt(),
         identity: identity,
-        voiceUrl: voiceUrl
+        voiceUrl: voiceUrl,
+        expiresAt: expiresAt,
+        refreshAt: refreshAt,
+        ttlSeconds: ttlSeconds
       });
     } catch (error: any) {
       log(`Error generating voice token: ${error.message}`, "twilio");
@@ -926,8 +1054,10 @@ export async function registerRoutes(
    * 
    * TwiML endpoint for browser-initiated calls.
    * Connects the browser client to the banter-main conference.
+   * 
+   * Security: Validates Twilio webhook signature
    */
-  app.post("/voice/browser", async (req, res) => {
+  app.post("/voice/browser", validateTwilioWebhook, async (req, res) => {
     const identity = req.body.From || req.body.Caller || "web-user";
     const userName = req.body.userName || identity;
     
@@ -961,6 +1091,10 @@ export async function registerRoutes(
       track: 'inbound_track'
     });
     
+    // Build status callback URL for participant events using public base URL
+    const baseUrl = getPublicBaseUrl(req);
+    const statusCallbackUrl = `${baseUrl}/voice/conference-status`;
+    
     // Join the conference
     const dial = twiml.dial();
     dial.conference({
@@ -969,7 +1103,9 @@ export async function registerRoutes(
       beep: 'false',
       record: 'do-not-record',
       muted: shouldMute,
-      participantLabel: userName
+      participantLabel: userName,
+      statusCallback: statusCallbackUrl,
+      statusCallbackEvent: ['join', 'leave', 'mute', 'hold'] as any
     }, 'banter-main');
     
     res.type('text/xml');

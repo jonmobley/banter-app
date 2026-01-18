@@ -38,8 +38,43 @@ async function getCredentials() {
     accountSid: connectionSettings.settings.account_sid,
     apiKey: connectionSettings.settings.api_key,
     apiKeySecret: connectionSettings.settings.api_key_secret,
+    authToken: connectionSettings.settings.auth_token,
     phoneNumber: connectionSettings.settings.phone_number
   };
+}
+
+/**
+ * Rate-limited Twilio API call wrapper with exponential backoff
+ * Handles 429 (Too Many Requests) errors gracefully
+ */
+export async function withRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelayMs: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      lastError = error;
+      
+      // Check if it's a rate limit error (429)
+      const isRateLimit = error.status === 429 || error.code === 20429;
+      
+      if (!isRateLimit || attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Exponential backoff: 1s, 2s, 4s, etc.
+      const delay = initialDelayMs * Math.pow(2, attempt);
+      console.log(`[twilio] Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
 }
 
 export async function getTwilioClient() {
@@ -56,4 +91,9 @@ export async function getTwilioFromPhoneNumber() {
 
 export async function getTwilioCredentials() {
   return await getCredentials();
+}
+
+export async function getTwilioAuthToken() {
+  const { authToken } = await getCredentials();
+  return authToken;
 }
