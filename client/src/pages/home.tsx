@@ -11,7 +11,7 @@ export default function Home() {
         
         <h1 className="text-5xl font-bold mb-3 text-center" data-testid="text-title">Banter</h1>
         <p className="text-xl text-slate-400 text-center mb-8 max-w-sm">
-          Instant walkie-talkie for your team. Just call and talk.
+          Instant walkie-talkie for your team.
         </p>
 
         <div className="flex flex-col gap-4 w-full max-w-xs">
