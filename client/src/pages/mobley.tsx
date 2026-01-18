@@ -111,8 +111,18 @@ export default function Mobley() {
     }
   };
 
-  const participantCount = participantsData?.count || 0;
-  const participants = participantsData?.participants || [];
+  const sampleParticipants: Participant[] = [
+    { callSid: "sample-1", phone: "+12025551234", name: "Mom", muted: false, hold: false },
+    { callSid: "sample-2", phone: "+13105559876", name: "Jake", muted: true, hold: false },
+    { callSid: "sample-3", phone: "+14155550000", name: null, muted: false, hold: false },
+  ];
+
+  const realParticipants = participantsData?.participants || [];
+  const realCount = participantsData?.count || 0;
+  
+  const isPreviewMode = realCount === 0;
+  const participants = isPreviewMode ? sampleParticipants : realParticipants;
+  const participantCount = isPreviewMode ? sampleParticipants.length : realCount;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col relative">
@@ -234,6 +244,11 @@ export default function Mobley() {
                   : `${participantCount} people on the call`
                 }
               </span>
+              {isPreviewMode && (
+                <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">
+                  Preview
+                </span>
+              )}
             </div>
 
             <div className="space-y-2">
