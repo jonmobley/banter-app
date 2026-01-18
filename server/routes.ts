@@ -229,5 +229,76 @@ export async function registerRoutes(
     }
   });
 
+  /**
+   * POST /api/admin/verify
+   * 
+   * Verifies the admin PIN code.
+   */
+  app.post("/api/admin/verify", (req, res) => {
+    const { pin } = req.body;
+    const adminPin = process.env.ADMIN_PIN;
+    
+    if (!adminPin) {
+      log("ADMIN_PIN not configured", "api");
+      return res.status(500).json({ error: "Admin PIN not configured" });
+    }
+    
+    if (pin === adminPin) {
+      log("Admin PIN verified successfully", "api");
+      return res.json({ success: true });
+    } else {
+      log("Invalid admin PIN attempt", "api");
+      return res.status(401).json({ error: "Invalid PIN" });
+    }
+  });
+
+  /**
+   * POST /api/admin/mute
+   * 
+   * Mutes or unmutes a participant in the conference.
+   * Requires admin PIN verification.
+   */
+  app.post("/api/admin/mute", async (req, res) => {
+    try {
+      const { pin, callSid, muted } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      if (!callSid || typeof muted !== 'boolean') {
+        return res.status(400).json({ error: "callSid and muted are required" });
+      }
+      
+      const client = await getTwilioClient();
+      
+      // Find the active conference
+      const conferences = await client.conferences.list({
+        friendlyName: 'banter-main',
+        status: 'in-progress',
+        limit: 1
+      });
+      
+      if (conferences.length === 0) {
+        return res.status(404).json({ error: "No active conference" });
+      }
+      
+      const conference = conferences[0];
+      
+      // Update the participant's mute status
+      await client.conferences(conference.sid)
+        .participants(callSid)
+        .update({ muted });
+      
+      log(`Participant ${callSid} ${muted ? 'muted' : 'unmuted'} by admin`, "twilio");
+      
+      res.json({ success: true, callSid, muted });
+    } catch (error: any) {
+      log(`Error muting participant: ${error.message}`, "twilio");
+      res.status(500).json({ error: "Failed to update mute status" });
+    }
+  });
+
   return httpServer;
 }

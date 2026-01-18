@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
-import { Phone, Ban, Users } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Phone, Ban, Users, Lock, Unlock, Volume2, VolumeX } from "lucide-react";
 import { Link } from "wouter";
+import { useState } from "react";
 
 interface Participant {
   callSid: string;
@@ -30,6 +31,13 @@ function formatPhone(phone: string): string {
 }
 
 export default function Mobley() {
+  const queryClient = useQueryClient();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinError, setPinError] = useState(false);
+  const [pinDigits, setPinDigits] = useState(["", "", "", ""]);
+
   const { data: participantsData } = useQuery<ParticipantsData>({
     queryKey: ["/api/participants"],
     queryFn: async () => {
@@ -40,11 +48,136 @@ export default function Mobley() {
     refetchInterval: 2000,
   });
 
+  const verifyPin = useMutation({
+    mutationFn: async (pin: string) => {
+      const res = await fetch("/api/admin/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin }),
+      });
+      if (!res.ok) throw new Error("Invalid PIN");
+      return res.json();
+    },
+    onSuccess: () => {
+      setIsAdmin(true);
+      setShowPinModal(false);
+      setPinError(false);
+      setPinDigits(["", "", "", ""]);
+    },
+    onError: () => {
+      setPinError(true);
+      setPinDigits(["", "", "", ""]);
+    },
+  });
+
+  const toggleMute = useMutation({
+    mutationFn: async ({ callSid, muted }: { callSid: string; muted: boolean }) => {
+      const res = await fetch("/api/admin/mute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin, callSid, muted }),
+      });
+      if (!res.ok) throw new Error("Failed to mute");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+    },
+  });
+
+  const handlePinDigit = (index: number, value: string) => {
+    if (value.length > 1) return;
+    const newDigits = [...pinDigits];
+    newDigits[index] = value;
+    setPinDigits(newDigits);
+    setPinError(false);
+
+    if (value && index < 3) {
+      const nextInput = document.getElementById(`pin-${index + 1}`);
+      nextInput?.focus();
+    }
+
+    if (newDigits.every(d => d !== "")) {
+      const pin = newDigits.join("");
+      setAdminPin(pin);
+      verifyPin.mutate(pin);
+    }
+  };
+
+  const handlePinKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !pinDigits[index] && index > 0) {
+      const prevInput = document.getElementById(`pin-${index - 1}`);
+      prevInput?.focus();
+    }
+  };
+
   const participantCount = participantsData?.count || 0;
   const participants = participantsData?.participants || [];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col relative">
+      <button
+        onClick={() => {
+          if (isAdmin) {
+            setIsAdmin(false);
+            setAdminPin("");
+          } else {
+            setShowPinModal(true);
+          }
+        }}
+        className="absolute top-4 right-4 p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
+        data-testid="button-admin"
+      >
+        {isAdmin ? (
+          <Unlock className="w-5 h-5 text-emerald-400" />
+        ) : (
+          <Lock className="w-5 h-5 text-slate-400" />
+        )}
+      </button>
+
+      {showPinModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
+          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-xs">
+            <h2 className="text-xl font-bold text-center mb-2">Admin Access</h2>
+            <p className="text-sm text-slate-400 text-center mb-6">Enter 4-digit PIN</p>
+            
+            <div className="flex justify-center gap-3 mb-6">
+              {pinDigits.map((digit, i) => (
+                <input
+                  key={i}
+                  id={`pin-${i}`}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handlePinDigit(i, e.target.value.replace(/\D/g, ""))}
+                  onKeyDown={(e) => handlePinKeyDown(i, e)}
+                  className={`w-14 h-14 text-center text-2xl font-bold rounded-lg bg-slate-800 border-2 outline-none transition-colors ${
+                    pinError ? 'border-red-500' : 'border-slate-700 focus:border-emerald-500'
+                  }`}
+                  data-testid={`input-pin-${i}`}
+                />
+              ))}
+            </div>
+            
+            {pinError && (
+              <p className="text-red-400 text-sm text-center mb-4">Invalid PIN. Try again.</p>
+            )}
+            
+            <button
+              onClick={() => {
+                setShowPinModal(false);
+                setPinDigits(["", "", "", ""]);
+                setPinError(false);
+              }}
+              className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-8">
           <Phone className="w-10 h-10 text-emerald-400" />
@@ -121,7 +254,25 @@ export default function Mobley() {
                       <p className="text-xs text-slate-500 truncate">{formatPhone(p.phone)}</p>
                     )}
                   </div>
-                  <div className={`w-2 h-2 rounded-full ${p.muted ? 'bg-slate-500' : 'bg-emerald-400 animate-pulse'}`} />
+                  {isAdmin ? (
+                    <button
+                      onClick={() => toggleMute.mutate({ callSid: p.callSid, muted: !p.muted })}
+                      className={`p-2 rounded-lg transition-colors ${
+                        p.muted 
+                          ? 'bg-red-500/20 hover:bg-red-500/30' 
+                          : 'bg-emerald-500/20 hover:bg-emerald-500/30'
+                      }`}
+                      data-testid={`button-mute-${i}`}
+                    >
+                      {p.muted ? (
+                        <VolumeX className="w-5 h-5 text-red-400" />
+                      ) : (
+                        <Volume2 className="w-5 h-5 text-emerald-400" />
+                      )}
+                    </button>
+                  ) : (
+                    <div className={`w-2 h-2 rounded-full ${p.muted ? 'bg-slate-500' : 'bg-emerald-400 animate-pulse'}`} />
+                  )}
                 </div>
               ))}
             </div>
