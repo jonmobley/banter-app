@@ -1096,8 +1096,7 @@ export default function Mobley() {
               className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
               data-testid="button-join"
             >
-              <Phone className="w-5 h-5" />
-              Banter
+              Join
             </a>
           </div>
         </div>
