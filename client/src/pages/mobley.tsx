@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X } from "lucide-react";
+import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef } from "react";
 
@@ -519,21 +519,54 @@ export default function Mobley() {
                     <p className="text-xs text-slate-500 truncate">{formatPhone(p.phone)}</p>
                   )}
                 </div>
-                <button
-                  onClick={() => isAdmin && toggleMute.mutate({ callSid: p.callSid, muted: !p.muted })}
-                  className={`p-2 rounded-lg transition-colors ${
-                    p.muted 
-                      ? 'bg-red-500/20 hover:bg-red-500/30' 
-                      : 'bg-emerald-500/20 hover:bg-emerald-500/30'
-                  } ${!isAdmin ? 'cursor-default' : ''}`}
-                  data-testid={`button-mute-${i}`}
-                >
-                  {p.muted ? (
-                    <VolumeX className="w-5 h-5 text-red-400" />
-                  ) : (
-                    <Volume2 className="w-5 h-5 text-emerald-400" />
+                <div className="relative" ref={openDropdown === `active-${p.callSid}` ? dropdownRef : undefined}>
+                  <button
+                    onClick={() => setOpenDropdown(openDropdown === `active-${p.callSid}` ? null : `active-${p.callSid}`)}
+                    className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition-colors"
+                    data-testid={`button-menu-active-${i}`}
+                  >
+                    <MoreVertical className="w-5 h-5 text-slate-400" />
+                  </button>
+                  {openDropdown === `active-${p.callSid}` && (
+                    <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[120px]">
+                      <button
+                        onClick={() => {
+                          if (isAdmin) {
+                            toggleMute.mutate({ callSid: p.callSid, muted: !p.muted });
+                          }
+                          setOpenDropdown(null);
+                        }}
+                        className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${!isAdmin ? 'opacity-50' : ''} ${p.muted ? 'text-red-400' : 'text-slate-300'}`}
+                        data-testid={`button-mute-${i}`}
+                      >
+                        {p.muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                        {p.muted ? 'Unmute' : 'Mute'}
+                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => {
+                            const matchingExpected = expectedParticipants.find(ep => {
+                              const normalizedExpected = ep.phone.replace(/\D/g, '');
+                              const normalizedActive = p.phone.replace(/\D/g, '');
+                              return normalizedActive === normalizedExpected || 
+                                     normalizedActive.endsWith(normalizedExpected) ||
+                                     normalizedExpected.endsWith(normalizedActive);
+                            });
+                            if (matchingExpected) {
+                              openProfileDrawer(matchingExpected);
+                            }
+                            setOpenDropdown(null);
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                          data-testid={`button-edit-active-${i}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                          Edit
+                        </button>
+                      )}
+                    </div>
                   )}
-                </button>
+                </div>
               </div>
             ))}
             
@@ -553,21 +586,16 @@ export default function Mobley() {
                   className="flex items-center gap-3 bg-slate-700/30 rounded-lg px-4 py-3"
                   data-testid={`expected-${i}`}
                 >
-                  <div 
-                    className={`flex items-center gap-3 flex-1 min-w-0 ${isAdmin ? 'cursor-pointer' : ''}`}
-                    onClick={() => isAdmin && openProfileDrawer(ep)}
-                  >
-                    <div className="w-10 h-10 rounded-full bg-slate-600/30 flex items-center justify-center">
-                      <span className="text-base font-medium text-slate-400">
-                        {ep.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-slate-400 truncate">
-                        {ep.name}
-                      </p>
-                      <p className="text-xs text-slate-500 truncate">{formatPhone(ep.phone)}</p>
-                    </div>
+                  <div className="w-10 h-10 rounded-full bg-slate-600/30 flex items-center justify-center">
+                    <span className="text-base font-medium text-slate-400">
+                      {ep.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-400 truncate">
+                      {ep.name}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">{formatPhone(ep.phone)}</p>
                   </div>
                   <div className="relative" ref={openDropdown === ep.id ? dropdownRef : undefined}>
                     <button
@@ -579,6 +607,19 @@ export default function Mobley() {
                     </button>
                     {openDropdown === ep.id && (
                       <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-lg py-1 z-10 min-w-[120px]">
+                        {isAdmin && (
+                          <button
+                            onClick={() => {
+                              openProfileDrawer(ep);
+                              setOpenDropdown(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                            data-testid={`button-edit-${i}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                            Edit
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             remindExpected.mutate(ep.id);
