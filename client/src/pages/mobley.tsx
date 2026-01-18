@@ -511,6 +511,31 @@ export default function Mobley() {
     setLoginError("");
   };
 
+  const validatePhoneNumber = (phone: string): { isValid: boolean; error: string | null } => {
+    const digitsOnly = phone.replace(/\D/g, '');
+    
+    if (!digitsOnly) {
+      return { isValid: false, error: null };
+    }
+    
+    if (digitsOnly.length < 10) {
+      return { isValid: false, error: `Missing ${10 - digitsOnly.length} digit${10 - digitsOnly.length > 1 ? 's' : ''}` };
+    }
+    
+    if (digitsOnly.length > 11) {
+      return { isValid: false, error: "Too many digits" };
+    }
+    
+    if (digitsOnly.length === 11 && !digitsOnly.startsWith('1')) {
+      return { isValid: false, error: "Invalid country code" };
+    }
+    
+    return { isValid: true, error: null };
+  };
+
+  const phoneValidation = validatePhoneNumber(loginPhone);
+  const isPhoneValid = phoneValidation.isValid;
+
   const handleLogout = () => {
     setVerifiedPhone(null);
     localStorage.removeItem('banter_verified_phone');
@@ -777,7 +802,7 @@ export default function Mobley() {
         </p>
         
         {loginStep === 'phone' ? (
-          <div className="space-y-4 mb-6">
+          <div className="space-y-2 mb-6">
             <input
               type="tel"
               inputMode="tel"
@@ -786,10 +811,26 @@ export default function Mobley() {
               placeholder="(555) 555-5555"
               value={loginPhone}
               onChange={(e) => setLoginPhone(e.target.value)}
-              className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors text-center text-base"
+              className={`w-full px-4 py-3.5 rounded-xl bg-slate-800 border outline-none transition-colors text-center text-base ${
+                phoneValidation.error 
+                  ? 'border-amber-500' 
+                  : isPhoneValid 
+                    ? 'border-emerald-500' 
+                    : 'border-slate-700 focus:border-emerald-500'
+              }`}
               style={{ fontSize: '16px' }}
               data-testid="input-login-phone"
             />
+            {phoneValidation.error && (
+              <p className="text-amber-400 text-sm text-center" data-testid="text-phone-error">
+                {phoneValidation.error}
+              </p>
+            )}
+            {isPhoneValid && (
+              <p className="text-emerald-400 text-sm text-center" data-testid="text-phone-valid">
+                Valid phone number
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-4 mb-6">
@@ -816,7 +857,7 @@ export default function Mobley() {
         <div className="space-y-3">
           <button
             onClick={loginStep === 'phone' ? sendVerificationCode : verifyLoginCode}
-            disabled={loginLoading || (loginStep === 'phone' ? !loginPhone : loginCode.length !== 6)}
+            disabled={loginLoading || (loginStep === 'phone' ? !isPhoneValid : loginCode.length !== 6)}
             className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium py-3 rounded-full transition-colors"
             data-testid="button-login-submit"
           >
