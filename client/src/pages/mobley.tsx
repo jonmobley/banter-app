@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Ban, Users, Lock, Unlock, Plus, Volume2, VolumeX, Settings, MoreVertical } from "lucide-react";
+import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect } from "react";
 
@@ -361,7 +361,7 @@ export default function Mobley() {
                 className="p-3 rounded-full bg-slate-800/50 hover:bg-slate-700 transition-colors"
                 data-testid="button-admin"
               >
-                <Lock className="w-5 h-5 text-slate-400" />
+                <User className="w-5 h-5 text-slate-400" />
               </button>
             )}
           </div>
@@ -516,9 +516,9 @@ export default function Mobley() {
         data-testid="button-admin"
       >
         {isAdmin ? (
-          <Unlock className="w-5 h-5 text-emerald-400" />
+          <User className="w-5 h-5 text-emerald-400" />
         ) : (
-          <Lock className="w-5 h-5 text-slate-400" />
+          <User className="w-5 h-5 text-slate-400" />
         )}
       </button>
 
