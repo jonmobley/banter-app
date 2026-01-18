@@ -233,7 +233,97 @@ export default function Mobley() {
   });
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const dropdownMenuRef = useRef<HTMLDivElement>(null);
+
+  // Calculate optimal dropdown position with clamping to stay within safe bounds
+  const calculateDropdownPosition = useCallback((buttonElement: HTMLElement) => {
+    const rect = buttonElement.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth;
+    const safeTop = 70; // Below header
+    const safeBottom = viewportHeight - 130; // Above footer
+    const minDropdownHeight = 120; // Minimum usable height
+    const dropdownWidth = 180;
+    
+    // Calculate available safe zone
+    const safeZoneHeight = safeBottom - safeTop;
+    
+    // If viewport is too small, use centered fallback
+    if (safeZoneHeight < minDropdownHeight) {
+      const centeredTop = Math.max(16, (viewportHeight - 280) / 2);
+      setDropdownStyle({
+        position: 'fixed',
+        top: `${centeredTop}px`,
+        left: `${Math.max(16, (viewportWidth - dropdownWidth) / 2)}px`,
+        maxHeight: `${Math.min(280, viewportHeight - 32)}px`,
+      });
+      return;
+    }
+    
+    const dropdownMaxHeight = Math.min(280, safeZoneHeight - 20);
+    
+    // Calculate horizontal position - align right edge with button, clamp to viewport
+    let left = rect.right - dropdownWidth;
+    if (left < 8) left = 8;
+    if (left + dropdownWidth > viewportWidth - 8) left = viewportWidth - dropdownWidth - 8;
+    
+    // Calculate vertical position - prefer below, use above if needed
+    const spaceBelow = Math.max(0, safeBottom - rect.bottom);
+    const spaceAbove = Math.max(0, rect.top - safeTop);
+    
+    let top: number;
+    let maxHeight: number;
+    
+    if (spaceBelow >= minDropdownHeight && (spaceBelow >= dropdownMaxHeight || spaceBelow >= spaceAbove)) {
+      // Open below
+      top = rect.bottom + 4;
+      maxHeight = Math.min(dropdownMaxHeight, safeBottom - top - 8);
+    } else if (spaceAbove >= minDropdownHeight) {
+      // Open above
+      maxHeight = Math.min(dropdownMaxHeight, spaceAbove - 8);
+      top = rect.top - maxHeight - 4;
+    } else {
+      // Fallback: center in safe zone
+      top = safeTop + 10;
+      maxHeight = Math.min(dropdownMaxHeight, safeZoneHeight - 20);
+    }
+    
+    // Final safety clamps
+    maxHeight = Math.max(minDropdownHeight, maxHeight);
+    top = Math.max(safeTop, Math.min(top, safeBottom - maxHeight));
+    
+    setDropdownStyle({
+      position: 'fixed',
+      top: `${top}px`,
+      left: `${left}px`,
+      maxHeight: `${maxHeight}px`,
+    });
+  }, []);
+
+  const handleOpenDropdown = useCallback((id: string, event: React.MouseEvent<HTMLButtonElement>) => {
+    if (openDropdown === id) {
+      setOpenDropdown(null);
+    } else {
+      calculateDropdownPosition(event.currentTarget);
+      setOpenDropdown(id);
+    }
+  }, [openDropdown, calculateDropdownPosition]);
+  
+  // Close dropdown on scroll or resize to prevent stale positions
+  useEffect(() => {
+    if (!openDropdown) return;
+    
+    const handleScrollOrResize = () => setOpenDropdown(null);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [openDropdown]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1324,14 +1414,18 @@ export default function Mobley() {
                 {canShowControls && (
                 <div className="relative" ref={openDropdown === `active-${p.callSid}` ? dropdownRef : undefined}>
                   <button
-                    onClick={() => setOpenDropdown(openDropdown === `active-${p.callSid}` ? null : `active-${p.callSid}`)}
+                    onClick={(e) => handleOpenDropdown(`active-${p.callSid}`, e)}
                     className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition-colors"
                     data-testid={`button-menu-active-${i}`}
                   >
                     <MoreVertical className="w-5 h-5 text-slate-400" />
                   </button>
                   {openDropdown === `active-${p.callSid}` && (
-                    <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-xl py-1 z-50 min-w-[160px]">
+                    <div 
+                      ref={dropdownMenuRef}
+                      style={dropdownStyle}
+                      className="bg-slate-800 rounded-lg shadow-xl py-1 z-50 min-w-[160px] overflow-y-auto"
+                    >
                       {matchingExpected && (
                         <>
                           <button
@@ -1442,14 +1536,18 @@ export default function Mobley() {
                   {canShowControls && (
                   <div className="relative" ref={openDropdown === ep.id ? dropdownRef : undefined}>
                     <button
-                      onClick={() => setOpenDropdown(openDropdown === ep.id ? null : ep.id)}
+                      onClick={(e) => handleOpenDropdown(ep.id, e)}
                       className="p-2 rounded-lg bg-slate-600/30 hover:bg-slate-600/50 transition-colors"
                       data-testid={`button-menu-${i}`}
                     >
                       <MoreVertical className="w-5 h-5 text-slate-400" />
                     </button>
                     {openDropdown === ep.id && (
-                      <div className="absolute right-0 top-full mt-1 bg-slate-800 rounded-lg shadow-xl py-1 z-50 min-w-[160px]">
+                      <div 
+                        ref={dropdownMenuRef}
+                        style={dropdownStyle}
+                        className="bg-slate-800 rounded-lg shadow-xl py-1 z-50 min-w-[160px] overflow-y-auto"
+                      >
                         <button
                           onClick={() => {
                             callExpected.mutate(ep.id);
