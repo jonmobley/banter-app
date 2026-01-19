@@ -516,6 +516,18 @@ export default function Mobley() {
       await device.register();
       setTwilioDevice(device);
       
+      // Enable browser-native audio processing for cleaner voice
+      try {
+        await device.audio?.setAudioConstraints({
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        });
+        console.log('Audio processing enabled: AEC, NS, AGC');
+      } catch (err) {
+        console.warn('Could not enable audio processing:', err);
+      }
+      
       // Set the selected input device if one is chosen
       if (selectedAudioDevice) {
         try {
