@@ -57,7 +57,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-              <Phone className="w-4 h-4 text-emerald-400" />
+              <span className="text-emerald-400 font-bold text-lg">B</span>
             </div>
             <span className="text-xl font-bold">Banter</span>
           </div>
@@ -268,7 +268,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                <Phone className="w-4 h-4 text-emerald-400" />
+                <span className="text-emerald-400 font-bold text-lg">B</span>
               </div>
               <span className="text-xl font-bold">Banter</span>
             </div>

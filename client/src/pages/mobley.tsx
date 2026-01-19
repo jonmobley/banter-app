@@ -1742,7 +1742,7 @@ export default function Mobley() {
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-8">
-          <Phone className="w-10 h-10 text-emerald-400" />
+          <span className="text-emerald-400 font-bold text-4xl">B</span>
         </div>
         
         <button 
