@@ -29,20 +29,25 @@ import crypto from "crypto";
 
 // Secret key for signing auth tokens - must be a strong, persistent secret
 // In production, AUTH_TOKEN_SECRET must be set to a 64+ character random string
-const getAuthSecret = (): string => {
+// Lazy-loaded to allow proper error handling during startup
+let _authSecret: string | null = null;
+
+function getAuthSecret(): string {
+  if (_authSecret) return _authSecret;
+  
   const isProduction = process.env.NODE_ENV === 'production';
   
   // Dedicated auth secret (required in production)
   if (process.env.AUTH_TOKEN_SECRET && process.env.AUTH_TOKEN_SECRET.length >= 32) {
-    return process.env.AUTH_TOKEN_SECRET;
+    _authSecret = process.env.AUTH_TOKEN_SECRET;
+    return _authSecret;
   }
   
   if (isProduction) {
     // In production, fail fast if AUTH_TOKEN_SECRET is missing
-    throw new Error(
-      'FATAL: AUTH_TOKEN_SECRET environment variable is required in production. ' +
-      'Please set AUTH_TOKEN_SECRET to a random 64+ character string.'
-    );
+    console.error('FATAL: AUTH_TOKEN_SECRET environment variable is required in production.');
+    console.error('Please set AUTH_TOKEN_SECRET to a random 64+ character string.');
+    process.exit(1);
   }
   
   // Development only: use a derived key for convenience
@@ -53,9 +58,9 @@ const getAuthSecret = (): string => {
     process.env.REPLIT_DEV_DOMAIN || 'localhost',
     'banter-auth-dev-v1-2024'
   ];
-  return crypto.createHash('sha256').update(sources.join('|')).digest('hex');
-};
-const AUTH_SECRET = getAuthSecret();
+  _authSecret = crypto.createHash('sha256').update(sources.join('|')).digest('hex');
+  return _authSecret;
+}
 
 /**
  * Create a signed auth token for a verified phone number.
@@ -65,7 +70,7 @@ function createAuthToken(phone: string): string {
   const normalizedPhone = normalizePhone(phone);
   const expiry = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
   const data = `${normalizedPhone}:${expiry}`;
-  const signature = crypto.createHmac('sha256', AUTH_SECRET).update(data).digest('hex');
+  const signature = crypto.createHmac('sha256', getAuthSecret()).update(data).digest('hex');
   return Buffer.from(`${data}:${signature}`).toString('base64');
 }
 
@@ -90,7 +95,7 @@ function verifyAuthToken(token: string): string | null {
     
     // Verify signature
     const data = `${phone}:${expiryStr}`;
-    const expectedSignature = crypto.createHmac('sha256', AUTH_SECRET).update(data).digest('hex');
+    const expectedSignature = crypto.createHmac('sha256', getAuthSecret()).update(data).digest('hex');
     
     if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
       log(`Invalid auth token signature for ${phone}`, "auth");
