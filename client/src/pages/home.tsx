@@ -12,10 +12,7 @@ export default function Home() {
     e.preventDefault();
     const element = document.getElementById('request-access');
     if (element) {
-      const headerOffset = 100;
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-      window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
       // Focus the email input after scrolling
       setTimeout(() => {
         const input = element.querySelector('input[type="email"]') as HTMLInputElement;
