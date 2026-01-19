@@ -2031,24 +2031,25 @@ export default function Mobley() {
               </button>
             ) : (
               <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setShowAudioSettings(true)}
-                    className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
-                    data-testid="button-audio-settings-prejoin"
-                  >
-                    <Settings className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={joinFromBrowser}
-                    disabled={duplicateCheckLoading}
-                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-                    data-testid="button-join-browser"
-                  >
-                    <Wifi className="w-5 h-5" />
-                    {duplicateCheckLoading ? 'Checking...' : 'Connect'}
-                  </button>
-                </div>
+                <button
+                  onClick={joinFromBrowser}
+                  disabled={duplicateCheckLoading}
+                  className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                  data-testid="button-join-browser"
+                >
+                  <Wifi className="w-5 h-5" />
+                  {duplicateCheckLoading ? 'Checking...' : 'Connect'}
+                </button>
+                <button
+                  onClick={() => setShowAudioSettings(true)}
+                  className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 px-6 rounded-full transition-colors"
+                  data-testid="button-audio-settings-prejoin"
+                >
+                  <Mic className="w-4 h-4 text-slate-400" />
+                  <span className="truncate text-sm">
+                    {audioDevices.find(d => d.deviceId === selectedAudioDevice)?.label || 'Select microphone'}
+                  </span>
+                </button>
                 <a
                   href="tel:+12202423245"
                   className="text-slate-400 hover:text-slate-300 text-sm text-center transition-colors"
@@ -2190,33 +2191,15 @@ export default function Mobley() {
             </button>
           ) : (
             <>
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setShowAudioSettings(true)}
-                    className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
-                    data-testid="button-audio-settings-home-prejoin"
-                  >
-                    <Settings className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={joinFromBrowser}
-                    disabled={duplicateCheckLoading}
-                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-                    data-testid="button-join-browser-home"
-                  >
-                    <Wifi className="w-5 h-5" />
-                    {duplicateCheckLoading ? 'Checking...' : 'Connect'}
-                  </button>
-                </div>
-                <a
-                  href="tel:+12202423245"
-                  className="text-slate-400 hover:text-slate-300 text-sm text-center transition-colors"
-                  data-testid="button-join-phone-home"
-                >
-                  or call to join
-                </a>
-              </div>
+              <button
+                onClick={joinFromBrowser}
+                disabled={duplicateCheckLoading}
+                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                data-testid="button-join-browser-home"
+              >
+                <Wifi className="w-5 h-5" />
+                {duplicateCheckLoading ? 'Checking...' : 'Connect'}
+              </button>
               
               {isAdmin && (
                 <Link
