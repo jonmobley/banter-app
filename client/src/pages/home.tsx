@@ -8,6 +8,22 @@ export default function Home() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const { toast } = useToast();
 
+  const scrollToForm = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const element = document.getElementById('request-access');
+    if (element) {
+      const headerOffset = 100;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+      // Focus the email input after scrolling
+      setTimeout(() => {
+        const input = element.querySelector('input[type="email"]') as HTMLInputElement;
+        input?.focus();
+      }, 500);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
@@ -45,13 +61,13 @@ export default function Home() {
             </div>
             <span className="text-xl font-bold">Banter</span>
           </div>
-          <a
-            href="#request-access"
+          <button
+            onClick={scrollToForm}
             className="bg-emerald-500 hover:bg-emerald-400 text-white font-medium px-4 py-2 rounded-full text-sm transition-colors"
             data-testid="link-request-access"
           >
             Request Access
-          </a>
+          </button>
         </div>
       </header>
 
@@ -236,14 +252,14 @@ export default function Home() {
             No credit card required.
           </p>
           
-          <a
-            href="#request-access"
+          <button
+            onClick={scrollToForm}
             className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-4 rounded-full text-lg transition-colors"
             data-testid="button-request-access-bottom"
           >
             Request Beta Access
             <ChevronRight className="w-5 h-5" />
-          </a>
+          </button>
         </div>
       </section>
 
