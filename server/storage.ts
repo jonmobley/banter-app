@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters } from "@shared/schema";
+import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, gt, lt, lte, sql } from "drizzle-orm";
@@ -56,6 +56,9 @@ export interface IStorage {
   deleteScheduledBanter(id: string): Promise<void>;
   getPendingBantersForTime(time: Date): Promise<ScheduledBanter[]>;
   getBantersNeedingReminder(time: Date): Promise<ScheduledBanter[]>;
+  
+  // Beta Requests
+  createBetaRequest(email: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -184,6 +187,10 @@ export class DatabaseStorage implements IStorage {
         gt(scheduledBanters.scheduledAt, time)
       )
     );
+  }
+
+  async createBetaRequest(email: string): Promise<void> {
+    await db.insert(betaRequests).values({ email });
   }
 }
 

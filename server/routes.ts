@@ -466,6 +466,37 @@ export async function registerRoutes(
   });
 
   /**
+   * POST /api/beta-request
+   * 
+   * Submit an email for beta access waitlist.
+   */
+  app.post("/api/beta-request", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Invalid email format" });
+      }
+      
+      await storage.createBetaRequest(email.toLowerCase().trim());
+      log(`📧 New beta request: ${email}`, "beta");
+      res.json({ success: true });
+    } catch (error: any) {
+      if (error.code === '23505') {
+        // Unique constraint violation - email already exists
+        res.json({ success: true }); // Don't reveal that email was already submitted
+      } else {
+        log(`Error creating beta request: ${error.message}`, "beta");
+        res.status(500).json({ error: "Failed to submit request" });
+      }
+    }
+  });
+
+  /**
    * POST /api/auth/send-code
    * 
    * Send a verification code via SMS to the provided phone number.

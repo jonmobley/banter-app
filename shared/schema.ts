@@ -122,3 +122,17 @@ export const updateScheduledBanterSchema = createInsertSchema(scheduledBanters).
 export type InsertScheduledBanter = z.infer<typeof insertScheduledBanterSchema>;
 export type UpdateScheduledBanter = z.infer<typeof updateScheduledBanterSchema>;
 export type ScheduledBanter = typeof scheduledBanters.$inferSelect;
+
+// Beta Access Requests
+export const betaRequests = pgTable("beta_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull().unique(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertBetaRequestSchema = createInsertSchema(betaRequests).pick({
+  email: true,
+});
+
+export type InsertBetaRequest = z.infer<typeof insertBetaRequestSchema>;
+export type BetaRequest = typeof betaRequests.$inferSelect;

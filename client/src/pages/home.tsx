@@ -1,7 +1,40 @@
-import { Phone, Users, Zap, Shield, Clock, Globe, ChevronRight, PhoneCall, Calendar, Headphones } from "lucide-react";
-import { Link } from "wouter";
+import { Phone, Users, Zap, Shield, Clock, Globe, ChevronRight, Calendar, Headphones, Mail } from "lucide-react";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
+  const [email, setEmail] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const res = await fetch("/api/beta-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      
+      if (res.ok) {
+        setIsSubmitted(true);
+        setEmail("");
+        toast({ title: "You're on the list!", description: "We'll be in touch soon." });
+      } else {
+        toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-lg border-b border-slate-800">
@@ -12,13 +45,13 @@ export default function Home() {
             </div>
             <span className="text-xl font-bold">Banter</span>
           </div>
-          <Link
-            href="/mobley"
+          <a
+            href="#request-access"
             className="bg-emerald-500 hover:bg-emerald-400 text-white font-medium px-4 py-2 rounded-full text-sm transition-colors"
-            data-testid="link-join-call"
+            data-testid="link-request-access"
           >
-            Join Call
-          </Link>
+            Request Access
+          </a>
         </div>
       </header>
 
@@ -40,26 +73,39 @@ export default function Home() {
             No downloads, no signups, just instant voice connection.
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <Link
-              href="/mobley"
-              className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-4 rounded-full text-lg transition-colors"
-              data-testid="button-get-started"
-            >
-              <PhoneCall className="w-5 h-5" />
-              Get Started Free
-            </Link>
-            <a
-              href="tel:+12202423245"
-              className="inline-flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-white font-semibold px-8 py-4 rounded-full text-lg transition-colors"
-              data-testid="button-call-now"
-            >
-              <Phone className="w-5 h-5" />
-              Call (220) 242-3245
-            </a>
+          <div id="request-access" className="max-w-md mx-auto mb-16">
+            {isSubmitted ? (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-8 text-center">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                  <Mail className="w-8 h-8 text-emerald-400" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">You're on the list!</h3>
+                <p className="text-slate-400">We'll reach out when it's your turn to join.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  required
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-6 py-4 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  data-testid="input-email"
+                />
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold px-8 py-4 rounded-full text-lg transition-colors whitespace-nowrap"
+                  data-testid="button-request-access"
+                >
+                  {isSubmitting ? "Submitting..." : "Request Beta Access"}
+                </button>
+              </form>
+            )}
           </div>
 
-          <div className="flex items-center justify-center gap-8 text-slate-500 text-sm">
+          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-slate-500 text-sm">
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4" />
               <span>Secure & Private</span>
@@ -160,7 +206,7 @@ export default function Home() {
               <div>
                 <h3 className="text-lg font-bold mb-2">Crystal Clear Audio</h3>
                 <p className="text-slate-400">
-                  Powered by Twilio's enterprise-grade voice infrastructure for reliable, high-quality calls.
+                  Enterprise-grade voice infrastructure for reliable, high-quality calls every time.
                 </p>
               </div>
             </div>
@@ -183,23 +229,21 @@ export default function Home() {
       <section className="py-20 px-6 bg-gradient-to-b from-slate-900/50 to-slate-950">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl md:text-4xl font-bold mb-6">
-            Ready to start your first banter?
+            Ready to simplify team communication?
           </h2>
           <p className="text-slate-400 text-lg mb-10 max-w-2xl mx-auto">
-            Join thousands of teams who've simplified their voice communication. 
+            Be among the first to experience a new way to connect with your team.
             No credit card required.
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/mobley"
-              className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-4 rounded-full text-lg transition-colors"
-              data-testid="button-start-banter"
-            >
-              Start a Banter
-              <ChevronRight className="w-5 h-5" />
-            </Link>
-          </div>
+          <a
+            href="#request-access"
+            className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-4 rounded-full text-lg transition-colors"
+            data-testid="button-request-access-bottom"
+          >
+            Request Beta Access
+            <ChevronRight className="w-5 h-5" />
+          </a>
         </div>
       </section>
 
@@ -213,20 +257,8 @@ export default function Home() {
               <span className="text-xl font-bold">Banter</span>
             </div>
             
-            <div className="flex items-center gap-6 text-slate-400 text-sm">
-              <a href="tel:+12202423245" className="hover:text-white transition-colors">
-                (220) 242-3245
-              </a>
-              <Link href="/mobley" className="hover:text-white transition-colors">
-                Join Call
-              </Link>
-              <Link href="/schedule" className="hover:text-white transition-colors">
-                Schedule
-              </Link>
-            </div>
-            
             <p className="text-slate-500 text-sm">
-              Powered by Twilio
+              Instant group calls for modern teams
             </p>
           </div>
         </div>
