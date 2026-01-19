@@ -843,7 +843,7 @@ export default function Mobley() {
 
   // The actual browser join logic
   const proceedWithBrowserJoin = useCallback(() => {
-    let identity = 'Web User';
+    let identity = 'WebUser';
     if (verifiedPhone) {
       const matchingParticipant = expectedData?.find(p => {
         const normalizedExpected = p.phone.replace(/\D/g, '');
@@ -853,7 +853,8 @@ export default function Mobley() {
                normalizedVerified.endsWith(normalizedExpected);
       });
       if (matchingParticipant) {
-        identity = matchingParticipant.name;
+        // Sanitize name for Twilio identity (no spaces, alphanumeric with underscores)
+        identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
       }
     }
     initTwilioDevice(identity);
