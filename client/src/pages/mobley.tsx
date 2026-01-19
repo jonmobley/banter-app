@@ -590,6 +590,28 @@ export default function Mobley() {
         setIsBrowserMuted(false);
       });
       
+      // Monitor for network quality issues
+      call.on('warning', (warningName: string) => {
+        console.warn('Call quality warning:', warningName);
+        if (warningName === 'high-rtt') {
+          toast({
+            title: 'Network latency detected',
+            description: 'You may experience audio delays. Try moving closer to your router.',
+            variant: 'destructive',
+          });
+        } else if (warningName === 'low-mos') {
+          toast({
+            title: 'Poor audio quality',
+            description: 'Your network connection may be unstable.',
+            variant: 'destructive',
+          });
+        }
+      });
+      
+      call.on('warning-cleared', (warningName: string) => {
+        console.log('Call quality warning cleared:', warningName);
+      });
+      
       setActiveCall(call);
       
     } catch (error: any) {
