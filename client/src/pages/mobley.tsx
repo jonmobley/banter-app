@@ -1611,7 +1611,7 @@ export default function Mobley() {
           >
             Banter
             <span 
-              className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`}
+              className="hidden"
               title={wsConnected ? 'Connected' : 'Reconnecting...'}
               data-testid="ws-status-indicator"
             />
@@ -2122,7 +2122,7 @@ export default function Mobley() {
         >
           Banter
           <span 
-            className={`w-3 h-3 rounded-full ${wsConnected ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`}
+            className="hidden"
             title={wsConnected ? 'Connected' : 'Reconnecting...'}
             data-testid="ws-status-indicator-home"
           />
