@@ -76,14 +76,14 @@ export default function Home() {
           </div>
           
           <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight" data-testid="text-title">
-            Instant group calls,
+            The modern
             <br />
-            <span className="text-emerald-400">no apps required</span>
+            <span className="text-emerald-400">walkie talkie</span>
           </h1>
           
           <p className="text-xl text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Group calls and walkie-talkie features made simple. No apps, no downloads, no friction. 
-            Banter makes it easy to stay connected.
+            Push-to-talk voice communication for teams. No apps, no downloads, no friction. 
+            Just open your browser and start talking.
           </p>
           
           <div id="request-access" className="max-w-md mx-auto mb-16">
@@ -207,7 +207,7 @@ export default function Home() {
               <div>
                 <h3 className="text-lg font-bold mb-2">Always Available</h3>
                 <p className="text-slate-400">
-                  Your conference room is always on. Drop in whenever you need to connect with your team.
+                  Your channel is always on. Drop in whenever you need to connect with your team.
                 </p>
               </div>
             </div>
@@ -271,7 +271,7 @@ export default function Home() {
             </div>
             
             <p className="text-slate-500 text-sm">
-              Instant group calls for modern teams
+              The modern walkie talkie for teams
             </p>
           </div>
         </div>
