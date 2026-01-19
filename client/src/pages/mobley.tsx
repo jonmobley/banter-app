@@ -640,24 +640,22 @@ export default function Mobley() {
   }, [activeCall]);
   
   const startVAD = useCallback(async () => {
-    if (vadRef.current || !activeCall) return;
+    // Guard: prevent redundant starts
+    if (vadRef.current || vadStreamRef.current || !activeCall) return;
     
     try {
+      // Get microphone stream for VAD (separate from Twilio's internal stream)
+      // Note: Twilio SDK manages its own stream internally via device.connect()
+      // We get a separate stream for VAD to analyze audio without interfering
+      const constraints: MediaStreamConstraints = {
+        audio: selectedAudioDevice ? { deviceId: { exact: selectedAudioDevice } } : true
+      };
+      const vadStream = await navigator.mediaDevices.getUserMedia(constraints);
+      vadStreamRef.current = vadStream;
+      
       // Initialize VAD with sensitive threshold for quick detection
       const vad = await MicVAD.new({
-        getStream: async () => {
-          // Get microphone stream for VAD
-          const constraints: MediaStreamConstraints = {
-            audio: selectedAudioDevice ? { deviceId: { exact: selectedAudioDevice } } : true
-          };
-          const stream = await navigator.mediaDevices.getUserMedia(constraints);
-          // Clone the stream for VAD (original can be used by Twilio)
-          const vadStream = stream.clone();
-          vadStreamRef.current = vadStream;
-          // Stop the original stream tracks
-          stream.getTracks().forEach(track => track.stop());
-          return vadStream;
-        },
+        getStream: async () => vadStream,
         positiveSpeechThreshold: 0.5, // Sensitive for fast detection
         negativeSpeechThreshold: 0.35,
         startOnLoad: true,
@@ -704,18 +702,28 @@ export default function Mobley() {
     }
   }, [activeCall, selectedAudioDevice, toast]);
   
-  const stopVAD = useCallback(() => {
-    if (vadRef.current) {
-      vadRef.current.pause();
-      vadRef.current.destroy();
-      vadRef.current = null;
-    }
-    if (vadStreamRef.current) {
-      vadStreamRef.current.getTracks().forEach(track => track.stop());
-      vadStreamRef.current = null;
-    }
+  const stopVAD = useCallback(async () => {
+    const vad = vadRef.current;
+    const stream = vadStreamRef.current;
+    
+    // Clear refs immediately to prevent race conditions
+    vadRef.current = null;
+    vadStreamRef.current = null;
     setVadActive(false);
     setVadSpeaking(false);
+    
+    // Async cleanup
+    if (vad) {
+      try {
+        await vad.pause();
+        await vad.destroy();
+      } catch (err) {
+        console.error('Error stopping VAD:', err);
+      }
+    }
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
   }, []);
   
   // Handle talk mode changes
