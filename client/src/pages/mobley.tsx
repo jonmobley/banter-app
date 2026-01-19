@@ -593,14 +593,25 @@ export default function Mobley() {
     setIsBrowserMuted(false); // Reset mute state on hangup
   }, [activeCall, twilioDevice]);
   
-  const toggleBrowserMute = useCallback(() => {
-    if (activeCall) {
-      const newMuted = !isBrowserMuted;
-      activeCall.mute(newMuted);
-      setIsBrowserMuted(newMuted);
-      // Haptic feedback for tactile confirmation
+  // PTT (Push-to-Talk) functions
+  const startTalking = useCallback(() => {
+    if (activeCall && isBrowserMuted) {
+      activeCall.mute(false);
+      setIsBrowserMuted(false);
+      // Haptic feedback - double pulse for unmute (going live)
       if (navigator.vibrate) {
-        navigator.vibrate(newMuted ? 50 : [50, 30, 50]); // Short pulse for mute, double pulse for unmute
+        navigator.vibrate([50, 30, 50]);
+      }
+    }
+  }, [activeCall, isBrowserMuted]);
+  
+  const stopTalking = useCallback(() => {
+    if (activeCall && !isBrowserMuted) {
+      activeCall.mute(true);
+      setIsBrowserMuted(true);
+      // Haptic feedback - short pulse for mute
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
       }
     }
   }, [activeCall, isBrowserMuted]);
@@ -1785,16 +1796,21 @@ export default function Mobley() {
                   <Settings className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={toggleBrowserMute}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all active:scale-95 ${
+                  onMouseDown={startTalking}
+                  onMouseUp={stopTalking}
+                  onMouseLeave={stopTalking}
+                  onTouchStart={startTalking}
+                  onTouchEnd={stopTalking}
+                  onTouchCancel={stopTalking}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none ${
                     isBrowserMuted 
-                      ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border-2 border-red-500/50' 
-                      : 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25'
+                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
+                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
                   }`}
                   data-testid="button-browser-mute"
                 >
                   {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {isBrowserMuted ? 'Tap to Unmute' : 'Live'}
+                  {isBrowserMuted ? 'Hold to Talk' : 'Live'}
                 </button>
                 <button
                   onClick={() => setShowDisconnectConfirm(true)}
@@ -1814,7 +1830,7 @@ export default function Mobley() {
                 Connecting...
               </button>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setShowAudioSettings(true)}
@@ -1823,14 +1839,6 @@ export default function Mobley() {
                   >
                     <Settings className="w-5 h-5" />
                   </button>
-                  <a
-                    href="tel:+12202423245"
-                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-                    data-testid="button-join-phone"
-                  >
-                    <Phone className="w-5 h-5" />
-                    Call
-                  </a>
                   <button
                     onClick={joinFromBrowser}
                     disabled={duplicateCheckLoading}
@@ -1841,7 +1849,13 @@ export default function Mobley() {
                     {duplicateCheckLoading ? 'Checking...' : 'Connect'}
                   </button>
                 </div>
-                <p className="text-slate-400 text-sm text-center">Join by phone or in browser</p>
+                <a
+                  href="tel:+12202423245"
+                  className="text-slate-400 hover:text-slate-300 text-sm text-center transition-colors"
+                  data-testid="button-join-phone"
+                >
+                  or call to join
+                </a>
               </div>
             )}
             {browserCallError && (
@@ -1926,16 +1940,21 @@ export default function Mobley() {
                   <Settings className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={toggleBrowserMute}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all active:scale-95 ${
+                  onMouseDown={startTalking}
+                  onMouseUp={stopTalking}
+                  onMouseLeave={stopTalking}
+                  onTouchStart={startTalking}
+                  onTouchEnd={stopTalking}
+                  onTouchCancel={stopTalking}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none ${
                     isBrowserMuted 
-                      ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border-2 border-red-500/50' 
-                      : 'bg-emerald-500 hover:bg-emerald-400 text-white shadow-lg shadow-emerald-500/25'
+                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
+                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
                   }`}
                   data-testid="button-browser-mute-home"
                 >
                   {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {isBrowserMuted ? 'Tap to Unmute' : 'Live'}
+                  {isBrowserMuted ? 'Hold to Talk' : 'Live'}
                 </button>
                 <button
                   onClick={() => setShowDisconnectConfirm(true)}
@@ -1957,7 +1976,7 @@ export default function Mobley() {
             </button>
           ) : (
             <>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setShowAudioSettings(true)}
@@ -1966,14 +1985,6 @@ export default function Mobley() {
                   >
                     <Settings className="w-5 h-5" />
                   </button>
-                  <a
-                    href="tel:+12202423245"
-                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-                    data-testid="button-join-phone-home"
-                  >
-                    <Phone className="w-5 h-5" />
-                    Call
-                  </a>
                   <button
                     onClick={joinFromBrowser}
                     disabled={duplicateCheckLoading}
@@ -1984,7 +1995,13 @@ export default function Mobley() {
                     {duplicateCheckLoading ? 'Checking...' : 'Connect'}
                   </button>
                 </div>
-                <p className="text-slate-400 text-sm text-center">Join by phone or in browser</p>
+                <a
+                  href="tel:+12202423245"
+                  className="text-slate-400 hover:text-slate-300 text-sm text-center transition-colors"
+                  data-testid="button-join-phone-home"
+                >
+                  or call to join
+                </a>
               </div>
               
               {isAdmin && (
