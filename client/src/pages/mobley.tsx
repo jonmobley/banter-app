@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, PhoneOff, Mic, MicOff, Globe, Wifi } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Device, Call } from "@twilio/voice-sdk";
@@ -52,6 +52,7 @@ export default function Mobley() {
   const [isAdmin, setIsAdmin] = useState(true); // Admin enabled by default for now
   const [adminPin, setAdminPin] = useState("");
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [pinError, setPinError] = useState(false);
   const [pinDigits, setPinDigits] = useState(["", "", "", ""]);
   const [callDuration, setCallDuration] = useState(0);
@@ -952,6 +953,34 @@ export default function Mobley() {
     </div>
   );
 
+  const disconnectConfirmModal = (
+    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+        <h2 className="text-xl font-bold text-center mb-6">Disconnect?</h2>
+        
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowDisconnectConfirm(false)}
+            className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+            data-testid="button-disconnect-cancel"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              setShowDisconnectConfirm(false);
+              hangupBrowserCall();
+            }}
+            className="flex-1 bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
+            data-testid="button-disconnect-confirm"
+          >
+            Disconnect
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   const loginModal = (
     <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
       <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
@@ -1639,11 +1668,11 @@ export default function Mobley() {
                   {isBrowserMuted ? 'Tap to Unmute' : 'Live'}
                 </button>
                 <button
-                  onClick={hangupBrowserCall}
+                  onClick={() => setShowDisconnectConfirm(true)}
                   className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
                   data-testid="button-browser-hangup"
                 >
-                  <PhoneOff className="w-5 h-5" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             ) : browserCallStatus === 'connecting' ? (
@@ -1687,6 +1716,7 @@ export default function Mobley() {
         {showProfileDrawer && profileDrawer}
         {showLoginModal && loginModal}
         {showDuplicateWarning && duplicateWarningModal}
+        {showDisconnectConfirm && disconnectConfirmModal}
       </div>
     );
   }
@@ -1724,6 +1754,7 @@ export default function Mobley() {
       {showPinModal && pinModal}
       {showLoginModal && loginModal}
       {showDuplicateWarning && duplicateWarningModal}
+      {showDisconnectConfirm && disconnectConfirmModal}
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-8">
@@ -1759,11 +1790,11 @@ export default function Mobley() {
                   {isBrowserMuted ? 'Tap to Unmute' : 'Live'}
                 </button>
                 <button
-                  onClick={hangupBrowserCall}
+                  onClick={() => setShowDisconnectConfirm(true)}
                   className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
                   data-testid="button-browser-hangup-home"
                 >
-                  <PhoneOff className="w-5 h-5" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
