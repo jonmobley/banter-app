@@ -1342,8 +1342,10 @@ export default function Mobley() {
                     ? 'bg-amber-500/30 ring-2 ring-amber-400/50' 
                     : 'bg-amber-500/20';
                 }
-                if (role === 'listener') {
-                  return 'bg-blue-500/20';
+                if (role === 'participant') {
+                  return isSpeaking
+                    ? 'bg-blue-500/30 ring-2 ring-blue-400/50'
+                    : 'bg-blue-500/20';
                 }
                 return isSpeaking 
                   ? 'bg-emerald-500/30 ring-2 ring-emerald-400/50' 
@@ -1354,15 +1356,15 @@ export default function Mobley() {
                 if (role === 'host') {
                   return isSpeaking ? 'bg-amber-400/40' : 'bg-amber-500/30';
                 }
-                if (role === 'listener') {
-                  return 'bg-blue-500/30';
+                if (role === 'participant') {
+                  return isSpeaking ? 'bg-blue-400/40' : 'bg-blue-500/30';
                 }
                 return isSpeaking ? 'bg-emerald-400/40' : 'bg-emerald-500/20';
               };
               
               const getTextColor = () => {
                 if (role === 'host') return 'text-amber-400';
-                if (role === 'listener') return 'text-blue-400';
+                if (role === 'participant') return 'text-blue-400';
                 return 'text-emerald-400';
               };
               
@@ -1388,8 +1390,8 @@ export default function Mobley() {
                     {role === 'host' && (
                       <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">Host</span>
                     )}
-                    {role === 'listener' && (
-                      <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">Listener</span>
+                    {role === 'participant' && (
+                      <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">Participant</span>
                     )}
                   </div>
                   {p.name && (
@@ -1456,7 +1458,7 @@ export default function Mobley() {
                               updateRole.mutate({ id: matchingExpected.id, role: 'participant' });
                               setOpenDropdown(null);
                             }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${role === 'participant' ? 'text-emerald-400' : 'text-slate-300'}`}
+                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${role === 'participant' ? 'text-blue-400' : 'text-slate-300'}`}
                             data-testid={`button-role-participant-${i}`}
                           >
                             Participant
@@ -1466,7 +1468,7 @@ export default function Mobley() {
                               updateRole.mutate({ id: matchingExpected.id, role: 'listener' });
                               setOpenDropdown(null);
                             }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${role === 'listener' ? 'text-blue-400' : 'text-slate-300'}`}
+                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${role === 'listener' ? 'text-emerald-400' : 'text-slate-300'}`}
                             data-testid={`button-role-listener-${i}`}
                           >
                             Listener
@@ -1494,18 +1496,18 @@ export default function Mobley() {
               .map((ep, i) => {
                 const getExpectedCardStyle = () => {
                   if (ep.role === 'host') return 'bg-amber-500/10 border border-amber-500/30';
-                  if (ep.role === 'listener') return 'bg-blue-500/10 border border-blue-500/30';
-                  return 'bg-slate-700/30';
+                  if (ep.role === 'participant') return 'bg-blue-500/10 border border-blue-500/30';
+                  return 'bg-emerald-500/10 border border-emerald-500/30';
                 };
                 const getExpectedAvatarStyle = () => {
                   if (ep.role === 'host') return 'bg-amber-500/20';
-                  if (ep.role === 'listener') return 'bg-blue-500/20';
-                  return 'bg-slate-600/30';
+                  if (ep.role === 'participant') return 'bg-blue-500/20';
+                  return 'bg-emerald-500/20';
                 };
                 const getExpectedTextColor = () => {
                   if (ep.role === 'host') return 'text-amber-400';
-                  if (ep.role === 'listener') return 'text-blue-400';
-                  return 'text-slate-400';
+                  if (ep.role === 'participant') return 'text-blue-400';
+                  return 'text-emerald-400';
                 };
                 
                 return (
@@ -1527,8 +1529,8 @@ export default function Mobley() {
                       {ep.role === 'host' && (
                         <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">Host</span>
                       )}
-                      {ep.role === 'listener' && (
-                        <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">Listener</span>
+                      {ep.role === 'participant' && (
+                        <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">Participant</span>
                       )}
                     </div>
                     <p className="text-xs text-slate-500 truncate">{formatPhone(ep.phone)}</p>
@@ -1598,7 +1600,7 @@ export default function Mobley() {
                             updateRole.mutate({ id: ep.id, role: 'participant' });
                             setOpenDropdown(null);
                           }}
-                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'participant' ? 'text-emerald-400' : 'text-slate-300'}`}
+                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'participant' ? 'text-blue-400' : 'text-slate-300'}`}
                           data-testid={`button-role-participant-exp-${i}`}
                         >
                           Participant
@@ -1608,7 +1610,7 @@ export default function Mobley() {
                             updateRole.mutate({ id: ep.id, role: 'listener' });
                             setOpenDropdown(null);
                           }}
-                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'listener' ? 'text-blue-400' : 'text-slate-300'}`}
+                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'listener' ? 'text-emerald-400' : 'text-slate-300'}`}
                           data-testid={`button-role-listener-exp-${i}`}
                         >
                           Listener
