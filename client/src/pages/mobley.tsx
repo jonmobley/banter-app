@@ -379,6 +379,67 @@ export default function Mobley() {
   const [isBrowserMuted, setIsBrowserMuted] = useState(false);
   const [browserCallError, setBrowserCallError] = useState<string | null>(null);
   
+  // Audio device selection
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
+  const [showAudioSettings, setShowAudioSettings] = useState(false);
+  
+  // Enumerate audio devices (called when user opens settings)
+  const refreshAudioDevices = useCallback(async () => {
+    try {
+      // Request permission first to get device labels
+      await navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        stream.getTracks().forEach(track => track.stop());
+      });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(d => d.kind === 'audioinput');
+      setAudioDevices(audioInputs);
+      // Set default device if not already selected
+      if (!selectedAudioDevice && audioInputs.length > 0) {
+        setSelectedAudioDevice(audioInputs[0].deviceId);
+      }
+    } catch (err) {
+      console.error('Failed to enumerate audio devices:', err);
+    }
+  }, [selectedAudioDevice]);
+  
+  // Listen for device changes (only enumerate without permission request)
+  useEffect(() => {
+    const handleDeviceChange = async () => {
+      // Only refresh if we already have permission (devices array has items)
+      if (audioDevices.length > 0) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+        setAudioDevices(audioInputs);
+      }
+    };
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
+  }, [audioDevices.length]);
+  
+  // Refresh devices when audio settings modal opens
+  useEffect(() => {
+    if (showAudioSettings) {
+      refreshAudioDevices();
+    }
+  }, [showAudioSettings, refreshAudioDevices]);
+  
+  // Change audio input device on active call
+  const changeAudioDevice = useCallback(async (deviceId: string) => {
+    setSelectedAudioDevice(deviceId);
+    if (twilioDevice) {
+      try {
+        // Use Twilio's audio API to set the input device
+        await twilioDevice.audio?.setInputDevice(deviceId);
+        console.log('Audio input device changed to:', deviceId);
+      } catch (err) {
+        console.error('Failed to change audio device:', err);
+      }
+    }
+  }, [twilioDevice]);
+  
   // Initialize Twilio Device
   const initTwilioDevice = useCallback(async (identity: string) => {
     try {
@@ -438,6 +499,16 @@ export default function Mobley() {
       
       await device.register();
       setTwilioDevice(device);
+      
+      // Set the selected input device if one is chosen
+      if (selectedAudioDevice) {
+        try {
+          await device.audio?.setInputDevice(selectedAudioDevice);
+          console.log('Set audio input device to:', selectedAudioDevice);
+        } catch (err) {
+          console.error('Failed to set initial audio device:', err);
+        }
+      }
       
       // Make the outbound call to join conference
       const call = await device.connect({
@@ -506,7 +577,7 @@ export default function Mobley() {
       setBrowserCallError(userMessage);
       setBrowserCallStatus('disconnected');
     }
-  }, [queryClient]);
+  }, [queryClient, selectedAudioDevice]);
   
   const hangupBrowserCall = useCallback(() => {
     if (activeCall) {
@@ -981,6 +1052,57 @@ export default function Mobley() {
     </div>
   );
 
+  const audioSettingsModal = (
+    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+        <h2 className="text-xl font-bold text-center mb-2">Audio Settings</h2>
+        <p className="text-sm text-slate-400 text-center mb-6">Choose your microphone</p>
+        
+        <div className="space-y-2 mb-6">
+          {audioDevices.length === 0 ? (
+            <p className="text-slate-400 text-sm text-center py-4">No microphones found</p>
+          ) : (
+            audioDevices.map((device) => (
+              <button
+                key={device.deviceId}
+                onClick={() => changeAudioDevice(device.deviceId)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                  selectedAudioDevice === device.deviceId
+                    ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                    : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
+                }`}
+                data-testid={`audio-device-${device.deviceId}`}
+              >
+                <Mic className={`w-5 h-5 ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-slate-400'}`} />
+                <span className={`text-sm truncate ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-white'}`}>
+                  {device.label || `Microphone ${audioDevices.indexOf(device) + 1}`}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+        
+        <button
+          onClick={() => {
+            refreshAudioDevices();
+          }}
+          className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors mb-3"
+          data-testid="button-refresh-devices"
+        >
+          Refresh Devices
+        </button>
+        
+        <button
+          onClick={() => setShowAudioSettings(false)}
+          className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
+          data-testid="button-audio-settings-done"
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  );
+
   const loginModal = (
     <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
       <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
@@ -1440,7 +1562,7 @@ export default function Mobley() {
                     <div 
                       ref={dropdownMenuRef}
                       style={dropdownStyle}
-                      className="bg-slate-800 rounded-lg shadow-xl py-1 z-50 min-w-[160px] overflow-y-auto"
+                      className="fixed bg-slate-800 rounded-lg shadow-xl py-1 z-[100] min-w-[160px] overflow-y-auto"
                     >
                       {matchingExpected && (
                         <>
@@ -1562,7 +1684,7 @@ export default function Mobley() {
                       <div 
                         ref={dropdownMenuRef}
                         style={dropdownStyle}
-                        className="bg-slate-800 rounded-lg shadow-xl py-1 z-50 min-w-[160px] overflow-y-auto"
+                        className="fixed bg-slate-800 rounded-lg shadow-xl py-1 z-[100] min-w-[160px] overflow-y-auto"
                       >
                         <button
                           onClick={() => {
@@ -1656,6 +1778,13 @@ export default function Mobley() {
             {browserCallStatus === 'connected' ? (
               <div className="flex items-center gap-3">
                 <button
+                  onClick={() => setShowAudioSettings(true)}
+                  className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
+                  data-testid="button-audio-settings"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+                <button
                   onClick={toggleBrowserMute}
                   className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all active:scale-95 ${
                     isBrowserMuted 
@@ -1687,6 +1816,13 @@ export default function Mobley() {
             ) : (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowAudioSettings(true)}
+                    className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
+                    data-testid="button-audio-settings-prejoin"
+                  >
+                    <Settings className="w-5 h-5" />
+                  </button>
                   <a
                     href="tel:+12202423245"
                     className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
@@ -1720,6 +1856,7 @@ export default function Mobley() {
         {showLoginModal && loginModal}
         {showDuplicateWarning && duplicateWarningModal}
         {showDisconnectConfirm && disconnectConfirmModal}
+        {showAudioSettings && audioSettingsModal}
       </div>
     );
   }
@@ -1758,6 +1895,7 @@ export default function Mobley() {
       {showLoginModal && loginModal}
       {showDuplicateWarning && duplicateWarningModal}
       {showDisconnectConfirm && disconnectConfirmModal}
+      {showAudioSettings && audioSettingsModal}
 
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-8">
@@ -1780,6 +1918,13 @@ export default function Mobley() {
           {browserCallStatus === 'connected' ? (
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowAudioSettings(true)}
+                  className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
+                  data-testid="button-audio-settings-home"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
                 <button
                   onClick={toggleBrowserMute}
                   className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all active:scale-95 ${
@@ -1814,6 +1959,13 @@ export default function Mobley() {
             <>
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setShowAudioSettings(true)}
+                    className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
+                    data-testid="button-audio-settings-home-prejoin"
+                  >
+                    <Settings className="w-5 h-5" />
+                  </button>
                   <a
                     href="tel:+12202423245"
                     className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
