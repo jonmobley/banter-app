@@ -387,6 +387,20 @@ export default function Mobley() {
   const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
   const [showAudioSettings, setShowAudioSettings] = useState(false);
   
+  // Audio processing settings (persisted to localStorage)
+  const [echoCancellation, setEchoCancellation] = useState<boolean>(() => {
+    const saved = localStorage.getItem('banter_echo_cancellation');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [noiseSuppression, setNoiseSuppression] = useState<boolean>(() => {
+    const saved = localStorage.getItem('banter_noise_suppression');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [autoGainControl, setAutoGainControl] = useState<boolean>(() => {
+    const saved = localStorage.getItem('banter_auto_gain_control');
+    return saved !== null ? saved === 'true' : true;
+  });
+  
   // Talk mode: PTT (push-to-talk) or Auto (VAD)
   const [talkMode, setTalkMode] = useState<TalkMode>(() => {
     const saved = localStorage.getItem('banter_talk_mode');
@@ -455,6 +469,45 @@ export default function Mobley() {
     }
   }, [twilioDevice]);
   
+  // Toggle audio processing settings (applies immediately if on a call)
+  const updateAudioProcessing = useCallback(async (settings: {
+    echoCancellation?: boolean;
+    noiseSuppression?: boolean;
+    autoGainControl?: boolean;
+  }) => {
+    const newEcho = settings.echoCancellation ?? echoCancellation;
+    const newNoise = settings.noiseSuppression ?? noiseSuppression;
+    const newGain = settings.autoGainControl ?? autoGainControl;
+    
+    // Update state and localStorage
+    if (settings.echoCancellation !== undefined) {
+      setEchoCancellation(settings.echoCancellation);
+      localStorage.setItem('banter_echo_cancellation', String(settings.echoCancellation));
+    }
+    if (settings.noiseSuppression !== undefined) {
+      setNoiseSuppression(settings.noiseSuppression);
+      localStorage.setItem('banter_noise_suppression', String(settings.noiseSuppression));
+    }
+    if (settings.autoGainControl !== undefined) {
+      setAutoGainControl(settings.autoGainControl);
+      localStorage.setItem('banter_auto_gain_control', String(settings.autoGainControl));
+    }
+    
+    // Apply immediately if we have an active device
+    if (twilioDevice) {
+      try {
+        await twilioDevice.audio?.setAudioConstraints({
+          echoCancellation: newEcho,
+          noiseSuppression: newNoise,
+          autoGainControl: newGain,
+        });
+        console.log('Audio processing updated:', { echoCancellation: newEcho, noiseSuppression: newNoise, autoGainControl: newGain });
+      } catch (err) {
+        console.warn('Could not update audio processing:', err);
+      }
+    }
+  }, [twilioDevice, echoCancellation, noiseSuppression, autoGainControl]);
+  
   // Initialize Twilio Device
   const initTwilioDevice = useCallback(async (identity: string) => {
     try {
@@ -516,16 +569,16 @@ export default function Mobley() {
       await device.register();
       setTwilioDevice(device);
       
-      // Enable browser-native audio processing for cleaner voice
+      // Enable browser-native audio processing based on user settings
       try {
         await device.audio?.setAudioConstraints({
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation,
+          noiseSuppression,
+          autoGainControl,
         });
-        console.log('Audio processing enabled: AEC, NS, AGC');
+        console.log('Audio processing applied:', { echoCancellation, noiseSuppression, autoGainControl });
       } catch (err) {
-        console.warn('Could not enable audio processing:', err);
+        console.warn('Could not apply audio processing:', err);
       }
       
       // Set the selected input device if one is chosen
@@ -1311,6 +1364,72 @@ export default function Mobley() {
                 </button>
               ))
             )}
+          </div>
+        </div>
+        
+        {/* Audio Processing */}
+        <div className="mb-6">
+          <p className="text-sm text-slate-400 mb-3">Audio Processing</p>
+          <div className="space-y-2">
+            <button
+              onClick={() => updateAudioProcessing({ echoCancellation: !echoCancellation })}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
+                echoCancellation
+                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                  : 'bg-slate-800 border-2 border-transparent'
+              }`}
+              data-testid="toggle-echo-cancellation"
+            >
+              <div className="flex flex-col items-start">
+                <span className={`text-sm font-medium ${echoCancellation ? 'text-emerald-400' : 'text-white'}`}>
+                  Echo Cancellation
+                </span>
+                <span className="text-xs text-slate-500">Removes room echo</span>
+              </div>
+              <div className={`w-10 h-6 rounded-full transition-colors ${echoCancellation ? 'bg-emerald-500' : 'bg-slate-600'} relative`}>
+                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${echoCancellation ? 'right-1' : 'left-1'}`} />
+              </div>
+            </button>
+            
+            <button
+              onClick={() => updateAudioProcessing({ noiseSuppression: !noiseSuppression })}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
+                noiseSuppression
+                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                  : 'bg-slate-800 border-2 border-transparent'
+              }`}
+              data-testid="toggle-noise-suppression"
+            >
+              <div className="flex flex-col items-start">
+                <span className={`text-sm font-medium ${noiseSuppression ? 'text-emerald-400' : 'text-white'}`}>
+                  Noise Suppression
+                </span>
+                <span className="text-xs text-slate-500">Filters background noise</span>
+              </div>
+              <div className={`w-10 h-6 rounded-full transition-colors ${noiseSuppression ? 'bg-emerald-500' : 'bg-slate-600'} relative`}>
+                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${noiseSuppression ? 'right-1' : 'left-1'}`} />
+              </div>
+            </button>
+            
+            <button
+              onClick={() => updateAudioProcessing({ autoGainControl: !autoGainControl })}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
+                autoGainControl
+                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                  : 'bg-slate-800 border-2 border-transparent'
+              }`}
+              data-testid="toggle-auto-gain-control"
+            >
+              <div className="flex flex-col items-start">
+                <span className={`text-sm font-medium ${autoGainControl ? 'text-emerald-400' : 'text-white'}`}>
+                  Auto Gain Control
+                </span>
+                <span className="text-xs text-slate-500">Normalizes volume levels</span>
+              </div>
+              <div className={`w-10 h-6 rounded-full transition-colors ${autoGainControl ? 'bg-emerald-500' : 'bg-slate-600'} relative`}>
+                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${autoGainControl ? 'right-1' : 'left-1'}`} />
+              </div>
+            </button>
           </div>
         </div>
         
