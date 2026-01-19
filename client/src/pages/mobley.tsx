@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, PhoneOff, Mic, MicOff, Globe, Headphones } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, PhoneOff, Mic, MicOff, Globe, Wifi } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Device, Call } from "@twilio/voice-sdk";
@@ -1686,7 +1686,7 @@ export default function Mobley() {
                   className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
                   data-testid="button-join-browser"
                 >
-                  <Headphones className="w-5 h-5" />
+                  <Wifi className="w-5 h-5" />
                   {duplicateCheckLoading ? 'Checking...' : 'Connect'}
                 </button>
               </div>
@@ -1809,7 +1809,7 @@ export default function Mobley() {
                   className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
                   data-testid="button-join-browser-home"
                 >
-                  <Headphones className="w-5 h-5" />
+                  <Wifi className="w-5 h-5" />
                   {duplicateCheckLoading ? 'Checking...' : 'Connect'}
                 </button>
               </div>
