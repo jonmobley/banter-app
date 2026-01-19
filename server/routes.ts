@@ -392,8 +392,8 @@ export async function registerRoutes(
       statusCallback: statusCallbackUrl,
       statusCallbackEvent: ['join', 'leave', 'mute', 'hold'] as any,
       
-      // Optional: Wait music while alone (uncomment if desired)
-      // waitUrl: 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3'
+      // Disable hold music
+      waitUrl: ''
     }, 'banter-main');
     
     // Send TwiML response
@@ -1375,7 +1375,8 @@ export async function registerRoutes(
       muted: shouldMute,
       participantLabel: userName,
       statusCallback: statusCallbackUrl,
-      statusCallbackEvent: ['join', 'leave', 'mute', 'hold'] as any
+      statusCallbackEvent: ['join', 'leave', 'mute', 'hold'] as any,
+      waitUrl: ''
     }, 'banter-main');
     
     res.type('text/xml');
