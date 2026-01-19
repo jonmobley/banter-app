@@ -41,3 +41,8 @@ waitForPort = 5000
 [agent]
 mockupState = "FULLSTACK"
 integrations = ["twilio:1.0.0"]
+
+[userenv]
+
+[userenv.shared]
+LIVEKIT_URL = "wss://banter-4d7r2g6h.livekit.cloud"
