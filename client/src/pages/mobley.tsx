@@ -475,10 +475,11 @@ export default function Mobley() {
       
       const { token, voiceUrl } = await res.json();
       
-      // Create new Device
+      // Create new Device with highest quality audio settings
       const device = new Device(token, {
         logLevel: 1,
         codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
+        maxAverageBitrate: 40000,
       });
       
       device.on('registered', () => {
