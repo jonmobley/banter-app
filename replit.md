@@ -9,6 +9,23 @@ Banter is a phone-based walkie-talkie/audio conference application that allows u
 - Preferred communication style: Simple, everyday language
 - Mobile-first design following Apple Human Interface Guidelines
 - Default to muted when joining calls (prevents accidental noise)
+- Browser connection is primary, phone fallback is secondary
+
+## Talk Modes
+
+Browser users can choose between two talk modes (accessible via Audio Settings):
+
+| Mode | Description | Use Case |
+|------|-------------|----------|
+| **Hold to Talk (PTT)** | Manual control - press and hold button to unmute | Active use, prevents accidental transmission |
+| **Auto (VAD)** | Voice Activity Detection - automatically unmutes when speaking | Hands-free, phone in pocket |
+
+### VAD Implementation Details
+- Uses `@ricky0123/vad-web` library with ML-based speech detection
+- Thresholds: 0.5 positive (sensitive), 0.35 negative
+- Separate MediaStream for VAD (Twilio manages its own stream internally)
+- Local mute/unmute for instant response (no server roundtrip)
+- Mode preference persisted to localStorage
 
 ## Product Taxonomy
 
