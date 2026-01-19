@@ -69,8 +69,8 @@ export default function Home() {
           </h1>
           
           <p className="text-xl text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Banter is the modern walkie-talkie for teams. Call in from any phone or join from your browser. 
-            No downloads, no signups, just instant voice connection.
+            Group calls and walkie-talkie features made simple. No apps, no downloads, no friction. 
+            Banter makes it easy to stay connected.
           </p>
           
           <div id="request-access" className="max-w-md mx-auto mb-16">
