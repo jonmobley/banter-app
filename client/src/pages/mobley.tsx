@@ -1067,6 +1067,9 @@ export default function Mobley() {
         // Sanitize name for Twilio identity (no spaces, alphanumeric with underscores)
         identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
       }
+    } else {
+      // Generate unique identity for non-logged-in users to allow multiple devices
+      identity = `WebUser_${Date.now().toString(36)}`;
     }
     initTwilioDevice(identity);
   }, [verifiedPhone, expectedData, initTwilioDevice]);
