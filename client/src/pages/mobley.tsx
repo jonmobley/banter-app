@@ -52,7 +52,6 @@ export default function Mobley() {
   const [isAdmin, setIsAdmin] = useState(true); // Admin enabled by default for now
   const [adminPin, setAdminPin] = useState("");
   const [showPinModal, setShowPinModal] = useState(false);
-  const [showDemoPreview, setShowDemoPreview] = useState(false); // Toggle for demo preview
   const [pinError, setPinError] = useState(false);
   const [pinDigits, setPinDigits] = useState(["", "", "", ""]);
   const [callDuration, setCallDuration] = useState(0);
@@ -747,19 +746,6 @@ export default function Mobley() {
     }
   };
 
-  const sampleParticipants: Participant[] = [
-    { callSid: "sample-1", phone: "+12025551234", name: "Mom", muted: false, hold: false },
-    { callSid: "sample-2", phone: "+13105559876", name: "Jake", muted: false, hold: false },
-    { callSid: "sample-3", phone: "+12025558888", name: "Sue", muted: true, hold: false },
-  ];
-
-  const sampleExpected: ExpectedParticipant[] = [
-    { id: "sample-exp-1", name: "Mom", phone: "+12025551234", role: 'host' },
-    { id: "sample-exp-2", name: "Jake", phone: "+13105559876", role: 'participant' },
-    { id: "sample-exp-3", name: "Sue", phone: "+12025558888", role: 'listener' },
-    { id: "sample-exp-4", name: "Dad", phone: "+12025559999", role: 'participant' },
-  ];
-  
   const updateRole = useMutation({
     mutationFn: async ({ id, role }: { id: string; role: string }) => {
       const res = await fetch(`/api/expected/${id}`, {
@@ -804,10 +790,9 @@ export default function Mobley() {
   const realCount = participantsData?.count || 0;
   const conferenceActive = participantsData?.conferenceActive || false;
   
-  const isPreviewMode = showDemoPreview;
-  const unsortedParticipants = showDemoPreview ? sampleParticipants : realParticipants;
-  const participantCount = showDemoPreview ? sampleParticipants.length : realCount;
-  const unsortedExpected = showDemoPreview ? sampleExpected : (expectedData || []);
+  const unsortedParticipants = realParticipants;
+  const participantCount = realCount;
+  const unsortedExpected = expectedData || [];
   
   const expectedParticipants = [...unsortedExpected].sort((a, b) => {
     return roleOrder[a.role] - roleOrder[b.role];
@@ -903,7 +888,7 @@ export default function Mobley() {
     proceedWithBrowserJoin();
   }, [checkForDuplicateJoin, proceedWithBrowserJoin]);
   
-  const hasActiveCall = conferenceActive || showDemoPreview;
+  const hasActiveCall = conferenceActive;
 
   useEffect(() => {
     if (hasActiveCall && !callStartTime) {
@@ -1272,9 +1257,8 @@ export default function Mobley() {
             </div>
           </div>
           
-          <button 
-            onClick={() => setShowDemoPreview(!showDemoPreview)}
-            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 text-xl font-bold hover:text-emerald-400 transition-colors" 
+          <div 
+            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 text-xl font-bold" 
             data-testid="text-title"
           >
             Banter
@@ -1283,7 +1267,7 @@ export default function Mobley() {
               title={wsConnected ? 'Connected' : 'Reconnecting...'}
               data-testid="ws-status-indicator"
             />
-          </button>
+          </div>
           
           <div className="flex items-center gap-2">
             {isAdmin && (
@@ -1746,9 +1730,8 @@ export default function Mobley() {
           <span className="text-emerald-400 font-bold text-4xl">B</span>
         </div>
         
-        <button 
-          onClick={() => setShowDemoPreview(true)}
-          className="flex items-center gap-3 text-5xl font-bold mb-8 text-center hover:text-emerald-400 transition-colors" 
+        <div 
+          className="flex items-center gap-3 text-5xl font-bold mb-8 text-center" 
           data-testid="text-title"
         >
           Banter
@@ -1757,7 +1740,7 @@ export default function Mobley() {
             title={wsConnected ? 'Connected' : 'Reconnecting...'}
             data-testid="ws-status-indicator-home"
           />
-        </button>
+        </div>
 
         <div className="flex flex-col gap-4 w-full max-w-xs">
           {browserCallStatus === 'connected' ? (
