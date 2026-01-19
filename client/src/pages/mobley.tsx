@@ -1685,24 +1685,27 @@ export default function Mobley() {
                 Connecting...
               </button>
             ) : (
-              <div className="flex items-center gap-3">
-                <a
-                  href="tel:+12202423245"
-                  className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-                  data-testid="button-join-phone"
-                >
-                  <Phone className="w-5 h-5" />
-                  Call
-                </a>
-                <button
-                  onClick={joinFromBrowser}
-                  disabled={duplicateCheckLoading}
-                  className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-                  data-testid="button-join-browser"
-                >
-                  <Wifi className="w-5 h-5" />
-                  {duplicateCheckLoading ? 'Checking...' : 'Connect'}
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <a
+                    href="tel:+12202423245"
+                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                    data-testid="button-join-phone"
+                  >
+                    <Phone className="w-5 h-5" />
+                    Call
+                  </a>
+                  <button
+                    onClick={joinFromBrowser}
+                    disabled={duplicateCheckLoading}
+                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                    data-testid="button-join-browser"
+                  >
+                    <Wifi className="w-5 h-5" />
+                    {duplicateCheckLoading ? 'Checking...' : 'Connect'}
+                  </button>
+                </div>
+                <p className="text-slate-400 text-sm text-center">Join by phone or in browser</p>
               </div>
             )}
             {browserCallError && (
@@ -1809,24 +1812,27 @@ export default function Mobley() {
             </button>
           ) : (
             <>
-              <div className="flex items-center gap-3">
-                <a
-                  href="tel:+12202423245"
-                  className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-                  data-testid="button-join-phone-home"
-                >
-                  <Phone className="w-5 h-5" />
-                  Call
-                </a>
-                <button
-                  onClick={joinFromBrowser}
-                  disabled={duplicateCheckLoading}
-                  className="flex-1 flex items-center justify-center gap-2 bg-blue-500 hover:bg-blue-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-                  data-testid="button-join-browser-home"
-                >
-                  <Wifi className="w-5 h-5" />
-                  {duplicateCheckLoading ? 'Checking...' : 'Connect'}
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  <a
+                    href="tel:+12202423245"
+                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                    data-testid="button-join-phone-home"
+                  >
+                    <Phone className="w-5 h-5" />
+                    Call
+                  </a>
+                  <button
+                    onClick={joinFromBrowser}
+                    disabled={duplicateCheckLoading}
+                    className="flex-1 flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                    data-testid="button-join-browser-home"
+                  >
+                    <Wifi className="w-5 h-5" />
+                    {duplicateCheckLoading ? 'Checking...' : 'Connect'}
+                  </button>
+                </div>
+                <p className="text-slate-400 text-sm text-center">Join by phone or in browser</p>
               </div>
               
               {isAdmin && (
