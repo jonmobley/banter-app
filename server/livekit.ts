@@ -106,6 +106,7 @@ export async function listRooms() {
 
 /**
  * Mute/unmute a participant's audio track
+ * Enumerates participant's tracks to find the actual audio track SID
  */
 export async function muteParticipant(
   participantIdentity: string,
@@ -113,7 +114,31 @@ export async function muteParticipant(
   roomName: string = DEFAULT_ROOM_NAME
 ) {
   const client = getRoomServiceClient();
-  await client.mutePublishedTrack(roomName, participantIdentity, 'audio', muted);
+  
+  // Get the participant to find their audio track SID
+  const participants = await client.listParticipants(roomName);
+  const participant = participants.find(p => p.identity === participantIdentity);
+  
+  if (!participant) {
+    throw new Error(`Participant ${participantIdentity} not found in room`);
+  }
+  
+  // Find audio tracks (type=1 is AUDIO, source=1 is MICROPHONE)
+  const audioTracks = participant.tracks?.filter(t => 
+    (t.type === 1 || String(t.type) === 'AUDIO') &&
+    (t.source === 1 || String(t.source) === 'MICROPHONE')
+  ) || [];
+  
+  if (audioTracks.length === 0) {
+    throw new Error(`No audio track found for participant ${participantIdentity}`);
+  }
+  
+  // Mute all audio tracks
+  for (const track of audioTracks) {
+    if (track.sid) {
+      await client.mutePublishedTrack(roomName, participantIdentity, track.sid, muted);
+    }
+  }
 }
 
 /**

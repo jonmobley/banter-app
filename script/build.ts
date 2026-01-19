@@ -25,7 +25,7 @@ const allowlist = [
   "passport-local",
   "pg",
   "stripe",
-  "twilio",
+  "livekit-server-sdk",
   "uuid",
   "ws",
   "xlsx",

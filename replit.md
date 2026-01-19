@@ -1,8 +1,8 @@
-# Banter - Phone-Based Audio Conference System
+# Banter - Web-Based Audio Conference System
 
 ## Overview
 
-Banter is a phone-based walkie-talkie/audio conference application that allows users to join voice conferences by calling a Twilio phone number or from a web browser. The system automatically connects callers to a shared conference room without requiring PINs or complex setup. It includes a contact management system, scheduled events, role-based access, and real-time speaking indicators.
+Banter is a web-based walkie-talkie/audio conference application that allows users to join voice conferences from a web browser using LiveKit. The system automatically connects users to a shared conference room without requiring complex setup. It includes a contact management system, scheduled events, role-based access, and real-time speaking indicators.
 
 ## User Preferences
 
@@ -21,10 +21,8 @@ Browser users can choose between two talk modes (accessible via Audio Settings):
 | **Auto (VAD)** | Voice Activity Detection - automatically unmutes when speaking | Hands-free, phone in pocket |
 
 ### VAD Implementation Details
-- Uses `@ricky0123/vad-web` library with ML-based speech detection
-- Thresholds: 0.5 positive (sensitive), 0.35 negative
-- Separate MediaStream for VAD (Twilio manages its own stream internally)
-- Local mute/unmute for instant response (no server roundtrip)
+- LiveKit provides built-in speaking detection via `ActiveSpeakersChanged` event
+- Local mute/unmute handled directly via `room.localParticipant.setMicrophoneEnabled()`
 - Mode preference persisted to localStorage
 
 ## Product Taxonomy
@@ -72,13 +70,13 @@ The frontend is a single-page application located in `client/src/` with path ali
 ### Backend Architecture
 - **Runtime**: Node.js with Express 5
 - **Language**: TypeScript with ESM modules
-- **API Style**: REST endpoints under `/api/` and `/voice/` prefixes
-- **Telephony**: Twilio Voice API for phone conferencing
+- **API Style**: REST endpoints under `/api/` prefix
+- **Real-time Voice**: LiveKit for WebRTC audio conferencing
 
 Key server files:
 - `server/index.ts` - Express app setup and middleware
-- `server/routes.ts` - API route definitions including Twilio webhook handlers
-- `server/twilio.ts` - Twilio client initialization using Replit's connector system
+- `server/routes.ts` - API route definitions including LiveKit token generation
+- `server/livekit.ts` - LiveKit room service for token generation and room management
 - `server/storage.ts` - Database access layer
 
 ### Data Storage
@@ -92,22 +90,31 @@ Key server files:
 - Development: Vite dev server with HMR proxied through Express
 - Production: Static files served from `dist/public/`, built with Vite and esbuild
 
-### Twilio Integration
-The application uses Replit's Twilio connector for authentication. Two methods to join the conference:
+### LiveKit Integration
+The application uses LiveKit for real-time voice conferencing:
 
-1. **Phone Calling**: Webhook endpoint `/voice/incoming` handles incoming phone calls and joins them to the "banter-main" conference room. The Twilio phone number (220) 242-3245 must be configured in the Twilio console to point to this webhook.
+**WebSocket URL**: `wss://banter-4d7r2g6h.livekit.cloud`
 
-2. **Browser Calling**: Uses Twilio Voice JavaScript SDK (`@twilio/voice-sdk`) for web-based joining:
-   - `POST /api/voice/token` - Generates access tokens for browser clients, automatically creates/updates a TwiML App
-   - `POST /voice/browser` - TwiML endpoint for browser-initiated calls, joins the same "banter-main" conference
-   - Frontend uses `Device` and `Call` from `@twilio/voice-sdk` for WebRTC audio
+**Authentication**: API credentials stored as environment secrets:
+- `LIVEKIT_API_KEY` - LiveKit API key
+- `LIVEKIT_API_SECRET` - LiveKit API secret
+
+**Endpoints**:
+- `POST /api/livekit/token` - Generates access tokens for browser clients (requires auth token or admin PIN in production)
+- `POST /api/livekit/webhook` - Receives LiveKit room/participant events
+- `GET /api/participants` - Returns current room participants with mute status
+
+**Security**:
+- Token generation requires authentication (admin PIN or valid auth token) in production
+- Tokens use stable identity based on verified phone number to prevent collisions
+- 6-hour token TTL with room-scoped permissions
 
 ## External Dependencies
 
 ### Third-Party Services
-- **Twilio**: Voice telephony and conference calling
-  - Configured via Replit connector (manages API keys automatically)
-  - Requires webhook URL configuration in Twilio console
+- **LiveKit**: Real-time WebRTC voice conferencing
+  - Cloud-hosted at `livekit.cloud`
+  - Credentials managed via Replit secrets
 
 ### Database
 - **PostgreSQL**: Primary data store
@@ -115,9 +122,22 @@ The application uses Replit's Twilio connector for authentication. Two methods t
   - Managed through Drizzle ORM with `drizzle-kit` for migrations
 
 ### Key NPM Packages
-- `twilio` - Twilio SDK for voice API
-- `@twilio/voice-sdk` - Twilio Voice JavaScript SDK for browser calling
+- `livekit-server-sdk` - LiveKit server SDK for token generation and room management
+- `livekit-client` - LiveKit client SDK for browser WebRTC audio
 - `drizzle-orm` / `drizzle-zod` - Database ORM and validation
 - `@tanstack/react-query` - Data fetching and caching
 - `express` - Web server framework
 - Full shadcn/ui component suite via Radix UI primitives
+
+## Recent Changes
+
+### January 2026 - LiveKit Migration
+- Migrated from Twilio Voice SDK to LiveKit for real-time voice conferencing
+- Removed all Twilio dependencies (`twilio`, `@twilio/voice-sdk`, `@ricky0123/vad-web`)
+- Added LiveKit packages (`livekit-server-sdk`, `livekit-client`)
+- Created `server/livekit.ts` for LiveKit room service
+- Rewrote `server/routes.ts` with LiveKit token generation and participant management
+- Rewrote `client/src/pages/mobley.tsx` with LiveKit client SDK integration
+- Added security: token generation requires authentication in production
+- Fixed participant tracking to use actual track mute state instead of permissions
+- Note: Phone calling features removed - LiveKit is web-only

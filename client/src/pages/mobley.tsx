@@ -2,18 +2,16 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Device, Call } from "@twilio/voice-sdk";
+import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState } from "livekit-client";
 import { useToast } from "@/hooks/use-toast";
-import { MicVAD } from "@ricky0123/vad-web";
 
 type TalkMode = 'ptt' | 'auto';
 
 interface Participant {
-  callSid: string;
-  phone: string;
-  name: string | null;
+  identity: string;
+  name: string;
   muted: boolean;
-  hold: boolean;
+  joinedAt?: number;
 }
 
 interface ExpectedParticipant {
@@ -49,10 +47,24 @@ function formatDuration(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function normalizePhone(phone: string): string {
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `+1${cleaned}`;
+  }
+  if (cleaned.length === 11 && cleaned.startsWith('1')) {
+    return `+${cleaned}`;
+  }
+  if (!cleaned.startsWith('+')) {
+    return `+${cleaned}`;
+  }
+  return phone;
+}
+
 export default function Mobley() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [isAdmin, setIsAdmin] = useState(true); // Admin enabled by default for now
+  const [isAdmin, setIsAdmin] = useState(true);
   const [adminPin, setAdminPin] = useState("");
   const [showPinModal, setShowPinModal] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
@@ -65,6 +77,55 @@ export default function Mobley() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // LiveKit room and connection state
+  const [room, setRoom] = useState<Room | null>(null);
+  const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
+  const [isMuted, setIsMuted] = useState(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [localIdentity, setLocalIdentity] = useState<string | null>(null);
+
+  // Audio device selection
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
+  const [showAudioSettings, setShowAudioSettings] = useState(false);
+
+  // Audio processing settings
+  const [echoCancellation, setEchoCancellation] = useState<boolean>(() => {
+    const saved = localStorage.getItem('banter_echo_cancellation');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [noiseSuppression, setNoiseSuppression] = useState<boolean>(() => {
+    const saved = localStorage.getItem('banter_noise_suppression');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [autoGainControl, setAutoGainControl] = useState<boolean>(() => {
+    const saved = localStorage.getItem('banter_auto_gain_control');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  // Talk mode: PTT (push-to-talk) or Auto
+  const [talkMode, setTalkMode] = useState<TalkMode>(() => {
+    const saved = localStorage.getItem('banter_talk_mode');
+    return (saved === 'auto' || saved === 'ptt') ? saved : 'ptt';
+  });
+
+  // Phone verification state
+  const [verifiedPhone, setVerifiedPhone] = useState<string | null>(() => {
+    return localStorage.getItem('banter_verified_phone');
+  });
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    return localStorage.getItem('banter_auth_token');
+  });
+
+  // Login modal state
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginStep, setLoginStep] = useState<'phone' | 'code'>('phone');
+  const [loginPhone, setLoginPhone] = useState('');
+  const [loginCode, setLoginCode] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  // WebSocket connection for real-time updates
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
@@ -86,6 +147,8 @@ export default function Mobley() {
           const msg = JSON.parse(event.data);
           if (msg.type === 'speaking') {
             setSpeakingState(msg.data);
+          } else if (msg.type === 'participant-event') {
+            queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
           }
         } catch (e) {
           // Ignore parse errors
@@ -116,7 +179,7 @@ export default function Mobley() {
         wsRef.current.close();
       }
     };
-  }, []);
+  }, [queryClient]);
 
   const { data: participantsData, isLoading: participantsLoading } = useQuery<ParticipantsData>({
     queryKey: ["/api/participants"],
@@ -125,9 +188,232 @@ export default function Mobley() {
       if (!res.ok) throw new Error("Failed to fetch participants");
       return res.json();
     },
-    refetchInterval: 2000,
+    refetchInterval: 3000,
   });
 
+  const { data: expectedData, isLoading: expectedLoading } = useQuery<ExpectedParticipant[]>({
+    queryKey: ["/api/expected"],
+    queryFn: async () => {
+      const res = await fetch("/api/expected");
+      if (!res.ok) throw new Error("Failed to fetch expected");
+      return res.json();
+    },
+    refetchInterval: 5000,
+  });
+
+  // Enumerate audio devices
+  const refreshAudioDevices = useCallback(async () => {
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        stream.getTracks().forEach(track => track.stop());
+      });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter(d => d.kind === 'audioinput');
+      setAudioDevices(audioInputs);
+      if (!selectedAudioDevice && audioInputs.length > 0) {
+        setSelectedAudioDevice(audioInputs[0].deviceId);
+      }
+    } catch (err) {
+      console.error('Failed to enumerate audio devices:', err);
+    }
+  }, [selectedAudioDevice]);
+
+  useEffect(() => {
+    if (showAudioSettings) {
+      refreshAudioDevices();
+    }
+  }, [showAudioSettings, refreshAudioDevices]);
+
+  // Connect to LiveKit room
+  const connectToRoom = useCallback(async () => {
+    try {
+      setConnectionError(null);
+      setConnectionState(ConnectionState.Connecting);
+
+      let identity = 'WebUser';
+      if (verifiedPhone && expectedData) {
+        const matchingParticipant = expectedData.find(p => {
+          const normalizedExpected = p.phone.replace(/\D/g, '');
+          const normalizedVerified = verifiedPhone.replace(/\D/g, '');
+          return normalizedExpected === normalizedVerified || 
+                 normalizedExpected.endsWith(normalizedVerified) ||
+                 normalizedVerified.endsWith(normalizedExpected);
+        });
+        if (matchingParticipant) {
+          identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+        }
+      } else {
+        identity = `WebUser_${Date.now().toString(36)}`;
+      }
+
+      // Get LiveKit token from server (include auth token if available)
+      const res = await fetch('/api/livekit/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          identity, 
+          name: identity,
+          authToken: authToken || undefined
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to get connection token');
+      }
+
+      const { token, url, identity: serverIdentity } = await res.json();
+      
+      // Use the server-returned identity for consistency
+      const actualIdentity = serverIdentity || identity;
+
+      // Create and connect to the room
+      const newRoom = new Room({
+        adaptiveStream: true,
+        dynacast: true,
+        audioCaptureDefaults: {
+          echoCancellation,
+          noiseSuppression,
+          autoGainControl,
+          deviceId: selectedAudioDevice || undefined
+        }
+      });
+
+      // Set up event listeners
+      newRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
+        setConnectionState(state);
+        if (state === ConnectionState.Disconnected) {
+          setRoom(null);
+          setLocalIdentity(null);
+        }
+      });
+
+      newRoom.on(RoomEvent.ParticipantConnected, () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      });
+
+      newRoom.on(RoomEvent.ParticipantDisconnected, () => {
+        queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      });
+
+      newRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+        const newSpeakingState: Record<string, boolean> = {};
+        speakers.forEach(speaker => {
+          newSpeakingState[speaker.identity] = true;
+        });
+        setSpeakingState(prev => ({ ...prev, ...newSpeakingState }));
+        
+        // Broadcast to server for other clients using actual LiveKit identity
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'speaking-update',
+            identity: actualIdentity,
+            speaking: speakers.some(s => s.identity === actualIdentity)
+          }));
+        }
+      });
+
+      await newRoom.connect(url, token);
+      setRoom(newRoom);
+      // Use the actual LiveKit identity (from room.localParticipant or server response)
+      setLocalIdentity(newRoom.localParticipant?.identity || actualIdentity);
+
+      // Start muted by default
+      await newRoom.localParticipant.setMicrophoneEnabled(false);
+      setIsMuted(true);
+
+      queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      
+    } catch (error: any) {
+      console.error('Failed to connect to room:', error);
+      setConnectionError(error.message || 'Connection failed');
+      setConnectionState(ConnectionState.Disconnected);
+    }
+  }, [verifiedPhone, expectedData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken]);
+
+  // Disconnect from room
+  const disconnectFromRoom = useCallback(async () => {
+    if (room) {
+      await room.disconnect();
+      setRoom(null);
+      setLocalIdentity(null);
+      setConnectionState(ConnectionState.Disconnected);
+      queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+    }
+  }, [room, queryClient]);
+
+  // Toggle mute
+  const toggleMute = useCallback(async () => {
+    if (room?.localParticipant) {
+      const newMuted = !isMuted;
+      await room.localParticipant.setMicrophoneEnabled(!newMuted);
+      setIsMuted(newMuted);
+    }
+  }, [room, isMuted]);
+
+  // PTT handlers
+  const startTalking = useCallback(async () => {
+    if (room?.localParticipant && isMuted) {
+      await room.localParticipant.setMicrophoneEnabled(true);
+      setIsMuted(false);
+    }
+  }, [room, isMuted]);
+
+  const stopTalking = useCallback(async () => {
+    if (room?.localParticipant && !isMuted && talkMode === 'ptt') {
+      await room.localParticipant.setMicrophoneEnabled(false);
+      setIsMuted(true);
+    }
+  }, [room, isMuted, talkMode]);
+
+  // Change talk mode
+  const changeTalkMode = useCallback(async (mode: TalkMode) => {
+    setTalkMode(mode);
+    localStorage.setItem('banter_talk_mode', mode);
+    
+    if (mode === 'auto' && room?.localParticipant) {
+      await room.localParticipant.setMicrophoneEnabled(true);
+      setIsMuted(false);
+    }
+  }, [room]);
+
+  // Change audio device
+  const changeAudioDevice = useCallback(async (deviceId: string) => {
+    setSelectedAudioDevice(deviceId);
+    if (room?.localParticipant) {
+      try {
+        await room.localParticipant.setMicrophoneEnabled(false);
+        await room.switchActiveDevice('audioinput', deviceId);
+        if (!isMuted) {
+          await room.localParticipant.setMicrophoneEnabled(true);
+        }
+      } catch (err) {
+        console.error('Failed to change audio device:', err);
+      }
+    }
+  }, [room, isMuted]);
+
+  // Update audio processing
+  const updateAudioProcessing = useCallback(async (settings: {
+    echoCancellation?: boolean;
+    noiseSuppression?: boolean;
+    autoGainControl?: boolean;
+  }) => {
+    if (settings.echoCancellation !== undefined) {
+      setEchoCancellation(settings.echoCancellation);
+      localStorage.setItem('banter_echo_cancellation', String(settings.echoCancellation));
+    }
+    if (settings.noiseSuppression !== undefined) {
+      setNoiseSuppression(settings.noiseSuppression);
+      localStorage.setItem('banter_noise_suppression', String(settings.noiseSuppression));
+    }
+    if (settings.autoGainControl !== undefined) {
+      setAutoGainControl(settings.autoGainControl);
+      localStorage.setItem('banter_auto_gain_control', String(settings.autoGainControl));
+    }
+  }, []);
+
+  // Admin mutations
   const verifyPin = useMutation({
     mutationFn: async (pin: string) => {
       const res = await fetch("/api/admin/verify", {
@@ -151,12 +437,12 @@ export default function Mobley() {
     },
   });
 
-  const toggleMute = useMutation({
-    mutationFn: async ({ callSid, muted }: { callSid: string; muted: boolean }) => {
+  const toggleParticipantMute = useMutation({
+    mutationFn: async ({ identity, muted }: { identity: string; muted: boolean }) => {
       const res = await fetch("/api/admin/mute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, callSid, muted }),
+        body: JSON.stringify({ pin: adminPin, identity, muted }),
       });
       if (!res.ok) throw new Error("Failed to mute");
       return res.json();
@@ -167,16 +453,6 @@ export default function Mobley() {
     onError: () => {
       toast({ title: "Failed to change mute status", description: "Please try again.", variant: "destructive" });
     },
-  });
-
-  const { data: expectedData, isLoading: expectedLoading } = useQuery<ExpectedParticipant[]>({
-    queryKey: ["/api/expected"],
-    queryFn: async () => {
-      const res = await fetch("/api/expected");
-      if (!res.ok) throw new Error("Failed to fetch expected");
-      return res.json();
-    },
-    refetchInterval: 5000,
   });
 
   const removeExpected = useMutation({
@@ -198,110 +474,48 @@ export default function Mobley() {
     },
   });
 
-  const remindExpected = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/expected/${id}/remind`, { 
-        method: "POST",
+  const updateRole = useMutation({
+    mutationFn: async ({ id, role }: { id: string; role: string }) => {
+      const res = await fetch(`/api/expected/${id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin }),
+        body: JSON.stringify({ pin: adminPin, role }),
       });
-      if (!res.ok) throw new Error("Failed to remind");
+      if (!res.ok) throw new Error("Failed to update role");
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Reminder sent", description: "Text message sent successfully." });
+      queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
+      toast({ title: "Role updated" });
     },
     onError: () => {
-      toast({ title: "Failed to send reminder", description: "Please try again.", variant: "destructive" });
+      toast({ title: "Failed to update role", description: "Please try again.", variant: "destructive" });
     },
   });
 
-  const callExpected = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/expected/${id}/call`, { 
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin }),
-      });
-      if (!res.ok) throw new Error("Failed to call");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
-      toast({ title: "Calling participant", description: "Phone call initiated." });
-    },
-    onError: () => {
-      toast({ title: "Failed to call participant", description: "Please try again.", variant: "destructive" });
-    },
-  });
-
+  // Dropdown handling
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const dropdownMenuRef = useRef<HTMLDivElement>(null);
 
-  // Calculate optimal dropdown position with clamping to stay within safe bounds
   const calculateDropdownPosition = useCallback((buttonElement: HTMLElement) => {
     const rect = buttonElement.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
     const viewportWidth = window.innerWidth;
-    const safeTop = 70; // Below header
-    const safeBottom = viewportHeight - 130; // Above footer
-    const minDropdownHeight = 120; // Minimum usable height
     const dropdownWidth = 180;
     
-    // Calculate available safe zone
-    const safeZoneHeight = safeBottom - safeTop;
-    
-    // If viewport is too small, use centered fallback
-    if (safeZoneHeight < minDropdownHeight) {
-      const centeredTop = Math.max(16, (viewportHeight - 280) / 2);
-      setDropdownStyle({
-        position: 'fixed',
-        top: `${centeredTop}px`,
-        left: `${Math.max(16, (viewportWidth - dropdownWidth) / 2)}px`,
-        maxHeight: `${Math.min(280, viewportHeight - 32)}px`,
-      });
-      return;
-    }
-    
-    const dropdownMaxHeight = Math.min(280, safeZoneHeight - 20);
-    
-    // Calculate horizontal position - align right edge with button, clamp to viewport
     let left = rect.right - dropdownWidth;
     if (left < 8) left = 8;
     if (left + dropdownWidth > viewportWidth - 8) left = viewportWidth - dropdownWidth - 8;
     
-    // Calculate vertical position - prefer below, use above if needed
-    const spaceBelow = Math.max(0, safeBottom - rect.bottom);
-    const spaceAbove = Math.max(0, rect.top - safeTop);
-    
-    let top: number;
-    let maxHeight: number;
-    
-    if (spaceBelow >= minDropdownHeight && (spaceBelow >= dropdownMaxHeight || spaceBelow >= spaceAbove)) {
-      // Open below
-      top = rect.bottom + 4;
-      maxHeight = Math.min(dropdownMaxHeight, safeBottom - top - 8);
-    } else if (spaceAbove >= minDropdownHeight) {
-      // Open above
-      maxHeight = Math.min(dropdownMaxHeight, spaceAbove - 8);
-      top = rect.top - maxHeight - 4;
-    } else {
-      // Fallback: center in safe zone
-      top = safeTop + 10;
-      maxHeight = Math.min(dropdownMaxHeight, safeZoneHeight - 20);
-    }
-    
-    // Final safety clamps
-    maxHeight = Math.max(minDropdownHeight, maxHeight);
-    top = Math.max(safeTop, Math.min(top, safeBottom - maxHeight));
+    const spaceBelow = viewportHeight - rect.bottom;
+    const top = spaceBelow > 200 ? rect.bottom + 4 : rect.top - 200;
     
     setDropdownStyle({
       position: 'fixed',
-      top: `${top}px`,
+      top: `${Math.max(8, top)}px`,
       left: `${left}px`,
-      maxHeight: `${maxHeight}px`,
+      maxHeight: '280px',
     });
   }, []);
 
@@ -313,20 +527,6 @@ export default function Mobley() {
       setOpenDropdown(id);
     }
   }, [openDropdown, calculateDropdownPosition]);
-  
-  // Close dropdown on scroll or resize to prevent stale positions
-  useEffect(() => {
-    if (!openDropdown) return;
-    
-    const handleScrollOrResize = () => setOpenDropdown(null);
-    window.addEventListener('scroll', handleScrollOrResize, true);
-    window.addEventListener('resize', handleScrollOrResize);
-    
-    return () => {
-      window.removeEventListener('scroll', handleScrollOrResize, true);
-      window.removeEventListener('resize', handleScrollOrResize);
-    };
-  }, [openDropdown]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -338,649 +538,11 @@ export default function Mobley() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openDropdown]);
 
+  // Add expected participant
   const [showAddExpectedModal, setShowAddExpectedModal] = useState(false);
   const [newExpectedName, setNewExpectedName] = useState("");
   const [newExpectedPhone, setNewExpectedPhone] = useState("");
-  const [newExpectedPhoneError, setNewExpectedPhoneError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  
-  // Phone validation helper
-  const validatePhone = (phone: string): { valid: boolean; error?: string } => {
-    if (!phone) return { valid: false };
-    const cleaned = phone.replace(/\D/g, '');
-    if (cleaned.length < 10) {
-      return { valid: false, error: "Phone number must be at least 10 digits" };
-    }
-    if (cleaned.length > 11) {
-      return { valid: false, error: "Phone number is too long" };
-    }
-    if (cleaned.length === 11 && !cleaned.startsWith('1')) {
-      return { valid: false, error: "11-digit numbers must start with 1" };
-    }
-    return { valid: true };
-  };
-  
-  const handleExpectedPhoneChange = (value: string) => {
-    setNewExpectedPhone(value);
-    const validation = validatePhone(value);
-    setNewExpectedPhoneError(value && !validation.valid ? (validation.error || null) : null);
-  };
-  
-  const handleConfirmDelete = () => {
-    if (confirmDeleteId) {
-      removeExpected.mutate(confirmDeleteId);
-      setConfirmDeleteId(null);
-    }
-  };
-  
-  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
-  
-  // Browser calling state
-  const [twilioDevice, setTwilioDevice] = useState<Device | null>(null);
-  const [activeCall, setActiveCall] = useState<Call | null>(null);
-  const [browserCallStatus, setBrowserCallStatus] = useState<'disconnected' | 'connecting' | 'connected'>('disconnected');
-  const [isBrowserMuted, setIsBrowserMuted] = useState(false);
-  const [browserCallError, setBrowserCallError] = useState<string | null>(null);
-  
-  // Audio device selection
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
-  const [showAudioSettings, setShowAudioSettings] = useState(false);
-  
-  // Audio processing settings (persisted to localStorage)
-  const [echoCancellation, setEchoCancellation] = useState<boolean>(() => {
-    const saved = localStorage.getItem('banter_echo_cancellation');
-    return saved !== null ? saved === 'true' : true;
-  });
-  const [noiseSuppression, setNoiseSuppression] = useState<boolean>(() => {
-    const saved = localStorage.getItem('banter_noise_suppression');
-    return saved !== null ? saved === 'true' : true;
-  });
-  const [autoGainControl, setAutoGainControl] = useState<boolean>(() => {
-    const saved = localStorage.getItem('banter_auto_gain_control');
-    return saved !== null ? saved === 'true' : true;
-  });
-  
-  // Talk mode: PTT (push-to-talk) or Auto (VAD)
-  const [talkMode, setTalkMode] = useState<TalkMode>(() => {
-    const saved = localStorage.getItem('banter_talk_mode');
-    return (saved === 'auto' || saved === 'ptt') ? saved : 'ptt';
-  });
-  
-  // VAD (Voice Activity Detection) state
-  const vadRef = useRef<MicVAD | null>(null);
-  const vadStreamRef = useRef<MediaStream | null>(null);
-  const [vadActive, setVadActive] = useState(false);
-  const [vadSpeaking, setVadSpeaking] = useState(false);
-  
-  // Enumerate audio devices (called when user opens settings)
-  const refreshAudioDevices = useCallback(async () => {
-    try {
-      // Request permission first to get device labels
-      await navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        stream.getTracks().forEach(track => track.stop());
-      });
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const audioInputs = devices.filter(d => d.kind === 'audioinput');
-      setAudioDevices(audioInputs);
-      // Set default device if not already selected
-      if (!selectedAudioDevice && audioInputs.length > 0) {
-        setSelectedAudioDevice(audioInputs[0].deviceId);
-      }
-    } catch (err) {
-      console.error('Failed to enumerate audio devices:', err);
-    }
-  }, [selectedAudioDevice]);
-  
-  // Listen for device changes (only enumerate without permission request)
-  useEffect(() => {
-    const handleDeviceChange = async () => {
-      // Only refresh if we already have permission (devices array has items)
-      if (audioDevices.length > 0) {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioInputs = devices.filter(d => d.kind === 'audioinput');
-        setAudioDevices(audioInputs);
-      }
-    };
-    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
-    return () => {
-      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
-    };
-  }, [audioDevices.length]);
-  
-  // Refresh devices when audio settings modal opens
-  useEffect(() => {
-    if (showAudioSettings) {
-      refreshAudioDevices();
-    }
-  }, [showAudioSettings, refreshAudioDevices]);
-  
-  // Change audio input device on active call
-  const changeAudioDevice = useCallback(async (deviceId: string) => {
-    setSelectedAudioDevice(deviceId);
-    if (twilioDevice) {
-      try {
-        // Use Twilio's audio API to set the input device
-        await twilioDevice.audio?.setInputDevice(deviceId);
-        console.log('Audio input device changed to:', deviceId);
-      } catch (err) {
-        console.error('Failed to change audio device:', err);
-      }
-    }
-  }, [twilioDevice]);
-  
-  // Toggle audio processing settings (applies immediately if on a call)
-  const updateAudioProcessing = useCallback(async (settings: {
-    echoCancellation?: boolean;
-    noiseSuppression?: boolean;
-    autoGainControl?: boolean;
-  }) => {
-    const newEcho = settings.echoCancellation ?? echoCancellation;
-    const newNoise = settings.noiseSuppression ?? noiseSuppression;
-    const newGain = settings.autoGainControl ?? autoGainControl;
-    
-    // Update state and localStorage
-    if (settings.echoCancellation !== undefined) {
-      setEchoCancellation(settings.echoCancellation);
-      localStorage.setItem('banter_echo_cancellation', String(settings.echoCancellation));
-    }
-    if (settings.noiseSuppression !== undefined) {
-      setNoiseSuppression(settings.noiseSuppression);
-      localStorage.setItem('banter_noise_suppression', String(settings.noiseSuppression));
-    }
-    if (settings.autoGainControl !== undefined) {
-      setAutoGainControl(settings.autoGainControl);
-      localStorage.setItem('banter_auto_gain_control', String(settings.autoGainControl));
-    }
-    
-    // Apply immediately if we have an active device
-    if (twilioDevice) {
-      try {
-        await twilioDevice.audio?.setAudioConstraints({
-          echoCancellation: newEcho,
-          noiseSuppression: newNoise,
-          autoGainControl: newGain,
-        });
-        console.log('Audio processing updated:', { echoCancellation: newEcho, noiseSuppression: newNoise, autoGainControl: newGain });
-      } catch (err) {
-        console.warn('Could not update audio processing:', err);
-      }
-    }
-  }, [twilioDevice, echoCancellation, noiseSuppression, autoGainControl]);
-  
-  // Initialize Twilio Device
-  const initTwilioDevice = useCallback(async (identity: string) => {
-    try {
-      setBrowserCallError(null);
-      setBrowserCallStatus('connecting');
-      
-      // Get access token from server
-      const res = await fetch('/api/voice/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identity })
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Unable to connect. Please try again.');
-      }
-      
-      const { token, voiceUrl } = await res.json();
-      
-      // Create new Device with highest quality audio settings
-      const device = new Device(token, {
-        logLevel: 1,
-        codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
-        maxAverageBitrate: 40000,
-      });
-      
-      device.on('registered', () => {
-        console.log('Twilio Device registered');
-      });
-      
-      device.on('error', (error) => {
-        console.error('Twilio Device error:', error);
-        let userMessage = 'Connection issue. Please try again.';
-        if (error.message?.includes('permission') || error.message?.includes('NotAllowedError')) {
-          userMessage = 'Please allow microphone access to join the call.';
-        } else if (error.message?.includes('NotFoundError')) {
-          userMessage = 'No microphone found. Please check your audio settings.';
-        } else if (error.message?.includes('network') || error.message?.includes('offline')) {
-          userMessage = 'Network issue. Please check your internet connection.';
-        }
-        setBrowserCallError(userMessage);
-        setBrowserCallStatus('disconnected');
-      });
-      
-      device.on('tokenWillExpire', async () => {
-        // Refresh the token
-        const refreshRes = await fetch('/api/voice/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identity })
-        });
-        if (refreshRes.ok) {
-          const data = await refreshRes.json();
-          device.updateToken(data.token);
-        }
-      });
-      
-      await device.register();
-      setTwilioDevice(device);
-      
-      // Enable browser-native audio processing based on user settings
-      try {
-        await device.audio?.setAudioConstraints({
-          echoCancellation,
-          noiseSuppression,
-          autoGainControl,
-        });
-        console.log('Audio processing applied:', { echoCancellation, noiseSuppression, autoGainControl });
-      } catch (err) {
-        console.warn('Could not apply audio processing:', err);
-      }
-      
-      // Set the selected input device if one is chosen
-      if (selectedAudioDevice) {
-        try {
-          await device.audio?.setInputDevice(selectedAudioDevice);
-          console.log('Set audio input device to:', selectedAudioDevice);
-        } catch (err) {
-          console.error('Failed to set initial audio device:', err);
-        }
-      }
-      
-      // Make the outbound call to join conference
-      const call = await device.connect({
-        params: {
-          To: 'banter-main',
-          userName: identity
-        }
-      });
-      
-      call.on('accept', () => {
-        console.log('Browser call connected');
-        setBrowserCallStatus('connected');
-        // Default to muted when joining to prevent accidental background noise
-        call.mute(true);
-        setIsBrowserMuted(true);
-      });
-      
-      call.on('disconnect', () => {
-        console.log('Browser call ended');
-        setBrowserCallStatus('disconnected');
-        setActiveCall(null);
-        setIsBrowserMuted(false);
-        queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
-      });
-      
-      call.on('cancel', () => {
-        console.log('Browser call canceled');
-        setBrowserCallStatus('disconnected');
-        setActiveCall(null);
-        setIsBrowserMuted(false);
-      });
-      
-      call.on('reject', () => {
-        console.log('Browser call rejected');
-        setBrowserCallStatus('disconnected');
-        setActiveCall(null);
-        setIsBrowserMuted(false);
-      });
-      
-      call.on('error', (error) => {
-        console.error('Browser call error:', error);
-        let userMessage = 'Call failed. Please try again.';
-        if (error.message?.includes('permission') || error.message?.includes('NotAllowedError')) {
-          userMessage = 'Please allow microphone access to join the call.';
-        } else if (error.message?.includes('busy')) {
-          userMessage = 'The line is busy. Please try again in a moment.';
-        }
-        setBrowserCallError(userMessage);
-        setBrowserCallStatus('disconnected');
-        setActiveCall(null);
-        setIsBrowserMuted(false);
-      });
-      
-      // Monitor for network quality issues
-      call.on('warning', (warningName: string) => {
-        console.warn('Call quality warning:', warningName);
-        if (warningName === 'high-rtt') {
-          toast({
-            title: 'Network latency detected',
-            description: 'You may experience audio delays. Try moving closer to your router.',
-            variant: 'destructive',
-          });
-        } else if (warningName === 'low-mos') {
-          toast({
-            title: 'Poor audio quality',
-            description: 'Your network connection may be unstable.',
-            variant: 'destructive',
-          });
-        }
-      });
-      
-      call.on('warning-cleared', (warningName: string) => {
-        console.log('Call quality warning cleared:', warningName);
-      });
-      
-      setActiveCall(call);
-      
-    } catch (error: any) {
-      console.error('Failed to initialize Twilio device:', error);
-      let userMessage = 'Unable to connect. Please try again.';
-      if (error.message?.includes('permission') || error.name === 'NotAllowedError') {
-        userMessage = 'Please allow microphone access in your browser to join the call.';
-      } else if (error.name === 'NotFoundError') {
-        userMessage = 'No microphone found. Please connect a microphone and try again.';
-      } else if (!navigator.onLine) {
-        userMessage = 'You appear to be offline. Please check your internet connection.';
-      }
-      setBrowserCallError(userMessage);
-      setBrowserCallStatus('disconnected');
-    }
-  }, [queryClient, selectedAudioDevice]);
-  
-  const hangupBrowserCall = useCallback(() => {
-    if (activeCall) {
-      activeCall.disconnect();
-    }
-    if (twilioDevice) {
-      twilioDevice.disconnectAll();
-      twilioDevice.unregister();
-      setTwilioDevice(null);
-    }
-    setActiveCall(null);
-    setBrowserCallStatus('disconnected');
-    setIsBrowserMuted(false); // Reset mute state on hangup
-  }, [activeCall, twilioDevice]);
-  
-  // PTT (Push-to-Talk) functions
-  const startTalking = useCallback(() => {
-    if (activeCall && isBrowserMuted) {
-      activeCall.mute(false);
-      setIsBrowserMuted(false);
-      // Haptic feedback - double pulse for unmute (going live)
-      if (navigator.vibrate) {
-        navigator.vibrate([50, 30, 50]);
-      }
-    }
-  }, [activeCall, isBrowserMuted]);
-  
-  const stopTalking = useCallback(() => {
-    if (activeCall && !isBrowserMuted) {
-      activeCall.mute(true);
-      setIsBrowserMuted(true);
-      // Haptic feedback - short pulse for mute
-      if (navigator.vibrate) {
-        navigator.vibrate(50);
-      }
-    }
-  }, [activeCall, isBrowserMuted]);
-  
-  // VAD (Voice Activity Detection) functions
-  const activeCallRef = useRef<Call | null>(null);
-  
-  // Keep activeCallRef in sync
-  useEffect(() => {
-    activeCallRef.current = activeCall;
-  }, [activeCall]);
-  
-  const startVAD = useCallback(async () => {
-    // Guard: prevent redundant starts
-    if (vadRef.current || vadStreamRef.current || !activeCall) return;
-    
-    try {
-      // Get microphone stream for VAD (separate from Twilio's internal stream)
-      // Note: Twilio SDK manages its own stream internally via device.connect()
-      // We get a separate stream for VAD to analyze audio without interfering
-      const constraints: MediaStreamConstraints = {
-        audio: selectedAudioDevice ? { deviceId: { exact: selectedAudioDevice } } : true
-      };
-      const vadStream = await navigator.mediaDevices.getUserMedia(constraints);
-      vadStreamRef.current = vadStream;
-      
-      // Initialize VAD with sensitive threshold for quick detection
-      const vad = await MicVAD.new({
-        getStream: async () => vadStream,
-        positiveSpeechThreshold: 0.5, // Sensitive for fast detection
-        negativeSpeechThreshold: 0.35,
-        startOnLoad: true,
-        onSpeechStart: () => {
-          setVadSpeaking(true);
-          // Unmute immediately when speech detected
-          const call = activeCallRef.current;
-          if (call) {
-            call.mute(false);
-            setIsBrowserMuted(false);
-            // Haptic feedback for going live
-            if (navigator.vibrate) {
-              navigator.vibrate([50, 30, 50]);
-            }
-          }
-        },
-        onSpeechEnd: () => {
-          setVadSpeaking(false);
-          // Mute when speech ends
-          const call = activeCallRef.current;
-          if (call) {
-            call.mute(true);
-            setIsBrowserMuted(true);
-            // Haptic feedback for mute
-            if (navigator.vibrate) {
-              navigator.vibrate(50);
-            }
-          }
-        },
-      });
-      
-      vadRef.current = vad;
-      setVadActive(true);
-      
-    } catch (err) {
-      console.error('Failed to start VAD:', err);
-      toast({
-        title: "Voice detection unavailable",
-        description: "Falling back to Push-to-Talk mode",
-        variant: "destructive"
-      });
-      setTalkMode('ptt');
-      localStorage.setItem('banter_talk_mode', 'ptt');
-    }
-  }, [activeCall, selectedAudioDevice, toast]);
-  
-  const stopVAD = useCallback(async () => {
-    const vad = vadRef.current;
-    const stream = vadStreamRef.current;
-    
-    // Clear refs immediately to prevent race conditions
-    vadRef.current = null;
-    vadStreamRef.current = null;
-    setVadActive(false);
-    setVadSpeaking(false);
-    
-    // Async cleanup
-    if (vad) {
-      try {
-        await vad.pause();
-        await vad.destroy();
-      } catch (err) {
-        console.error('Error stopping VAD:', err);
-      }
-    }
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-    }
-  }, []);
-  
-  // Handle talk mode changes
-  const changeTalkMode = useCallback((mode: TalkMode) => {
-    setTalkMode(mode);
-    localStorage.setItem('banter_talk_mode', mode);
-    
-    if (mode === 'auto' && activeCall && browserCallStatus === 'connected') {
-      startVAD();
-    } else if (mode === 'ptt') {
-      stopVAD();
-      // Ensure muted when switching to PTT
-      if (activeCall) {
-        activeCall.mute(true);
-        setIsBrowserMuted(true);
-      }
-    }
-  }, [activeCall, browserCallStatus, startVAD, stopVAD]);
-  
-  // Start/stop VAD based on call status and talk mode
-  useEffect(() => {
-    if (browserCallStatus === 'connected' && talkMode === 'auto' && !vadActive) {
-      startVAD();
-    } else if (browserCallStatus !== 'connected' && vadActive) {
-      stopVAD();
-    }
-  }, [browserCallStatus, talkMode, vadActive, startVAD, stopVAD]);
-  
-  // Cleanup VAD on unmount
-  useEffect(() => {
-    return () => {
-      stopVAD();
-    };
-  }, [stopVAD]);
-  
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (twilioDevice) {
-        twilioDevice.disconnectAll();
-        twilioDevice.unregister();
-      }
-    };
-  }, [twilioDevice]);
-  
-  // Auth state
-  const [verifiedPhone, setVerifiedPhone] = useState<string | null>(() => {
-    return localStorage.getItem('banter_verified_phone');
-  });
-  const [authToken, setAuthToken] = useState<string | null>(() => {
-    return localStorage.getItem('banter_auth_token');
-  });
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [loginPhone, setLoginPhone] = useState("");
-  const [loginCode, setLoginCode] = useState("");
-  const [loginStep, setLoginStep] = useState<'phone' | 'code'>('phone');
-  const [loginError, setLoginError] = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
-  
-  // Duplicate join detection state
-  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
-  const [duplicateCallSid, setDuplicateCallSid] = useState<string | null>(null);
-  const [duplicateCheckLoading, setDuplicateCheckLoading] = useState(false);
-
-  const sendVerificationCode = async () => {
-    setLoginLoading(true);
-    setLoginError("");
-    try {
-      const res = await fetch("/api/auth/send-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: loginPhone }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to send code");
-      }
-      setLoginStep('code');
-    } catch (err: any) {
-      setLoginError(err.message);
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const verifyLoginCode = async () => {
-    setLoginLoading(true);
-    setLoginError("");
-    try {
-      const res = await fetch("/api/auth/verify-code", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: loginPhone, code: loginCode }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Invalid code");
-      }
-      const data = await res.json();
-      setVerifiedPhone(data.phone);
-      setAuthToken(data.authToken);
-      localStorage.setItem('banter_verified_phone', data.phone);
-      localStorage.setItem('banter_auth_token', data.authToken);
-      setShowLoginModal(false);
-      resetLoginModal();
-    } catch (err: any) {
-      setLoginError(err.message);
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const resetLoginModal = () => {
-    setLoginPhone("");
-    setLoginCode("");
-    setLoginStep('phone');
-    setLoginError("");
-  };
-
-  const validatePhoneNumber = (phone: string): { isValid: boolean; error: string | null } => {
-    const digitsOnly = phone.replace(/\D/g, '');
-    
-    if (!digitsOnly) {
-      return { isValid: false, error: null };
-    }
-    
-    if (digitsOnly.length < 10) {
-      return { isValid: false, error: `Missing ${10 - digitsOnly.length} digit${10 - digitsOnly.length > 1 ? 's' : ''}` };
-    }
-    
-    if (digitsOnly.length > 11) {
-      return { isValid: false, error: "Too many digits" };
-    }
-    
-    if (digitsOnly.length === 11 && !digitsOnly.startsWith('1')) {
-      return { isValid: false, error: "Invalid country code" };
-    }
-    
-    return { isValid: true, error: null };
-  };
-
-  const phoneValidation = validatePhoneNumber(loginPhone);
-  const isPhoneValid = phoneValidation.isValid;
-
-  const handleLogout = () => {
-    setVerifiedPhone(null);
-    setAuthToken(null);
-    localStorage.removeItem('banter_verified_phone');
-    localStorage.removeItem('banter_auth_token');
-  };
-
-  // Normalize phone to E.164 format (same as server-side)
-  const normalizePhone = (phone: string): string => {
-    let digits = phone.replace(/\D/g, '');
-    if (digits.length === 10) {
-      digits = '1' + digits;
-    }
-    return '+' + digits;
-  };
-
-  const isMyParticipant = (phone: string): boolean => {
-    if (!verifiedPhone) return false;
-    // Use exact E.164 comparison
-    return normalizePhone(verifiedPhone) === normalizePhone(phone);
-  };
-  const [editingParticipant, setEditingParticipant] = useState<ExpectedParticipant | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editPhone, setEditPhone] = useState("");
-  const [editEmail, setEditEmail] = useState("");
 
   const addExpected = useMutation({
     mutationFn: async () => {
@@ -997,12 +559,19 @@ export default function Mobley() {
       setShowAddExpectedModal(false);
       setNewExpectedName("");
       setNewExpectedPhone("");
-      toast({ title: "Participant added", description: "New participant has been added to the list." });
+      toast({ title: "Participant added" });
     },
     onError: () => {
-      toast({ title: "Failed to add participant", description: "Please try again.", variant: "destructive" });
+      toast({ title: "Failed to add participant", variant: "destructive" });
     },
   });
+
+  // Profile drawer
+  const [showProfileDrawer, setShowProfileDrawer] = useState(false);
+  const [editingParticipant, setEditingParticipant] = useState<ExpectedParticipant | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editEmail, setEditEmail] = useState("");
 
   const updateExpected = useMutation({
     mutationFn: async () => {
@@ -1022,7 +591,7 @@ export default function Mobley() {
       toast({ title: "Profile updated" });
     },
     onError: () => {
-      toast({ title: "Failed to update profile", description: "Please try again.", variant: "destructive" });
+      toast({ title: "Failed to update profile", variant: "destructive" });
     },
   });
 
@@ -1032,6 +601,68 @@ export default function Mobley() {
     setEditPhone(participant.phone);
     setEditEmail(participant.email || "");
     setShowProfileDrawer(true);
+  };
+
+  // Phone validation
+  const phoneValidation = { valid: loginPhone.replace(/\D/g, '').length >= 10, error: null };
+  const isPhoneValid = phoneValidation.valid;
+
+  // Auth handlers
+  const sendVerificationCode = async () => {
+    setLoginLoading(true);
+    setLoginError(null);
+    try {
+      const res = await fetch('/api/auth/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: loginPhone })
+      });
+      if (!res.ok) throw new Error('Failed to send code');
+      setLoginStep('code');
+    } catch {
+      setLoginError('Failed to send verification code');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const verifyLoginCode = async () => {
+    setLoginLoading(true);
+    setLoginError(null);
+    try {
+      const res = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: loginPhone, code: loginCode })
+      });
+      if (!res.ok) throw new Error('Invalid code');
+      const data = await res.json();
+      setVerifiedPhone(data.phone);
+      setAuthToken(data.authToken);
+      localStorage.setItem('banter_verified_phone', data.phone);
+      localStorage.setItem('banter_auth_token', data.authToken);
+      setShowLoginModal(false);
+      resetLoginModal();
+    } catch {
+      setLoginError('Invalid verification code');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const resetLoginModal = () => {
+    setLoginStep('phone');
+    setLoginPhone('');
+    setLoginCode('');
+    setLoginError(null);
+  };
+
+  const handleLogout = () => {
+    setVerifiedPhone(null);
+    setAuthToken(null);
+    localStorage.removeItem('banter_verified_phone');
+    localStorage.removeItem('banter_auth_token');
+    toast({ title: "Signed out" });
   };
 
   const handlePinDigit = (index: number, value: string) => {
@@ -1060,152 +691,46 @@ export default function Mobley() {
     }
   };
 
-  const updateRole = useMutation({
-    mutationFn: async ({ id, role }: { id: string; role: string }) => {
-      const res = await fetch(`/api/expected/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, role }),
-      });
-      if (!res.ok) throw new Error("Failed to update role");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
-      toast({ title: "Role updated" });
-    },
-    onError: () => {
-      toast({ title: "Failed to update role", description: "Please try again.", variant: "destructive" });
-    },
-  });
-  
-  const getParticipantRole = (phone: string): ExpectedParticipant['role'] | null => {
-    const normalizedPhone = phone.replace(/\D/g, '');
+  const handleConfirmDelete = () => {
+    if (confirmDeleteId) {
+      removeExpected.mutate(confirmDeleteId);
+      setConfirmDeleteId(null);
+    }
+  };
+
+  // Helpers
+  const isMyParticipant = (identity: string): boolean => {
+    return localIdentity === identity;
+  };
+
+  const getParticipantRole = (identity: string): ExpectedParticipant['role'] | null => {
     const ep = expectedParticipants.find(e => {
-      const normalizedExpected = e.phone.replace(/\D/g, '');
-      return normalizedPhone === normalizedExpected || 
-             normalizedPhone.endsWith(normalizedExpected) ||
-             normalizedExpected.endsWith(normalizedPhone);
+      const normalizedName = e.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+      return normalizedName === identity || e.name === identity;
     });
     return ep?.role || null;
   };
-  
+
   const isUserHost = (): boolean => {
-    if (!verifiedPhone) return false;
-    const role = getParticipantRole(verifiedPhone);
+    if (!localIdentity) return false;
+    const role = getParticipantRole(localIdentity);
     return role === 'host';
   };
-  
+
   const canShowControls = isAdmin || isUserHost();
-  
   const roleOrder = { host: 0, participant: 1, listener: 2 };
 
   const realParticipants = participantsData?.participants || [];
-  const realCount = participantsData?.count || 0;
   const conferenceActive = participantsData?.conferenceActive || false;
-  
-  const unsortedParticipants = realParticipants;
-  const participantCount = realCount;
-  const unsortedExpected = expectedData || [];
-  
-  const expectedParticipants = [...unsortedExpected].sort((a, b) => {
-    return roleOrder[a.role] - roleOrder[b.role];
-  });
-  
-  const participants = [...unsortedParticipants].sort((a, b) => {
-    const roleA = getParticipantRole(a.phone) || 'participant';
-    const roleB = getParticipantRole(b.phone) || 'participant';
+  const expectedParticipants = [...(expectedData || [])].sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
+
+  const participants = [...realParticipants].sort((a, b) => {
+    const roleA = getParticipantRole(a.identity) || 'participant';
+    const roleB = getParticipantRole(b.identity) || 'participant';
     return roleOrder[roleA] - roleOrder[roleB];
   });
-  
-  // Check for duplicate join before connecting
-  const checkForDuplicateJoin = useCallback(async (): Promise<{ isDuplicate: boolean }> => {
-    if (!authToken) {
-      return { isDuplicate: false };
-    }
-    
-    try {
-      const res = await fetch('/api/participants/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authToken })
-      });
-      if (!res.ok) {
-        return { isDuplicate: false };
-      }
-      const data = await res.json();
-      return { isDuplicate: data.inConference };
-    } catch {
-      return { isDuplicate: false };
-    }
-  }, [authToken]);
 
-  // The actual browser join logic
-  const proceedWithBrowserJoin = useCallback(() => {
-    let identity = 'WebUser';
-    if (verifiedPhone) {
-      const matchingParticipant = expectedData?.find(p => {
-        const normalizedExpected = p.phone.replace(/\D/g, '');
-        const normalizedVerified = verifiedPhone.replace(/\D/g, '');
-        return normalizedExpected === normalizedVerified || 
-               normalizedExpected.endsWith(normalizedVerified) ||
-               normalizedVerified.endsWith(normalizedExpected);
-      });
-      if (matchingParticipant) {
-        // Sanitize name for Twilio identity (no spaces, alphanumeric with underscores)
-        identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
-      }
-    } else {
-      // Generate unique identity for non-logged-in users to allow multiple devices
-      identity = `WebUser_${Date.now().toString(36)}`;
-    }
-    initTwilioDevice(identity);
-  }, [verifiedPhone, expectedData, initTwilioDevice]);
-
-  // Disconnect phone call and connect via browser
-  const switchToBrowser = useCallback(async () => {
-    if (!authToken) return;
-    
-    try {
-      await fetch('/api/participants/disconnect-self', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authToken })
-      });
-    } catch {
-      // Continue anyway - the phone will hang up
-    }
-    
-    setShowDuplicateWarning(false);
-    setDuplicateCallSid(null);
-    
-    // Wait a moment for the disconnect to process
-    setTimeout(() => {
-      proceedWithBrowserJoin();
-    }, 1000);
-  }, [authToken, proceedWithBrowserJoin]);
-
-  // Browser call join function (defined after verifiedPhone and expectedData)
-  const joinFromBrowser = useCallback(async () => {
-    // Check if user is already in conference via phone
-    setDuplicateCheckLoading(true);
-    
-    try {
-      const { isDuplicate } = await checkForDuplicateJoin();
-      
-      if (isDuplicate) {
-        setShowDuplicateWarning(true);
-        return;
-      }
-    } finally {
-      setDuplicateCheckLoading(false);
-    }
-    
-    // No duplicate, proceed with join
-    proceedWithBrowserJoin();
-  }, [checkForDuplicateJoin, proceedWithBrowserJoin]);
-  
-  const hasActiveCall = conferenceActive;
+  const hasActiveCall = conferenceActive || connectionState === ConnectionState.Connected;
 
   useEffect(() => {
     if (hasActiveCall && !callStartTime) {
@@ -1214,650 +739,104 @@ export default function Mobley() {
       setCallStartTime(null);
       setCallDuration(0);
     }
-  }, [hasActiveCall]);
+  }, [hasActiveCall, callStartTime]);
 
   useEffect(() => {
     if (!callStartTime) return;
-    
     const interval = setInterval(() => {
       setCallDuration(Math.floor((Date.now() - callStartTime) / 1000));
     }, 1000);
-    
     return () => clearInterval(interval);
   }, [callStartTime]);
 
-  const pinModal = (
-    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
-      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-        <h2 className="text-xl font-bold text-center mb-2">Admin Access</h2>
-        <p className="text-sm text-slate-400 text-center mb-6">Enter 4-digit PIN</p>
-        
-        <div className="flex justify-center gap-3 mb-6">
-          {pinDigits.map((digit, i) => (
-            <input
-              key={i}
-              id={`pin-${i}`}
-              type="tel"
-              inputMode="numeric"
-              maxLength={1}
-              value={digit}
-              onChange={(e) => handlePinDigit(i, e.target.value.replace(/\D/g, ""))}
-              onKeyDown={(e) => handlePinKeyDown(i, e)}
-              className={`w-14 h-14 text-center text-2xl font-bold rounded-lg bg-slate-800 border-2 outline-none transition-colors ${
-                pinError ? 'border-red-500' : 'border-slate-700 focus:border-emerald-500'
-              }`}
-              data-testid={`input-pin-${i}`}
-            />
-          ))}
-        </div>
-        
-        {pinError && (
-          <p className="text-red-400 text-sm text-center mb-4">Invalid PIN. Try again.</p>
-        )}
-        
-        <button
-          onClick={() => {
-            setShowPinModal(false);
-            setPinDigits(["", "", "", ""]);
-            setPinError(false);
-          }}
-          className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (room) {
+        room.disconnect();
+      }
+    };
+  }, [room]);
 
-  const disconnectConfirmModal = (
-    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
-      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-        <h2 className="text-xl font-bold text-center mb-6">Disconnect?</h2>
-        
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowDisconnectConfirm(false)}
-            className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
-            data-testid="button-disconnect-cancel"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => {
-              setShowDisconnectConfirm(false);
-              hangupBrowserCall();
-            }}
-            className="flex-1 bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
-            data-testid="button-disconnect-confirm"
-          >
-            Disconnect
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const isConnected = connectionState === ConnectionState.Connected;
+  const isConnecting = connectionState === ConnectionState.Connecting;
 
-  const audioSettingsModal = (
-    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
-      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-        <h2 className="text-xl font-bold text-center mb-6">Audio Settings</h2>
-        
-        {/* Talk Mode Toggle */}
-        <div className="mb-6">
-          <p className="text-sm text-slate-400 mb-3">Talk Mode</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => changeTalkMode('ptt')}
-              className={`flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-colors ${
-                talkMode === 'ptt'
-                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                  : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
-              }`}
-              data-testid="button-talk-mode-ptt"
-            >
-              <Mic className={`w-5 h-5 ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-slate-400'}`} />
-              <span className={`text-sm font-medium ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-white'}`}>
-                Hold to Talk
-              </span>
-              <span className="text-xs text-slate-500">Manual control</span>
-            </button>
-            <button
-              onClick={() => changeTalkMode('auto')}
-              className={`flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-colors ${
-                talkMode === 'auto'
-                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                  : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
-              }`}
-              data-testid="button-talk-mode-auto"
-            >
-              <Volume2 className={`w-5 h-5 ${talkMode === 'auto' ? 'text-emerald-400' : 'text-slate-400'}`} />
-              <span className={`text-sm font-medium ${talkMode === 'auto' ? 'text-emerald-400' : 'text-white'}`}>
-                Auto
-              </span>
-              <span className="text-xs text-slate-500">Voice activated</span>
-            </button>
+  return (
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+      <header className="flex items-center justify-between p-4 border-b border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+            <Users className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <h1 className="font-semibold">Banter</h1>
+            <p className="text-xs text-slate-400">
+              {isConnected ? `Connected • ${formatDuration(callDuration)}` : 
+               conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
+            </p>
           </div>
         </div>
-        
-        {/* Microphone Selection */}
-        <div className="mb-6">
-          <p className="text-sm text-slate-400 mb-3">Microphone</p>
-          <div className="space-y-2">
-            {audioDevices.length === 0 ? (
-              <p className="text-slate-400 text-sm text-center py-4">No microphones found</p>
-            ) : (
-              audioDevices.map((device) => (
-                <button
-                  key={device.deviceId}
-                  onClick={() => changeAudioDevice(device.deviceId)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                    selectedAudioDevice === device.deviceId
-                      ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                      : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
-                  }`}
-                  data-testid={`audio-device-${device.deviceId}`}
-                >
-                  <Mic className={`w-5 h-5 ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-slate-400'}`} />
-                  <span className={`text-sm truncate ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-white'}`}>
-                    {device.label || `Microphone ${audioDevices.indexOf(device) + 1}`}
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-        
-        {/* Audio Processing */}
-        <div className="mb-6">
-          <p className="text-sm text-slate-400 mb-3">Audio Processing</p>
-          <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          {isAdmin && (
             <button
-              onClick={() => updateAudioProcessing({ echoCancellation: !echoCancellation })}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
-                echoCancellation
-                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                  : 'bg-slate-800 border-2 border-transparent'
-              }`}
-              data-testid="toggle-echo-cancellation"
+              onClick={() => setShowAddExpectedModal(true)}
+              className="p-3 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 transition-colors"
+              data-testid="button-add-expected"
             >
-              <div className="flex flex-col items-start">
-                <span className={`text-sm font-medium ${echoCancellation ? 'text-emerald-400' : 'text-white'}`}>
-                  Echo Cancellation
-                </span>
-                <span className="text-xs text-slate-500">Removes room echo</span>
-              </div>
-              <div className={`w-10 h-6 rounded-full transition-colors ${echoCancellation ? 'bg-emerald-500' : 'bg-slate-600'} relative`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${echoCancellation ? 'right-1' : 'left-1'}`} />
-              </div>
-            </button>
-            
-            <button
-              onClick={() => updateAudioProcessing({ noiseSuppression: !noiseSuppression })}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
-                noiseSuppression
-                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                  : 'bg-slate-800 border-2 border-transparent'
-              }`}
-              data-testid="toggle-noise-suppression"
-            >
-              <div className="flex flex-col items-start">
-                <span className={`text-sm font-medium ${noiseSuppression ? 'text-emerald-400' : 'text-white'}`}>
-                  Noise Suppression
-                </span>
-                <span className="text-xs text-slate-500">Filters background noise</span>
-              </div>
-              <div className={`w-10 h-6 rounded-full transition-colors ${noiseSuppression ? 'bg-emerald-500' : 'bg-slate-600'} relative`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${noiseSuppression ? 'right-1' : 'left-1'}`} />
-              </div>
-            </button>
-            
-            <button
-              onClick={() => updateAudioProcessing({ autoGainControl: !autoGainControl })}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
-                autoGainControl
-                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                  : 'bg-slate-800 border-2 border-transparent'
-              }`}
-              data-testid="toggle-auto-gain-control"
-            >
-              <div className="flex flex-col items-start">
-                <span className={`text-sm font-medium ${autoGainControl ? 'text-emerald-400' : 'text-white'}`}>
-                  Auto Gain Control
-                </span>
-                <span className="text-xs text-slate-500">Normalizes volume levels</span>
-              </div>
-              <div className={`w-10 h-6 rounded-full transition-colors ${autoGainControl ? 'bg-emerald-500' : 'bg-slate-600'} relative`}>
-                <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${autoGainControl ? 'right-1' : 'left-1'}`} />
-              </div>
-            </button>
-          </div>
-        </div>
-        
-        <button
-          onClick={() => {
-            refreshAudioDevices();
-          }}
-          className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors mb-3"
-          data-testid="button-refresh-devices"
-        >
-          Refresh Devices
-        </button>
-        
-        <button
-          onClick={() => setShowAudioSettings(false)}
-          className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
-          data-testid="button-audio-settings-done"
-        >
-          Done
-        </button>
-      </div>
-    </div>
-  );
-
-  const loginModal = (
-    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
-      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-        <h2 className="text-xl font-bold text-center mb-2">Sign In</h2>
-        <p className="text-sm text-slate-400 text-center mb-6">
-          {loginStep === 'phone' ? 'Enter your phone number' : 'Enter the code we texted you'}
-        </p>
-        
-        {loginStep === 'phone' ? (
-          <div className="space-y-2 mb-6">
-            <input
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              autoCorrect="off"
-              placeholder="(555) 555-5555"
-              value={loginPhone}
-              onChange={(e) => setLoginPhone(e.target.value)}
-              className={`w-full px-4 py-3.5 rounded-xl bg-slate-800 border outline-none transition-colors text-center text-base ${
-                phoneValidation.error 
-                  ? 'border-amber-500' 
-                  : isPhoneValid 
-                    ? 'border-emerald-500' 
-                    : 'border-slate-700 focus:border-emerald-500'
-              }`}
-              style={{ fontSize: '16px' }}
-              data-testid="input-login-phone"
-            />
-            {phoneValidation.error && (
-              <p className="text-amber-400 text-sm text-center" data-testid="text-phone-error">
-                {phoneValidation.error}
-              </p>
-            )}
-            {isPhoneValid && (
-              <p className="text-emerald-400 text-sm text-center" data-testid="text-phone-valid">
-                Valid phone number
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-4 mb-6">
-            <input
-              type="tel"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoCorrect="off"
-              placeholder="000000"
-              value={loginCode}
-              onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              maxLength={6}
-              className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors text-center text-2xl tracking-widest"
-              style={{ fontSize: '24px' }}
-              data-testid="input-login-code"
-            />
-          </div>
-        )}
-        
-        {loginError && (
-          <p className="text-red-400 text-sm text-center mb-4">{loginError}</p>
-        )}
-        
-        <div className="space-y-3">
-          <button
-            onClick={loginStep === 'phone' ? sendVerificationCode : verifyLoginCode}
-            disabled={loginLoading || (loginStep === 'phone' ? !isPhoneValid : loginCode.length !== 6)}
-            className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium py-3 rounded-full transition-colors"
-            data-testid="button-login-submit"
-          >
-            {loginLoading ? 'Loading...' : loginStep === 'phone' ? 'Send Code' : 'Verify'}
-          </button>
-          
-          {loginStep === 'code' && (
-            <button
-              onClick={() => setLoginStep('phone')}
-              className="w-full text-slate-400 hover:text-white text-sm transition-colors"
-              data-testid="button-login-back"
-            >
-              Use a different number
+              <Plus className="w-5 h-5 text-emerald-400" />
             </button>
           )}
-          
           <button
-            onClick={() => {
-              setShowLoginModal(false);
-              resetLoginModal();
-            }}
-            className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
-            data-testid="button-login-cancel"
+            onClick={() => verifiedPhone ? handleLogout() : setShowLoginModal(true)}
+            className={`p-3 rounded-full transition-colors ${
+              verifiedPhone 
+                ? 'bg-blue-500/20 hover:bg-blue-500/30' 
+                : 'bg-slate-800/50 hover:bg-slate-700'
+            }`}
+            data-testid="button-profile"
           >
-            Cancel
+            <User className={`w-5 h-5 ${verifiedPhone ? 'text-blue-400' : 'text-slate-400'}`} />
           </button>
         </div>
-      </div>
-    </div>
-  );
+      </header>
 
-  const duplicateWarningModal = (
-    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
-      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-        <div className="flex justify-center mb-4">
-          <div className="w-16 h-16 rounded-full bg-amber-500/20 flex items-center justify-center">
-            <Phone className="w-8 h-8 text-amber-400" />
-          </div>
-        </div>
-        <h2 className="text-xl font-bold text-center mb-2">Already Connected</h2>
-        <p className="text-sm text-slate-400 text-center mb-6">
-          You're already in this call on your phone. Would you like to switch to your browser instead?
-        </p>
-        
-        <div className="space-y-3">
-          <button
-            onClick={switchToBrowser}
-            className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
-            data-testid="button-switch-to-browser"
-          >
-            Switch to Browser
-          </button>
-          <button
-            onClick={() => {
-              setShowDuplicateWarning(false);
-              setDuplicateCallSid(null);
-            }}
-            className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
-            data-testid="button-stay-on-phone"
-          >
-            Stay on Phone
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const addExpectedModal = (
-    <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
-      <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-        <h2 className="text-xl font-bold text-center mb-2">Add Expected</h2>
-        <p className="text-sm text-slate-400 text-center mb-6">Who should join the call?</p>
-        
-        <div className="space-y-4 mb-6">
-          <input
-            type="text"
-            inputMode="text"
-            autoComplete="name"
-            autoCapitalize="words"
-            autoCorrect="off"
-            placeholder="Name"
-            value={newExpectedName}
-            onChange={(e) => setNewExpectedName(e.target.value)}
-            className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
-            style={{ fontSize: '16px' }}
-            data-testid="input-expected-name"
-          />
-          <div>
-            <input
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              autoCorrect="off"
-              placeholder="Phone number"
-              value={newExpectedPhone}
-              onChange={(e) => handleExpectedPhoneChange(e.target.value)}
-              className={`w-full px-4 py-3.5 rounded-xl bg-slate-800 border ${newExpectedPhoneError ? 'border-red-500' : 'border-slate-700 focus:border-emerald-500'} outline-none transition-colors`}
-              style={{ fontSize: '16px' }}
-              data-testid="input-expected-phone"
-            />
-            {newExpectedPhoneError && (
-              <p className="text-red-400 text-xs mt-1">{newExpectedPhoneError}</p>
-            )}
-          </div>
-        </div>
-        
-        <div className="space-y-3">
-          <button
-            onClick={() => addExpected.mutate()}
-            disabled={!newExpectedName || !newExpectedPhone || !validatePhone(newExpectedPhone).valid}
-            className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium py-3 rounded-full transition-colors"
-            data-testid="button-add-expected-confirm"
-          >
-            Add
-          </button>
-          <button
-            onClick={() => {
-              setShowAddExpectedModal(false);
-              setNewExpectedName("");
-              setNewExpectedPhone("");
-            }}
-            className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
-            data-testid="button-add-expected-cancel"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const profileDrawer = (
-    <div className="fixed inset-0 z-50">
-      <div 
-        className="absolute inset-0 bg-black/50"
-        onClick={() => setShowProfileDrawer(false)}
-      />
-      <div className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl animate-in slide-in-from-bottom duration-300 max-h-[85vh] max-h-[85dvh] overflow-y-auto">
-        <div className="sticky top-0 bg-slate-900 z-10 flex justify-center pt-3 pb-2">
-          <div className="w-10 h-1 bg-slate-600 rounded-full" />
-        </div>
-        
-        <div className="px-6 pb-8 pb-safe">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold">Edit Profile</h2>
-            <button
-              onClick={() => setShowProfileDrawer(false)}
-              className="p-2 rounded-full hover:bg-slate-800 transition-colors"
-              data-testid="button-close-drawer"
-            >
-              <X className="w-5 h-5 text-slate-400" />
-            </button>
-          </div>
-          
-          <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 rounded-full bg-slate-700 flex items-center justify-center">
-              <span className="text-3xl font-bold text-slate-300">
-                {editName ? editName.charAt(0).toUpperCase() : '?'}
-              </span>
-            </div>
-          </div>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm text-slate-400 mb-1.5 block">Name</label>
-              <input
-                type="text"
-                inputMode="text"
-                autoComplete="name"
-                autoCapitalize="words"
-                autoCorrect="off"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
-                style={{ fontSize: '16px' }}
-                data-testid="input-edit-name"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-slate-400 mb-1.5 block">Phone</label>
-              <input
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                autoCorrect="off"
-                value={editPhone}
-                onChange={(e) => setEditPhone(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
-                style={{ fontSize: '16px' }}
-                data-testid="input-edit-phone"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-slate-400 mb-1.5 block">Email</label>
-              <input
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                autoCorrect="off"
-                autoCapitalize="none"
-                value={editEmail}
-                onChange={(e) => setEditEmail(e.target.value)}
-                placeholder="Optional"
-                className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors"
-                style={{ fontSize: '16px' }}
-                data-testid="input-edit-email"
-              />
-            </div>
-          </div>
-          
-          <button
-            onClick={() => updateExpected.mutate()}
-            disabled={!editName || !editPhone}
-            className="w-full mt-6 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium py-4 rounded-full transition-colors"
-            data-testid="button-save-profile"
-          >
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  if (hasActiveCall) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col relative">
-        <header className="relative flex items-center justify-between px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-emerald-500/20 rounded-full px-3 py-2">
-              <div className="w-6 h-6 rounded-full bg-emerald-400/30 flex items-center justify-center">
-                <span className="text-sm font-medium text-emerald-400">
-                  {participantCount}
-                </span>
-              </div>
-              <span className="text-lg font-medium text-emerald-400" data-testid="text-duration">
-                {formatDuration(callDuration)}
-              </span>
-            </div>
-          </div>
-          
-          <div 
-            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 text-xl font-bold" 
-            data-testid="text-title"
-          >
-            Banter
-            <span 
-              className="hidden"
-              title={wsConnected ? 'Connected' : 'Reconnecting...'}
-              data-testid="ws-status-indicator"
-            />
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {isAdmin && (
-              <button
-                onClick={() => setShowAddExpectedModal(true)}
-                className="p-3 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 transition-colors"
-                data-testid="button-add-expected"
-              >
-                <Plus className="w-5 h-5 text-emerald-400" />
-              </button>
-            )}
-            {isAdmin ? (
-              <Link
-                href="/account"
-                className={`p-3 rounded-full transition-colors ${
-                  verifiedPhone 
-                    ? 'bg-blue-500/20 hover:bg-blue-500/30' 
-                    : 'bg-slate-800/50 hover:bg-slate-700'
-                }`}
-                data-testid="button-profile"
-              >
-                <User className={`w-5 h-5 ${verifiedPhone ? 'text-blue-400' : 'text-slate-400'}`} />
-              </Link>
-            ) : (
-              <button
-                onClick={() => verifiedPhone ? handleLogout() : setShowLoginModal(true)}
-                className={`p-3 rounded-full transition-colors ${
-                  verifiedPhone 
-                    ? 'bg-blue-500/20 hover:bg-blue-500/30' 
-                    : 'bg-slate-800/50 hover:bg-slate-700'
-                }`}
-                data-testid="button-profile"
-              >
-                <User className={`w-5 h-5 ${verifiedPhone ? 'text-blue-400' : 'text-slate-400'}`} />
-              </button>
-            )}
-          </div>
-        </header>
-
-
-        <div className="flex-1 overflow-auto px-4 pb-48">
-          <div className="space-y-2">
-            {participants.map((p, i) => {
-              const isSpeaking = speakingState[p.callSid] || false;
-              const role = getParticipantRole(p.phone);
-              const matchingExpected = expectedParticipants.find(ep => {
-                const normalizedExpected = ep.phone.replace(/\D/g, '');
-                const normalizedActive = p.phone.replace(/\D/g, '');
-                return normalizedActive === normalizedExpected || 
-                       normalizedActive.endsWith(normalizedExpected) ||
-                       normalizedExpected.endsWith(normalizedActive);
-              });
-              
-              const getCardStyle = () => {
-                if (role === 'host') {
-                  return isSpeaking 
-                    ? 'bg-amber-500/30 ring-2 ring-amber-400/50' 
-                    : 'bg-amber-500/20';
-                }
-                if (role === 'participant') {
-                  return isSpeaking
-                    ? 'bg-blue-500/30 ring-2 ring-blue-400/50'
-                    : 'bg-blue-500/20';
-                }
+      <div className="flex-1 overflow-auto px-4 pb-48">
+        <div className="space-y-2 mt-4">
+          {participants.map((p, i) => {
+            const isSpeaking = speakingState[p.identity] || false;
+            const role = getParticipantRole(p.identity);
+            
+            const getCardStyle = () => {
+              if (role === 'host') {
                 return isSpeaking 
-                  ? 'bg-emerald-500/30 ring-2 ring-emerald-400/50' 
-                  : 'bg-slate-800/50';
-              };
-              
-              const getAvatarStyle = () => {
-                if (role === 'host') {
-                  return isSpeaking ? 'bg-amber-400/40' : 'bg-amber-500/30';
-                }
-                if (role === 'participant') {
-                  return isSpeaking ? 'bg-blue-400/40' : 'bg-blue-500/30';
-                }
-                return isSpeaking ? 'bg-emerald-400/40' : 'bg-emerald-500/20';
-              };
-              
-              const getTextColor = () => {
-                if (role === 'host') return 'text-amber-400';
-                if (role === 'participant') return 'text-blue-400';
-                return 'text-emerald-400';
-              };
-              
-              return (
+                  ? 'bg-amber-500/30 ring-2 ring-amber-400/50' 
+                  : 'bg-amber-500/20';
+              }
+              if (role === 'participant') {
+                return isSpeaking
+                  ? 'bg-blue-500/30 ring-2 ring-blue-400/50'
+                  : 'bg-blue-500/20';
+              }
+              return isSpeaking 
+                ? 'bg-emerald-500/30 ring-2 ring-emerald-400/50' 
+                : 'bg-slate-800/50';
+            };
+            
+            const getAvatarStyle = () => {
+              if (role === 'host') return isSpeaking ? 'bg-amber-400/40' : 'bg-amber-500/30';
+              if (role === 'participant') return isSpeaking ? 'bg-blue-400/40' : 'bg-blue-500/30';
+              return isSpeaking ? 'bg-emerald-400/40' : 'bg-emerald-500/20';
+            };
+            
+            const getTextColor = () => {
+              if (role === 'host') return 'text-amber-400';
+              if (role === 'participant') return 'text-blue-400';
+              return 'text-emerald-400';
+            };
+            
+            return (
               <div 
-                key={p.callSid} 
+                key={p.identity} 
                 className={`flex items-center gap-3 rounded-lg px-4 py-3 transition-colors duration-200 ${getCardStyle()}`}
                 data-testid={`participant-${i}`}
               >
@@ -1868,25 +847,17 @@ export default function Mobley() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-medium truncate">
-                      {p.name || formatPhone(p.phone)}
-                    </p>
-                    {isMyParticipant(p.phone) && (
+                    <p className="font-medium truncate">{p.name || p.identity}</p>
+                    {isMyParticipant(p.identity) && (
                       <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">You</span>
                     )}
                     {role === 'host' && (
                       <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">Host</span>
                     )}
-                    {role === 'participant' && (
-                      <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">Participant</span>
-                    )}
                   </div>
-                  {p.name && (
-                    <p className="text-xs text-slate-500 truncate">{formatPhone(p.phone)}</p>
-                  )}
                 </div>
                 <button
-                  onClick={() => canShowControls && toggleMute.mutate({ callSid: p.callSid, muted: !p.muted })}
+                  onClick={() => canShowControls && toggleParticipantMute.mutate({ identity: p.identity, muted: !p.muted })}
                   className={`p-2 rounded-lg transition-colors ${
                     p.muted 
                       ? 'bg-red-500/20 hover:bg-red-500/30' 
@@ -1900,104 +871,33 @@ export default function Mobley() {
                     <Volume2 className="w-5 h-5 text-emerald-400" />
                   )}
                 </button>
-                {canShowControls && (
-                <div className="relative" ref={openDropdown === `active-${p.callSid}` ? dropdownRef : undefined}>
-                  <button
-                    onClick={(e) => handleOpenDropdown(`active-${p.callSid}`, e)}
-                    className="p-2 rounded-lg bg-slate-700/50 hover:bg-slate-700 transition-colors"
-                    data-testid={`button-menu-active-${i}`}
-                  >
-                    <MoreVertical className="w-5 h-5 text-slate-400" />
-                  </button>
-                  {openDropdown === `active-${p.callSid}` && (
-                    <div 
-                      ref={dropdownMenuRef}
-                      style={dropdownStyle}
-                      className="fixed bg-slate-800 rounded-lg shadow-xl py-1 z-[100] min-w-[160px] overflow-y-auto"
-                    >
-                      {matchingExpected && (
-                        <>
-                          <button
-                            onClick={() => {
-                              openProfileDrawer(matchingExpected);
-                              setOpenDropdown(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
-                            data-testid={`button-edit-active-${i}`}
-                          >
-                            <Pencil className="w-4 h-4" />
-                            Edit
-                          </button>
-                          <div className="border-t border-slate-700 my-1" />
-                          <div className="px-4 py-1 text-xs text-slate-500 uppercase">Change Role</div>
-                          <button
-                            onClick={() => {
-                              updateRole.mutate({ id: matchingExpected.id, role: 'host' });
-                              setOpenDropdown(null);
-                            }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${role === 'host' ? 'text-amber-400' : 'text-slate-300'}`}
-                            data-testid={`button-role-host-${i}`}
-                          >
-                            Host
-                          </button>
-                          <button
-                            onClick={() => {
-                              updateRole.mutate({ id: matchingExpected.id, role: 'participant' });
-                              setOpenDropdown(null);
-                            }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${role === 'participant' ? 'text-blue-400' : 'text-slate-300'}`}
-                            data-testid={`button-role-participant-${i}`}
-                          >
-                            Participant
-                          </button>
-                          <button
-                            onClick={() => {
-                              updateRole.mutate({ id: matchingExpected.id, role: 'listener' });
-                              setOpenDropdown(null);
-                            }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${role === 'listener' ? 'text-emerald-400' : 'text-slate-300'}`}
-                            data-testid={`button-role-listener-${i}`}
-                          >
-                            Listener
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-                )}
               </div>
             );
-            })}
-            
-            {expectedParticipants
-              .filter(ep => {
-                const normalizedExpected = ep.phone.replace(/\D/g, '');
-                return !participants.some(p => {
-                  const normalizedActive = p.phone.replace(/\D/g, '');
-                  return normalizedActive === normalizedExpected || 
-                         normalizedActive.endsWith(normalizedExpected) ||
-                         normalizedExpected.endsWith(normalizedActive);
-                });
-              })
-              .map((ep, i) => {
-                const getExpectedCardStyle = () => {
-                  if (ep.role === 'host') return 'bg-amber-500/10 border border-amber-500/30';
-                  if (ep.role === 'participant') return 'bg-blue-500/10 border border-blue-500/30';
-                  return 'bg-emerald-500/10 border border-emerald-500/30';
-                };
-                const getExpectedAvatarStyle = () => {
-                  if (ep.role === 'host') return 'bg-amber-500/20';
-                  if (ep.role === 'participant') return 'bg-blue-500/20';
-                  return 'bg-emerald-500/20';
-                };
-                const getExpectedTextColor = () => {
-                  if (ep.role === 'host') return 'text-amber-400';
-                  if (ep.role === 'participant') return 'text-blue-400';
-                  return 'text-emerald-400';
-                };
-                
-                return (
+          })}
+          
+          {expectedParticipants
+            .filter(ep => {
+              const normalizedName = ep.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+              return !participants.some(p => p.identity === normalizedName || p.name === ep.name);
+            })
+            .map((ep, i) => {
+              const getExpectedCardStyle = () => {
+                if (ep.role === 'host') return 'bg-amber-500/10 border border-amber-500/30';
+                if (ep.role === 'participant') return 'bg-blue-500/10 border border-blue-500/30';
+                return 'bg-emerald-500/10 border border-emerald-500/30';
+              };
+              const getExpectedAvatarStyle = () => {
+                if (ep.role === 'host') return 'bg-amber-500/20';
+                if (ep.role === 'participant') return 'bg-blue-500/20';
+                return 'bg-emerald-500/20';
+              };
+              const getExpectedTextColor = () => {
+                if (ep.role === 'host') return 'text-amber-400';
+                if (ep.role === 'participant') return 'text-blue-400';
+                return 'text-emerald-400';
+              };
+              
+              return (
                 <div 
                   key={ep.id} 
                   className={`flex items-center gap-3 rounded-lg px-4 py-3 ${getExpectedCardStyle()}`}
@@ -2010,400 +910,493 @@ export default function Mobley() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className={`font-medium truncate ${getExpectedTextColor()}`}>
-                        {ep.name}
-                      </p>
+                      <p className={`font-medium truncate ${getExpectedTextColor()}`}>{ep.name}</p>
                       {ep.role === 'host' && (
                         <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">Host</span>
-                      )}
-                      {ep.role === 'participant' && (
-                        <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">Participant</span>
                       )}
                     </div>
                     <p className="text-xs text-slate-500 truncate">{formatPhone(ep.phone)}</p>
                   </div>
                   {canShowControls && (
-                  <div className="relative" ref={openDropdown === ep.id ? dropdownRef : undefined}>
-                    <button
-                      onClick={(e) => handleOpenDropdown(ep.id, e)}
-                      className="p-2 rounded-lg bg-slate-600/30 hover:bg-slate-600/50 transition-colors"
-                      data-testid={`button-menu-${i}`}
-                    >
-                      <MoreVertical className="w-5 h-5 text-slate-400" />
-                    </button>
-                    {openDropdown === ep.id && (
-                      <div 
-                        ref={dropdownMenuRef}
-                        style={dropdownStyle}
-                        className="fixed bg-slate-800 rounded-lg shadow-xl py-1 z-[100] min-w-[160px] overflow-y-auto"
+                    <div className="relative" ref={openDropdown === ep.id ? dropdownRef : undefined}>
+                      <button
+                        onClick={(e) => handleOpenDropdown(ep.id, e)}
+                        className="p-2 rounded-lg bg-slate-600/30 hover:bg-slate-600/50 transition-colors"
+                        data-testid={`button-menu-${i}`}
                       >
-                        <button
-                          onClick={() => {
-                            callExpected.mutate(ep.id);
-                            setOpenDropdown(null);
-                          }}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-emerald-400 hover:bg-slate-700"
-                          data-testid={`button-call-${i}`}
+                        <MoreVertical className="w-5 h-5 text-slate-400" />
+                      </button>
+                      {openDropdown === ep.id && (
+                        <div 
+                          style={dropdownStyle}
+                          className="fixed bg-slate-800 rounded-lg shadow-xl py-1 z-[100] min-w-[160px] overflow-y-auto"
                         >
-                          <PhoneOutgoing className="w-4 h-4" />
-                          Call
-                        </button>
-                        <button
-                          onClick={() => {
-                            openProfileDrawer(ep);
-                            setOpenDropdown(null);
-                          }}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
-                          data-testid={`button-edit-${i}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => {
-                            remindExpected.mutate(ep.id);
-                            setOpenDropdown(null);
-                          }}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
-                          data-testid={`button-remind-${i}`}
-                        >
-                          <MessageSquare className="w-4 h-4" />
-                          Remind
-                        </button>
-                        <div className="border-t border-slate-700 my-1" />
-                        <div className="px-4 py-1 text-xs text-slate-500 uppercase">Change Role</div>
-                        <button
-                          onClick={() => {
-                            updateRole.mutate({ id: ep.id, role: 'host' });
-                            setOpenDropdown(null);
-                          }}
-                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'host' ? 'text-amber-400' : 'text-slate-300'}`}
-                          data-testid={`button-role-host-exp-${i}`}
-                        >
-                          Host
-                        </button>
-                        <button
-                          onClick={() => {
-                            updateRole.mutate({ id: ep.id, role: 'participant' });
-                            setOpenDropdown(null);
-                          }}
-                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'participant' ? 'text-blue-400' : 'text-slate-300'}`}
-                          data-testid={`button-role-participant-exp-${i}`}
-                        >
-                          Participant
-                        </button>
-                        <button
-                          onClick={() => {
-                            updateRole.mutate({ id: ep.id, role: 'listener' });
-                            setOpenDropdown(null);
-                          }}
-                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'listener' ? 'text-emerald-400' : 'text-slate-300'}`}
-                          data-testid={`button-role-listener-exp-${i}`}
-                        >
-                          Listener
-                        </button>
-                        <div className="border-t border-slate-700 my-1" />
-                        <button
-                          onClick={() => {
-                            setConfirmDeleteId(ep.id);
-                            setOpenDropdown(null);
-                          }}
-                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-slate-700"
-                          data-testid={`button-remove-${i}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                          <button
+                            onClick={() => {
+                              openProfileDrawer(ep);
+                              setOpenDropdown(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                            data-testid={`button-edit-${i}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                            Edit
+                          </button>
+                          <div className="border-t border-slate-700 my-1" />
+                          <button
+                            onClick={() => {
+                              updateRole.mutate({ id: ep.id, role: 'host' });
+                              setOpenDropdown(null);
+                            }}
+                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'host' ? 'text-amber-400' : 'text-slate-300'}`}
+                          >
+                            Host
+                          </button>
+                          <button
+                            onClick={() => {
+                              updateRole.mutate({ id: ep.id, role: 'participant' });
+                              setOpenDropdown(null);
+                            }}
+                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'participant' ? 'text-blue-400' : 'text-slate-300'}`}
+                          >
+                            Participant
+                          </button>
+                          <button
+                            onClick={() => {
+                              updateRole.mutate({ id: ep.id, role: 'listener' });
+                              setOpenDropdown(null);
+                            }}
+                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'listener' ? 'text-emerald-400' : 'text-slate-300'}`}
+                          >
+                            Listener
+                          </button>
+                          <div className="border-t border-slate-700 my-1" />
+                          <button
+                            onClick={() => {
+                              setConfirmDeleteId(ep.id);
+                              setOpenDropdown(null);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-slate-700"
+                            data-testid={`button-remove-${i}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               );
-              })}
-          </div>
+            })}
         </div>
+      </div>
 
-        <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8 pb-8 px-6">
-          <div className="flex flex-col gap-3 max-w-xs mx-auto">
-            {browserCallStatus === 'connected' ? (
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowAudioSettings(true)}
-                  className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
-                  data-testid="button-audio-settings"
-                >
-                  <Settings className="w-5 h-5" />
-                </button>
-                {talkMode === 'ptt' ? (
-                  <button
-                    onMouseDown={startTalking}
-                    onMouseUp={stopTalking}
-                    onMouseLeave={stopTalking}
-                    onTouchStart={startTalking}
-                    onTouchEnd={stopTalking}
-                    onTouchCancel={stopTalking}
-                    className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none ${
-                      isBrowserMuted 
-                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
-                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
-                    }`}
-                    data-testid="button-browser-mute"
-                  >
-                    {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    {isBrowserMuted ? 'Hold to Talk' : 'Live'}
-                  </button>
-                ) : (
-                  <div
-                    className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all ${
-                      isBrowserMuted 
-                        ? 'bg-slate-700 text-slate-300 border-2 border-slate-600' 
-                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
-                    }`}
-                    data-testid="button-browser-auto"
-                  >
-                    {isBrowserMuted ? <Volume2 className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    {isBrowserMuted ? 'Listening...' : 'Live'}
-                  </div>
-                )}
-                <button
-                  onClick={() => setShowDisconnectConfirm(true)}
-                  className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
-                  data-testid="button-browser-hangup"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            ) : browserCallStatus === 'connecting' ? (
+      {/* Bottom controls */}
+      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8 pb-8 px-6">
+        <div className="flex flex-col gap-3 max-w-xs mx-auto">
+          {isConnected ? (
+            <div className="flex items-center gap-3">
               <button
-                disabled
-                className="flex items-center justify-center gap-2 w-full bg-slate-600 text-white font-semibold py-4 px-6 rounded-full"
-                data-testid="button-browser-connecting"
+                onClick={() => setShowAudioSettings(true)}
+                className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
+                data-testid="button-audio-settings"
               >
-                <Globe className="w-5 h-5 animate-pulse" />
-                Connecting...
+                <Settings className="w-5 h-5" />
               </button>
-            ) : (
-              <div className="flex flex-col gap-3">
+              {talkMode === 'ptt' ? (
                 <button
-                  onClick={joinFromBrowser}
-                  disabled={duplicateCheckLoading}
-                  className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-                  data-testid="button-join-browser"
+                  onMouseDown={startTalking}
+                  onMouseUp={stopTalking}
+                  onMouseLeave={stopTalking}
+                  onTouchStart={startTalking}
+                  onTouchEnd={stopTalking}
+                  onTouchCancel={stopTalking}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none ${
+                    isMuted 
+                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
+                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
+                  }`}
+                  data-testid="button-ptt"
                 >
-                  <Wifi className="w-5 h-5" />
-                  {duplicateCheckLoading ? 'Checking...' : 'Connect'}
+                  {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  {isMuted ? 'Hold to Talk' : 'Live'}
                 </button>
+              ) : (
                 <button
-                  onClick={() => setShowAudioSettings(true)}
-                  className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 px-6 rounded-full transition-colors"
-                  data-testid="button-audio-settings-prejoin"
+                  onClick={toggleMute}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all ${
+                    isMuted 
+                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
+                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
+                  }`}
+                  data-testid="button-toggle-mute"
                 >
-                  <Mic className="w-4 h-4 text-slate-400" />
-                  <span className="truncate text-sm">
-                    {audioDevices.find(d => d.deviceId === selectedAudioDevice)?.label || 'Select microphone'}
-                  </span>
+                  {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  {isMuted ? 'Tap to Unmute' : 'Live'}
                 </button>
-                <a
-                  href="tel:+12202423245"
-                  className="text-slate-400 hover:text-slate-300 text-sm text-center transition-colors"
-                  data-testid="button-join-phone"
-                >
-                  or call to join
-                </a>
-              </div>
-            )}
-            {browserCallError && (
-              <p className="text-red-400 text-sm text-center">{browserCallError}</p>
-            )}
-          </div>
-        </div>
-
-        {showPinModal && pinModal}
-        {showAddExpectedModal && addExpectedModal}
-        {showProfileDrawer && profileDrawer}
-        {showLoginModal && loginModal}
-        {showDuplicateWarning && duplicateWarningModal}
-        {showDisconnectConfirm && disconnectConfirmModal}
-        {showAudioSettings && audioSettingsModal}
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col relative">
-      <div className="absolute top-4 right-4 flex items-center gap-2">
-        {isAdmin ? (
-          <Link
-            href="/account"
-            className={`p-3 rounded-full transition-colors ${
-              verifiedPhone 
-                ? 'bg-blue-500/20 hover:bg-blue-500/30' 
-                : 'bg-slate-800/50 hover:bg-slate-700'
-            }`}
-            data-testid="button-profile"
-          >
-            <User className={`w-5 h-5 ${verifiedPhone ? 'text-blue-400' : 'text-slate-400'}`} />
-          </Link>
-        ) : (
-          <button
-            onClick={() => verifiedPhone ? handleLogout() : setShowLoginModal(true)}
-            className={`p-3 rounded-full transition-colors ${
-              verifiedPhone 
-                ? 'bg-blue-500/20 hover:bg-blue-500/30' 
-                : 'bg-slate-800/50 hover:bg-slate-700'
-            }`}
-            data-testid="button-profile"
-          >
-            <User className={`w-5 h-5 ${verifiedPhone ? 'text-blue-400' : 'text-slate-400'}`} />
-          </button>
-        )}
-      </div>
-
-      {showPinModal && pinModal}
-      {showLoginModal && loginModal}
-      {showDuplicateWarning && duplicateWarningModal}
-      {showDisconnectConfirm && disconnectConfirmModal}
-      {showAudioSettings && audioSettingsModal}
-
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-        <div className="w-20 h-20 rounded-full bg-emerald-500/20 flex items-center justify-center mb-8">
-          <span className="text-emerald-400 font-bold text-4xl">B</span>
-        </div>
-        
-        <div 
-          className="flex items-center gap-3 text-5xl font-bold mb-8 text-center" 
-          data-testid="text-title"
-        >
-          Banter
-          <span 
-            className="hidden"
-            title={wsConnected ? 'Connected' : 'Reconnecting...'}
-            data-testid="ws-status-indicator-home"
-          />
-        </div>
-
-        <div className="flex flex-col gap-4 w-full max-w-xs">
-          {browserCallStatus === 'connected' ? (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setShowAudioSettings(true)}
-                  className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
-                  data-testid="button-audio-settings-home"
-                >
-                  <Settings className="w-5 h-5" />
-                </button>
-                {talkMode === 'ptt' ? (
-                  <button
-                    onMouseDown={startTalking}
-                    onMouseUp={stopTalking}
-                    onMouseLeave={stopTalking}
-                    onTouchStart={startTalking}
-                    onTouchEnd={stopTalking}
-                    onTouchCancel={stopTalking}
-                    className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none ${
-                      isBrowserMuted 
-                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
-                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
-                    }`}
-                    data-testid="button-browser-mute-home"
-                  >
-                    {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    {isBrowserMuted ? 'Hold to Talk' : 'Live'}
-                  </button>
-                ) : (
-                  <div
-                    className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all ${
-                      isBrowserMuted 
-                        ? 'bg-slate-700 text-slate-300 border-2 border-slate-600' 
-                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
-                    }`}
-                    data-testid="button-browser-auto-home"
-                  >
-                    {isBrowserMuted ? <Volume2 className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    {isBrowserMuted ? 'Listening...' : 'Live'}
-                  </div>
-                )}
-                <button
-                  onClick={() => setShowDisconnectConfirm(true)}
-                  className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
-                  data-testid="button-browser-hangup-home"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+              )}
+              <button
+                onClick={() => setShowDisconnectConfirm(true)}
+                className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
+                data-testid="button-hangup"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-          ) : browserCallStatus === 'connecting' ? (
+          ) : isConnecting ? (
             <button
               disabled
               className="flex items-center justify-center gap-2 w-full bg-slate-600 text-white font-semibold py-4 px-6 rounded-full"
-              data-testid="button-browser-connecting-home"
+              data-testid="button-connecting"
             >
               <Globe className="w-5 h-5 animate-pulse" />
               Connecting...
             </button>
           ) : (
-            <>
+            <div className="flex flex-col gap-3">
               <button
-                onClick={joinFromBrowser}
-                disabled={duplicateCheckLoading}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
-                data-testid="button-join-browser-home"
+                onClick={connectToRoom}
+                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                data-testid="button-connect"
               >
                 <Wifi className="w-5 h-5" />
-                {duplicateCheckLoading ? 'Checking...' : 'Connect'}
+                Connect
               </button>
               <button
                 onClick={() => setShowAudioSettings(true)}
                 className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 px-6 rounded-full transition-colors"
-                data-testid="button-audio-settings-home-prejoin"
+                data-testid="button-audio-settings-prejoin"
               >
                 <Mic className="w-4 h-4 text-slate-400" />
                 <span className="truncate text-sm">
                   {audioDevices.find(d => d.deviceId === selectedAudioDevice)?.label || 'Select microphone'}
                 </span>
               </button>
-              
-              {isAdmin && (
-                <Link
-                  href="/account"
-                  className="flex items-center justify-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3 px-6 rounded-full transition-colors"
-                  data-testid="button-account"
-                >
-                  Manage Account
-                </Link>
-              )}
-            </>
+            </div>
           )}
-          {browserCallError && (
-            <p className="text-red-400 text-sm text-center">{browserCallError}</p>
+          {connectionError && (
+            <p className="text-red-400 text-sm text-center">{connectionError}</p>
           )}
         </div>
-
       </div>
-      
+
+      {/* Modals */}
+      {showPinModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+            <h2 className="text-xl font-bold text-center mb-2">Admin Access</h2>
+            <p className="text-sm text-slate-400 text-center mb-6">Enter 4-digit PIN</p>
+            <div className="flex justify-center gap-3 mb-6">
+              {pinDigits.map((digit, i) => (
+                <input
+                  key={i}
+                  id={`pin-${i}`}
+                  type="tel"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={digit}
+                  onChange={(e) => handlePinDigit(i, e.target.value.replace(/\D/g, ""))}
+                  onKeyDown={(e) => handlePinKeyDown(i, e)}
+                  className={`w-14 h-14 text-center text-2xl font-bold rounded-lg bg-slate-800 border-2 outline-none transition-colors ${
+                    pinError ? 'border-red-500' : 'border-slate-700 focus:border-emerald-500'
+                  }`}
+                  data-testid={`input-pin-${i}`}
+                />
+              ))}
+            </div>
+            {pinError && <p className="text-red-400 text-sm text-center mb-4">Invalid PIN. Try again.</p>}
+            <button
+              onClick={() => { setShowPinModal(false); setPinDigits(["", "", "", ""]); setPinError(false); }}
+              className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showDisconnectConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+            <h2 className="text-xl font-bold text-center mb-6">Disconnect?</h2>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDisconnectConfirm(false)}
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setShowDisconnectConfirm(false); disconnectFromRoom(); }}
+                className="flex-1 bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
+              >
+                Disconnect
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAudioSettings && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs max-h-[80vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-center mb-6">Audio Settings</h2>
+            
+            <div className="mb-6">
+              <p className="text-sm text-slate-400 mb-3">Talk Mode</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => changeTalkMode('ptt')}
+                  className={`flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-colors ${
+                    talkMode === 'ptt'
+                      ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                      : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
+                  }`}
+                >
+                  <Mic className={`w-5 h-5 ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-slate-400'}`} />
+                  <span className={`text-sm font-medium ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-white'}`}>Hold to Talk</span>
+                </button>
+                <button
+                  onClick={() => changeTalkMode('auto')}
+                  className={`flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-colors ${
+                    talkMode === 'auto'
+                      ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                      : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
+                  }`}
+                >
+                  <Volume2 className={`w-5 h-5 ${talkMode === 'auto' ? 'text-emerald-400' : 'text-slate-400'}`} />
+                  <span className={`text-sm font-medium ${talkMode === 'auto' ? 'text-emerald-400' : 'text-white'}`}>Toggle</span>
+                </button>
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-sm text-slate-400 mb-3">Microphone</p>
+              <div className="space-y-2">
+                {audioDevices.length === 0 ? (
+                  <p className="text-slate-400 text-sm text-center py-4">No microphones found</p>
+                ) : (
+                  audioDevices.map((device) => (
+                    <button
+                      key={device.deviceId}
+                      onClick={() => changeAudioDevice(device.deviceId)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                        selectedAudioDevice === device.deviceId
+                          ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                          : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
+                      }`}
+                    >
+                      <Mic className={`w-5 h-5 ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-slate-400'}`} />
+                      <span className={`text-sm truncate ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-white'}`}>
+                        {device.label || `Microphone ${audioDevices.indexOf(device) + 1}`}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-sm text-slate-400 mb-3">Audio Processing</p>
+              <div className="space-y-2">
+                {[
+                  { key: 'echoCancellation', label: 'Echo Cancellation', value: echoCancellation, desc: 'Removes room echo' },
+                  { key: 'noiseSuppression', label: 'Noise Suppression', value: noiseSuppression, desc: 'Filters background noise' },
+                  { key: 'autoGainControl', label: 'Auto Gain Control', value: autoGainControl, desc: 'Normalizes volume levels' },
+                ].map(({ key, label, value, desc }) => (
+                  <button
+                    key={key}
+                    onClick={() => updateAudioProcessing({ [key]: !value })}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
+                      value ? 'bg-emerald-500/20 border-2 border-emerald-500' : 'bg-slate-800 border-2 border-transparent'
+                    }`}
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className={`text-sm font-medium ${value ? 'text-emerald-400' : 'text-white'}`}>{label}</span>
+                      <span className="text-xs text-slate-500">{desc}</span>
+                    </div>
+                    <div className={`w-10 h-6 rounded-full transition-colors ${value ? 'bg-emerald-500' : 'bg-slate-600'} relative`}>
+                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${value ? 'right-1' : 'left-1'}`} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <button
+              onClick={() => refreshAudioDevices()}
+              className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors mb-3"
+            >
+              Refresh Devices
+            </button>
+            
+            <button
+              onClick={() => setShowAudioSettings(false)}
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+            <h2 className="text-xl font-bold text-center mb-2">Sign In</h2>
+            <p className="text-sm text-slate-400 text-center mb-6">
+              {loginStep === 'phone' ? 'Enter your phone number' : 'Enter the code we texted you'}
+            </p>
+            
+            {loginStep === 'phone' ? (
+              <input
+                type="tel"
+                placeholder="(555) 555-5555"
+                value={loginPhone}
+                onChange={(e) => setLoginPhone(e.target.value)}
+                className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none mb-6 text-center"
+                style={{ fontSize: '16px' }}
+              />
+            ) : (
+              <input
+                type="tel"
+                placeholder="000000"
+                value={loginCode}
+                onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                maxLength={6}
+                className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none mb-6 text-center text-2xl tracking-widest"
+              />
+            )}
+            
+            {loginError && <p className="text-red-400 text-sm text-center mb-4">{loginError}</p>}
+            
+            <div className="space-y-3">
+              <button
+                onClick={loginStep === 'phone' ? sendVerificationCode : verifyLoginCode}
+                disabled={loginLoading || (loginStep === 'phone' ? !isPhoneValid : loginCode.length !== 6)}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors"
+              >
+                {loginLoading ? 'Loading...' : loginStep === 'phone' ? 'Send Code' : 'Verify'}
+              </button>
+              
+              {loginStep === 'code' && (
+                <button onClick={() => setLoginStep('phone')} className="w-full text-slate-400 hover:text-white text-sm transition-colors">
+                  Use a different number
+                </button>
+              )}
+              
+              <button
+                onClick={() => { setShowLoginModal(false); resetLoginModal(); }}
+                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddExpectedModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+            <h2 className="text-xl font-bold text-center mb-6">Add Participant</h2>
+            <div className="space-y-4 mb-6">
+              <input
+                type="text"
+                placeholder="Name"
+                value={newExpectedName}
+                onChange={(e) => setNewExpectedName(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+              />
+              <input
+                type="tel"
+                placeholder="Phone number"
+                value={newExpectedPhone}
+                onChange={(e) => setNewExpectedPhone(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowAddExpectedModal(false); setNewExpectedName(""); setNewExpectedPhone(""); }}
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => addExpected.mutate()}
+                disabled={!newExpectedName || !newExpectedPhone}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showProfileDrawer && editingParticipant && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+            <h2 className="text-xl font-bold text-center mb-6">Edit Profile</h2>
+            <div className="space-y-4 mb-6">
+              <input
+                type="text"
+                placeholder="Name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+              />
+              <input
+                type="tel"
+                placeholder="Phone"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+              />
+              <input
+                type="email"
+                placeholder="Email (optional)"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowProfileDrawer(false); setEditingParticipant(null); }}
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => updateExpected.mutate()}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmDeleteId && (
         <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-            <h2 className="text-xl font-bold text-center mb-2">Remove Participant?</h2>
-            <p className="text-sm text-slate-400 text-center mb-6">
-              This person will be removed from the expected list.
-            </p>
-            <div className="space-y-3">
-              <button
-                onClick={handleConfirmDelete}
-                className="w-full bg-red-500 hover:bg-red-400 text-white font-medium py-3.5 rounded-full transition-colors"
-                data-testid="button-confirm-delete"
-              >
-                Remove
-              </button>
+            <h2 className="text-xl font-bold text-center mb-6">Remove Participant?</h2>
+            <div className="flex gap-3">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3.5 rounded-full transition-colors"
-                data-testid="button-cancel-delete"
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
               >
                 Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
+              >
+                Remove
               </button>
             </div>
           </div>

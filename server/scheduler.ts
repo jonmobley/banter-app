@@ -1,6 +1,4 @@
 import { storage } from "./storage";
-import { getTwilioClient, getTwilioFromPhoneNumber } from "./twilio";
-import { normalizePhone } from "@shared/schema";
 import { log } from "./index";
 
 let schedulerInterval: NodeJS.Timeout | null = null;
@@ -19,36 +17,23 @@ export async function startScheduler(getHost: () => string) {
       // Check for banters that need reminders (5 min before)
       const bantersNeedingReminder = await storage.getBantersNeedingReminder(now);
       for (const banter of bantersNeedingReminder) {
-        // Skip if reminder already sent (persisted in DB)
         if (banter.reminderSentAt) {
           continue;
         }
 
-        log(`📱 Sending reminders for banter "${banter.name}"`, "scheduler");
+        log(`📱 Reminder needed for banter "${banter.name}"`, "scheduler");
         
-        // Mark reminder as sent immediately to prevent duplicates
+        // Mark reminder as sent
         await storage.updateScheduledBanter(banter.id, { reminderSentAt: new Date() });
 
-        // Send SMS reminders to all participants
+        // Get participants for logging
         const participants = await Promise.all(
           banter.participantIds.map(id => storage.getExpectedParticipant(id))
         );
 
-        const client = await getTwilioClient();
-        const fromNumber = await getTwilioFromPhoneNumber();
-
         for (const participant of participants) {
           if (!participant) continue;
-          try {
-            await client.messages.create({
-              body: `Reminder: "${banter.name}" starts in 5 minutes! Call (220) 242-3245 to join.`,
-              to: normalizePhone(participant.phone),
-              from: fromNumber
-            });
-            log(`📱 Reminder sent to ${participant.name}`, "scheduler");
-          } catch (err: any) {
-            log(`Error sending reminder to ${participant.name}: ${err.message}`, "scheduler");
-          }
+          log(`📱 Reminder would be sent to ${participant.name} (${participant.phone})`, "scheduler");
         }
       }
 
@@ -60,37 +45,22 @@ export async function startScheduler(getHost: () => string) {
         // Mark as active
         await storage.updateScheduledBanter(banter.id, { status: 'active' });
 
-        // If auto-call is enabled, call all participants
+        // Log participants who should join
         if (banter.autoCallEnabled === 'true') {
           const participants = await Promise.all(
             banter.participantIds.map(id => storage.getExpectedParticipant(id))
           );
 
-          const client = await getTwilioClient();
-          const fromNumber = await getTwilioFromPhoneNumber();
-          const host = getHost();
-          const protocol = host.includes('replit') ? 'https' : 'http';
-
           for (const participant of participants) {
             if (!participant) continue;
-            try {
-              const call = await client.calls.create({
-                to: normalizePhone(participant.phone),
-                from: fromNumber,
-                url: `${protocol}://${host}/voice/incoming`,
-                method: 'POST'
-              });
-              log(`📞 Auto-called ${participant.name}, callSid: ${call.sid}`, "scheduler");
-            } catch (err: any) {
-              log(`Error calling ${participant.name}: ${err.message}`, "scheduler");
-            }
+            log(`📞 ${participant.name} should join the banter`, "scheduler");
           }
         }
       }
     } catch (err: any) {
       log(`Scheduler error: ${err.message}`, "scheduler");
     }
-  }, 30000); // Check every 30 seconds
+  }, 30000);
 }
 
 export function stopScheduler() {
