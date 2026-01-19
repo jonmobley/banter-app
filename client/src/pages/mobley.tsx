@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Ban, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, PhoneOff, Mic, MicOff, Globe } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, PhoneOff, Mic, MicOff, Globe } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Device, Call } from "@twilio/voice-sdk";
@@ -1828,20 +1828,6 @@ export default function Mobley() {
           )}
         </div>
 
-        <div className="mt-16 grid grid-cols-3 gap-8 text-center max-w-sm">
-          <div className="flex flex-col items-center">
-            <Ban className="w-6 h-6 text-emerald-400 mb-1" />
-            <p className="text-xs text-slate-400 uppercase tracking-wide">PIN</p>
-          </div>
-          <div className="flex flex-col items-center">
-            <Ban className="w-6 h-6 text-emerald-400 mb-1" />
-            <p className="text-xs text-slate-400 uppercase tracking-wide">APP</p>
-          </div>
-          <div className="flex flex-col items-center">
-            <Ban className="w-6 h-6 text-emerald-400 mb-1" />
-            <p className="text-xs text-slate-400 uppercase tracking-wide">WAITING</p>
-          </div>
-        </div>
       </div>
       
       {confirmDeleteId && (

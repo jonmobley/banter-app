@@ -1,4 +1,4 @@
-import { Phone, Ban } from "lucide-react";
+import { Phone } from "lucide-react";
 
 export default function Home() {
   return (
@@ -24,20 +24,6 @@ export default function Home() {
           <p className="text-center text-sm text-slate-500">Coming Soon</p>
         </div>
 
-        <div className="mt-8 grid grid-cols-3 gap-8 text-center max-w-sm">
-          <div className="flex flex-col items-center">
-            <Ban className="w-6 h-6 text-emerald-400 mb-1" />
-            <p className="text-xs text-slate-400 uppercase tracking-wide">PIN</p>
-          </div>
-          <div className="flex flex-col items-center">
-            <Ban className="w-6 h-6 text-emerald-400 mb-1" />
-            <p className="text-xs text-slate-400 uppercase tracking-wide">APP</p>
-          </div>
-          <div className="flex flex-col items-center">
-            <Ban className="w-6 h-6 text-emerald-400 mb-1" />
-            <p className="text-xs text-slate-400 uppercase tracking-wide">WAITING</p>
-          </div>
-        </div>
       </div>
     </div>
   );
