@@ -1,4 +1,4 @@
-import { Phone, Users, Zap, Shield, Clock, Globe, ChevronRight, Calendar, Headphones, Mail } from "lucide-react";
+import { Users, Zap, Shield, Clock, Globe, ChevronRight, Calendar, Headphones, Mail } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -147,11 +147,11 @@ export default function Home() {
           <div className="grid md:grid-cols-3 gap-8">
             <div className="bg-slate-800/50 rounded-2xl p-8 border border-slate-700/50">
               <div className="w-14 h-14 rounded-xl bg-emerald-500/20 flex items-center justify-center mb-6">
-                <Phone className="w-7 h-7 text-emerald-400" />
+                <Zap className="w-7 h-7 text-emerald-400" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Call In</h3>
+              <h3 className="text-xl font-bold mb-3">Join Instantly</h3>
               <p className="text-slate-400 leading-relaxed">
-                Dial our number from any phone and you're instantly connected. No app downloads, no account creation.
+                Open the link and you're instantly connected. No app downloads, no account creation.
               </p>
             </div>
             
@@ -169,9 +169,9 @@ export default function Home() {
               <div className="w-14 h-14 rounded-xl bg-purple-500/20 flex items-center justify-center mb-6">
                 <Calendar className="w-7 h-7 text-purple-400" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Schedule Calls</h3>
+              <h3 className="text-xl font-bold mb-3">Schedule Banters</h3>
               <p className="text-slate-400 leading-relaxed">
-                Plan your banters in advance. Set reminders and auto-dial participants when it's time to connect.
+                Plan your banters in advance. Set reminders and notify participants when it's time to connect.
               </p>
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function Home() {
               <div>
                 <h3 className="text-lg font-bold mb-2">Crystal Clear Audio</h3>
                 <p className="text-slate-400">
-                  Enterprise-grade voice infrastructure for reliable, high-quality calls every time.
+                  Enterprise-grade voice infrastructure for reliable, high-quality audio every time.
                 </p>
               </div>
             </div>
@@ -231,7 +231,7 @@ export default function Home() {
               <div>
                 <h3 className="text-lg font-bold mb-2">Instant Notifications</h3>
                 <p className="text-slate-400">
-                  Get SMS reminders before scheduled calls. Never miss an important team banter.
+                  Get reminders before scheduled banters. Never miss an important team conversation.
                 </p>
               </div>
             </div>
