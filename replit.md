@@ -115,6 +115,9 @@ The application uses LiveKit for real-time voice conferencing:
 - **LiveKit**: Real-time WebRTC voice conferencing
   - Cloud-hosted at `livekit.cloud`
   - Credentials managed via Replit secrets
+- **Twilio**: SMS for authentication codes
+  - Configured via Replit connector (manages API keys automatically)
+  - Used only for phone verification, not voice
 
 ### Database
 - **PostgreSQL**: Primary data store
@@ -141,3 +144,4 @@ The application uses LiveKit for real-time voice conferencing:
 - Added security: token generation requires authentication in production
 - Fixed participant tracking to use actual track mute state instead of permissions
 - Note: Phone calling features removed - LiveKit is web-only
+- Twilio SMS restored for authentication magic codes (phone verification)

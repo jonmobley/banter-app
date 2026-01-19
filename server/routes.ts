@@ -218,7 +218,7 @@ export async function registerRoutes(
 
   /**
    * POST /api/auth/send-code
-   * Send a verification code via SMS (placeholder - requires SMS service).
+   * Send a verification code via SMS using Twilio.
    */
   app.post("/api/auth/send-code", async (req, res) => {
     try {
@@ -232,9 +232,16 @@ export async function registerRoutes(
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
       await storage.createVerificationCode(normalizedPhone, code, expiresAt);
 
-      // Note: SMS sending requires additional integration (Twilio SMS, etc.)
-      // For now, log the code for development
-      log(`📱 Verification code for ${normalizedPhone}: ${code}`, "auth");
+      // Send SMS via Twilio
+      const { sendVerificationSMS } = await import('./twilio-sms.js');
+      const sent = await sendVerificationSMS(normalizedPhone, code);
+      
+      if (sent) {
+        log(`📱 Verification code sent to ${normalizedPhone}`, "auth");
+      } else {
+        // Fall back to logging in development if SMS fails
+        log(`📱 SMS failed, verification code for ${normalizedPhone}: ${code}`, "auth");
+      }
       
       res.json({ success: true, message: "Verification code sent" });
     } catch (error: any) {
