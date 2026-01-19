@@ -243,7 +243,9 @@ export default function Mobley() {
           identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
         }
       } else {
-        identity = `WebUser_${Date.now().toString(36)}`;
+        // Generate random numbers 2-9 only (no 0 or 1 to avoid confusion)
+        const randomDigits = Array.from({ length: 8 }, () => Math.floor(Math.random() * 8) + 2).join('');
+        identity = `WebUser_${randomDigits}`;
       }
 
       // Get LiveKit token from server (include auth token if available)
