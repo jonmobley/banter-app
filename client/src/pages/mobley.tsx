@@ -117,6 +117,11 @@ export default function Mobley() {
     return localStorage.getItem('banter_auth_token');
   });
 
+  // User display name (editable before joining)
+  const [userName, setUserName] = useState<string>(() => {
+    return localStorage.getItem('banter_user_name') || '';
+  });
+
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginStep, setLoginStep] = useState<'phone' | 'code'>('phone');
@@ -231,7 +236,15 @@ export default function Mobley() {
       setConnectionState(ConnectionState.Connecting);
 
       let identity = 'WebUser';
-      if (verifiedPhone && expectedData) {
+      let displayName = userName.trim();
+      
+      // If user entered a name, use it
+      if (displayName) {
+        identity = displayName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+        // Save to localStorage for next time
+        localStorage.setItem('banter_user_name', displayName);
+      } else if (verifiedPhone && expectedData) {
+        // Try to match by verified phone
         const matchingParticipant = expectedData.find(p => {
           const normalizedExpected = p.phone.replace(/\D/g, '');
           const normalizedVerified = verifiedPhone.replace(/\D/g, '');
@@ -241,11 +254,13 @@ export default function Mobley() {
         });
         if (matchingParticipant) {
           identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+          displayName = matchingParticipant.name;
         }
       } else {
         // Generate random numbers 2-9 only (no 0 or 1 to avoid confusion)
         const randomDigits = Array.from({ length: 8 }, () => Math.floor(Math.random() * 8) + 2).join('');
         identity = `WebUser_${randomDigits}`;
+        displayName = identity;
       }
 
       // Get LiveKit token from server (include auth token if available)
@@ -254,7 +269,7 @@ export default function Mobley() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           identity, 
-          name: identity,
+          name: displayName || identity,
           authToken: authToken || undefined
         })
       });
@@ -331,7 +346,7 @@ export default function Mobley() {
       setConnectionError(error.message || 'Connection failed');
       setConnectionState(ConnectionState.Disconnected);
     }
-  }, [verifiedPhone, expectedData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken]);
+  }, [userName, verifiedPhone, expectedData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken]);
 
   // Disconnect from room
   const disconnectFromRoom = useCallback(async () => {
@@ -1057,6 +1072,14 @@ export default function Mobley() {
             </button>
           ) : (
             <div className="flex flex-col gap-3">
+              <input
+                type="text"
+                value={userName}
+                onChange={(e) => setUserName(e.target.value)}
+                placeholder="Enter your name"
+                className="w-full bg-slate-800 border border-slate-700 rounded-full py-3 px-5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-center"
+                data-testid="input-user-name"
+              />
               <button
                 onClick={connectToRoom}
                 className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
