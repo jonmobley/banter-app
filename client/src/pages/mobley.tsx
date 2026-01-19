@@ -4,6 +4,9 @@ import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Device, Call } from "@twilio/voice-sdk";
 import { useToast } from "@/hooks/use-toast";
+import { MicVAD } from "@ricky0123/vad-web";
+
+type TalkMode = 'ptt' | 'auto';
 
 interface Participant {
   callSid: string;
@@ -384,6 +387,18 @@ export default function Mobley() {
   const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
   const [showAudioSettings, setShowAudioSettings] = useState(false);
   
+  // Talk mode: PTT (push-to-talk) or Auto (VAD)
+  const [talkMode, setTalkMode] = useState<TalkMode>(() => {
+    const saved = localStorage.getItem('banter_talk_mode');
+    return (saved === 'auto' || saved === 'ptt') ? saved : 'ptt';
+  });
+  
+  // VAD (Voice Activity Detection) state
+  const vadRef = useRef<MicVAD | null>(null);
+  const vadStreamRef = useRef<MediaStream | null>(null);
+  const [vadActive, setVadActive] = useState(false);
+  const [vadSpeaking, setVadSpeaking] = useState(false);
+  
   // Enumerate audio devices (called when user opens settings)
   const refreshAudioDevices = useCallback(async () => {
     try {
@@ -615,6 +630,126 @@ export default function Mobley() {
       }
     }
   }, [activeCall, isBrowserMuted]);
+  
+  // VAD (Voice Activity Detection) functions
+  const activeCallRef = useRef<Call | null>(null);
+  
+  // Keep activeCallRef in sync
+  useEffect(() => {
+    activeCallRef.current = activeCall;
+  }, [activeCall]);
+  
+  const startVAD = useCallback(async () => {
+    if (vadRef.current || !activeCall) return;
+    
+    try {
+      // Initialize VAD with sensitive threshold for quick detection
+      const vad = await MicVAD.new({
+        getStream: async () => {
+          // Get microphone stream for VAD
+          const constraints: MediaStreamConstraints = {
+            audio: selectedAudioDevice ? { deviceId: { exact: selectedAudioDevice } } : true
+          };
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          // Clone the stream for VAD (original can be used by Twilio)
+          const vadStream = stream.clone();
+          vadStreamRef.current = vadStream;
+          // Stop the original stream tracks
+          stream.getTracks().forEach(track => track.stop());
+          return vadStream;
+        },
+        positiveSpeechThreshold: 0.5, // Sensitive for fast detection
+        negativeSpeechThreshold: 0.35,
+        startOnLoad: true,
+        onSpeechStart: () => {
+          setVadSpeaking(true);
+          // Unmute immediately when speech detected
+          const call = activeCallRef.current;
+          if (call) {
+            call.mute(false);
+            setIsBrowserMuted(false);
+            // Haptic feedback for going live
+            if (navigator.vibrate) {
+              navigator.vibrate([50, 30, 50]);
+            }
+          }
+        },
+        onSpeechEnd: () => {
+          setVadSpeaking(false);
+          // Mute when speech ends
+          const call = activeCallRef.current;
+          if (call) {
+            call.mute(true);
+            setIsBrowserMuted(true);
+            // Haptic feedback for mute
+            if (navigator.vibrate) {
+              navigator.vibrate(50);
+            }
+          }
+        },
+      });
+      
+      vadRef.current = vad;
+      setVadActive(true);
+      
+    } catch (err) {
+      console.error('Failed to start VAD:', err);
+      toast({
+        title: "Voice detection unavailable",
+        description: "Falling back to Push-to-Talk mode",
+        variant: "destructive"
+      });
+      setTalkMode('ptt');
+      localStorage.setItem('banter_talk_mode', 'ptt');
+    }
+  }, [activeCall, selectedAudioDevice, toast]);
+  
+  const stopVAD = useCallback(() => {
+    if (vadRef.current) {
+      vadRef.current.pause();
+      vadRef.current.destroy();
+      vadRef.current = null;
+    }
+    if (vadStreamRef.current) {
+      vadStreamRef.current.getTracks().forEach(track => track.stop());
+      vadStreamRef.current = null;
+    }
+    setVadActive(false);
+    setVadSpeaking(false);
+  }, []);
+  
+  // Handle talk mode changes
+  const changeTalkMode = useCallback((mode: TalkMode) => {
+    setTalkMode(mode);
+    localStorage.setItem('banter_talk_mode', mode);
+    
+    if (mode === 'auto' && activeCall && browserCallStatus === 'connected') {
+      startVAD();
+    } else if (mode === 'ptt') {
+      stopVAD();
+      // Ensure muted when switching to PTT
+      if (activeCall) {
+        activeCall.mute(true);
+        setIsBrowserMuted(true);
+      }
+    }
+  }, [activeCall, browserCallStatus, startVAD, stopVAD]);
+  
+  // Start/stop VAD based on call status and talk mode
+  useEffect(() => {
+    if (browserCallStatus === 'connected' && talkMode === 'auto' && !vadActive) {
+      startVAD();
+    } else if (browserCallStatus !== 'connected' && vadActive) {
+      stopVAD();
+    }
+  }, [browserCallStatus, talkMode, vadActive, startVAD, stopVAD]);
+  
+  // Cleanup VAD on unmount
+  useEffect(() => {
+    return () => {
+      stopVAD();
+    };
+  }, [stopVAD]);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -1066,31 +1201,71 @@ export default function Mobley() {
   const audioSettingsModal = (
     <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
       <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-        <h2 className="text-xl font-bold text-center mb-2">Audio Settings</h2>
-        <p className="text-sm text-slate-400 text-center mb-6">Choose your microphone</p>
+        <h2 className="text-xl font-bold text-center mb-6">Audio Settings</h2>
         
-        <div className="space-y-2 mb-6">
-          {audioDevices.length === 0 ? (
-            <p className="text-slate-400 text-sm text-center py-4">No microphones found</p>
-          ) : (
-            audioDevices.map((device) => (
-              <button
-                key={device.deviceId}
-                onClick={() => changeAudioDevice(device.deviceId)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                  selectedAudioDevice === device.deviceId
-                    ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                    : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
-                }`}
-                data-testid={`audio-device-${device.deviceId}`}
-              >
-                <Mic className={`w-5 h-5 ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-slate-400'}`} />
-                <span className={`text-sm truncate ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-white'}`}>
-                  {device.label || `Microphone ${audioDevices.indexOf(device) + 1}`}
-                </span>
-              </button>
-            ))
-          )}
+        {/* Talk Mode Toggle */}
+        <div className="mb-6">
+          <p className="text-sm text-slate-400 mb-3">Talk Mode</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => changeTalkMode('ptt')}
+              className={`flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-colors ${
+                talkMode === 'ptt'
+                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                  : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
+              }`}
+              data-testid="button-talk-mode-ptt"
+            >
+              <Mic className={`w-5 h-5 ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-slate-400'}`} />
+              <span className={`text-sm font-medium ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-white'}`}>
+                Hold to Talk
+              </span>
+              <span className="text-xs text-slate-500">Manual control</span>
+            </button>
+            <button
+              onClick={() => changeTalkMode('auto')}
+              className={`flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-colors ${
+                talkMode === 'auto'
+                  ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                  : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
+              }`}
+              data-testid="button-talk-mode-auto"
+            >
+              <Volume2 className={`w-5 h-5 ${talkMode === 'auto' ? 'text-emerald-400' : 'text-slate-400'}`} />
+              <span className={`text-sm font-medium ${talkMode === 'auto' ? 'text-emerald-400' : 'text-white'}`}>
+                Auto
+              </span>
+              <span className="text-xs text-slate-500">Voice activated</span>
+            </button>
+          </div>
+        </div>
+        
+        {/* Microphone Selection */}
+        <div className="mb-6">
+          <p className="text-sm text-slate-400 mb-3">Microphone</p>
+          <div className="space-y-2">
+            {audioDevices.length === 0 ? (
+              <p className="text-slate-400 text-sm text-center py-4">No microphones found</p>
+            ) : (
+              audioDevices.map((device) => (
+                <button
+                  key={device.deviceId}
+                  onClick={() => changeAudioDevice(device.deviceId)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                    selectedAudioDevice === device.deviceId
+                      ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                      : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
+                  }`}
+                  data-testid={`audio-device-${device.deviceId}`}
+                >
+                  <Mic className={`w-5 h-5 ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-slate-400'}`} />
+                  <span className={`text-sm truncate ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-white'}`}>
+                    {device.label || `Microphone ${audioDevices.indexOf(device) + 1}`}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
         </div>
         
         <button
@@ -1795,23 +1970,37 @@ export default function Mobley() {
                 >
                   <Settings className="w-5 h-5" />
                 </button>
-                <button
-                  onMouseDown={startTalking}
-                  onMouseUp={stopTalking}
-                  onMouseLeave={stopTalking}
-                  onTouchStart={startTalking}
-                  onTouchEnd={stopTalking}
-                  onTouchCancel={stopTalking}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none ${
-                    isBrowserMuted 
-                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
-                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
-                  }`}
-                  data-testid="button-browser-mute"
-                >
-                  {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {isBrowserMuted ? 'Hold to Talk' : 'Live'}
-                </button>
+                {talkMode === 'ptt' ? (
+                  <button
+                    onMouseDown={startTalking}
+                    onMouseUp={stopTalking}
+                    onMouseLeave={stopTalking}
+                    onTouchStart={startTalking}
+                    onTouchEnd={stopTalking}
+                    onTouchCancel={stopTalking}
+                    className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none ${
+                      isBrowserMuted 
+                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
+                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
+                    }`}
+                    data-testid="button-browser-mute"
+                  >
+                    {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    {isBrowserMuted ? 'Hold to Talk' : 'Live'}
+                  </button>
+                ) : (
+                  <div
+                    className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all ${
+                      isBrowserMuted 
+                        ? 'bg-slate-700 text-slate-300 border-2 border-slate-600' 
+                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
+                    }`}
+                    data-testid="button-browser-auto"
+                  >
+                    {isBrowserMuted ? <Volume2 className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    {isBrowserMuted ? 'Listening...' : 'Live'}
+                  </div>
+                )}
                 <button
                   onClick={() => setShowDisconnectConfirm(true)}
                   className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
@@ -1939,23 +2128,37 @@ export default function Mobley() {
                 >
                   <Settings className="w-5 h-5" />
                 </button>
-                <button
-                  onMouseDown={startTalking}
-                  onMouseUp={stopTalking}
-                  onMouseLeave={stopTalking}
-                  onTouchStart={startTalking}
-                  onTouchEnd={stopTalking}
-                  onTouchCancel={stopTalking}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none ${
-                    isBrowserMuted 
-                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
-                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
-                  }`}
-                  data-testid="button-browser-mute-home"
-                >
-                  {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {isBrowserMuted ? 'Hold to Talk' : 'Live'}
-                </button>
+                {talkMode === 'ptt' ? (
+                  <button
+                    onMouseDown={startTalking}
+                    onMouseUp={stopTalking}
+                    onMouseLeave={stopTalking}
+                    onTouchStart={startTalking}
+                    onTouchEnd={stopTalking}
+                    onTouchCancel={stopTalking}
+                    className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none ${
+                      isBrowserMuted 
+                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
+                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
+                    }`}
+                    data-testid="button-browser-mute-home"
+                  >
+                    {isBrowserMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    {isBrowserMuted ? 'Hold to Talk' : 'Live'}
+                  </button>
+                ) : (
+                  <div
+                    className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all ${
+                      isBrowserMuted 
+                        ? 'bg-slate-700 text-slate-300 border-2 border-slate-600' 
+                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
+                    }`}
+                    data-testid="button-browser-auto-home"
+                  >
+                    {isBrowserMuted ? <Volume2 className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    {isBrowserMuted ? 'Listening...' : 'Live'}
+                  </div>
+                )}
                 <button
                   onClick={() => setShowDisconnectConfirm(true)}
                   className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
