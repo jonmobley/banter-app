@@ -22,6 +22,12 @@ interface ScheduledBanter {
   createdAt: string;
 }
 
+interface Group {
+  id: string;
+  name: string;
+  memberIds: string[];
+}
+
 function formatDateTime(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleString('en-US', {
@@ -77,6 +83,15 @@ export default function Schedule() {
     queryFn: async () => {
       const res = await fetch("/api/expected");
       if (!res.ok) throw new Error("Failed to fetch expected");
+      return res.json();
+    },
+  });
+
+  const { data: groups = [] } = useQuery<Group[]>({
+    queryKey: ["/api/groups"],
+    queryFn: async () => {
+      const res = await fetch("/api/groups");
+      if (!res.ok) throw new Error("Failed to fetch groups");
       return res.json();
     },
   });
@@ -144,6 +159,13 @@ export default function Schedule() {
         ? prev.filter(p => p !== id)
         : [...prev, id]
     );
+  };
+
+  const addGroupMembers = (group: Group) => {
+    setSelectedParticipants(prev => {
+      const newIds = group.memberIds.filter(id => !prev.includes(id));
+      return [...prev, ...newIds];
+    });
   };
 
   const pendingBanters = banters.filter(b => b.status === 'pending');
@@ -350,6 +372,28 @@ export default function Schedule() {
 
               <div>
                 <label className="text-sm text-slate-400 mb-3 block">Participants</label>
+                
+                {groups.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-xs text-slate-500 mb-2">Quick add from group:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {groups.map(g => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => addGroupMembers(g)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-full text-sm transition-colors"
+                          data-testid={`button-add-group-${g.id}`}
+                        >
+                          <Users className="w-3.5 h-3.5 text-emerald-400" />
+                          {g.name}
+                          <span className="text-slate-400">({g.memberIds.length})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 <div className="space-y-2 max-h-40 overflow-auto">
                   {expectedParticipants.map(p => (
                     <label 
