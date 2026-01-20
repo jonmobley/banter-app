@@ -213,6 +213,15 @@ export default function Mobley() {
     refetchInterval: 5000,
   });
 
+  const { data: contactsData } = useQuery<{ id: string; name: string; phone: string }[]>({
+    queryKey: ["/api/contacts"],
+    queryFn: async () => {
+      const res = await fetch("/api/contacts");
+      if (!res.ok) throw new Error("Failed to fetch contacts");
+      return res.json();
+    },
+  });
+
   // Enumerate audio devices
   const refreshAudioDevices = useCallback(async () => {
     try {
@@ -254,22 +263,41 @@ export default function Mobley() {
     }
   }, [showAudioSettings, refreshAudioDevices]);
 
-  // Auto-fill name from expected participants when phone matches
+  // Auto-fill name from expected participants or contacts when phone matches
   useEffect(() => {
-    if (verifiedPhone && expectedData && !userName) {
-      const matchingParticipant = expectedData.find(p => {
-        const normalizedExpected = p.phone.replace(/\D/g, '');
-        const normalizedVerified = verifiedPhone.replace(/\D/g, '');
-        return normalizedExpected === normalizedVerified || 
-               normalizedExpected.endsWith(normalizedVerified) ||
-               normalizedVerified.endsWith(normalizedExpected);
-      });
-      if (matchingParticipant) {
-        setUserName(matchingParticipant.name);
-        localStorage.setItem('banter_user_name', matchingParticipant.name);
+    if (verifiedPhone && !userName) {
+      const normalizedVerified = verifiedPhone.replace(/\D/g, '');
+      
+      // First check expected participants
+      if (expectedData) {
+        const matchingParticipant = expectedData.find(p => {
+          const normalizedExpected = p.phone.replace(/\D/g, '');
+          return normalizedExpected === normalizedVerified || 
+                 normalizedExpected.endsWith(normalizedVerified) ||
+                 normalizedVerified.endsWith(normalizedExpected);
+        });
+        if (matchingParticipant) {
+          setUserName(matchingParticipant.name);
+          localStorage.setItem('banter_user_name', matchingParticipant.name);
+          return;
+        }
+      }
+      
+      // Then check contacts
+      if (contactsData) {
+        const matchingContact = contactsData.find(c => {
+          const normalizedContact = c.phone.replace(/\D/g, '');
+          return normalizedContact === normalizedVerified || 
+                 normalizedContact.endsWith(normalizedVerified) ||
+                 normalizedVerified.endsWith(normalizedContact);
+        });
+        if (matchingContact) {
+          setUserName(matchingContact.name);
+          localStorage.setItem('banter_user_name', matchingContact.name);
+        }
       }
     }
-  }, [verifiedPhone, expectedData, userName]);
+  }, [verifiedPhone, expectedData, contactsData, userName]);
 
   // Track if we've already auto-connected this session
   const hasAutoConnected = useRef(false);
@@ -288,18 +316,45 @@ export default function Mobley() {
         identity = displayName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
         // Save to localStorage for next time
         localStorage.setItem('banter_user_name', displayName);
-      } else if (verifiedPhone && expectedData) {
-        // Try to match by verified phone
-        const matchingParticipant = expectedData.find(p => {
-          const normalizedExpected = p.phone.replace(/\D/g, '');
-          const normalizedVerified = verifiedPhone.replace(/\D/g, '');
-          return normalizedExpected === normalizedVerified || 
-                 normalizedExpected.endsWith(normalizedVerified) ||
-                 normalizedVerified.endsWith(normalizedExpected);
-        });
-        if (matchingParticipant) {
-          identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
-          displayName = matchingParticipant.name;
+      } else if (verifiedPhone) {
+        const normalizedVerified = verifiedPhone.replace(/\D/g, '');
+        let found = false;
+        
+        // Try to match by verified phone in expected participants
+        if (expectedData) {
+          const matchingParticipant = expectedData.find(p => {
+            const normalizedExpected = p.phone.replace(/\D/g, '');
+            return normalizedExpected === normalizedVerified || 
+                   normalizedExpected.endsWith(normalizedVerified) ||
+                   normalizedVerified.endsWith(normalizedExpected);
+          });
+          if (matchingParticipant) {
+            identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+            displayName = matchingParticipant.name;
+            found = true;
+          }
+        }
+        
+        // Try to match in contacts if not found
+        if (!found && contactsData) {
+          const matchingContact = contactsData.find(c => {
+            const normalizedContact = c.phone.replace(/\D/g, '');
+            return normalizedContact === normalizedVerified || 
+                   normalizedContact.endsWith(normalizedVerified) ||
+                   normalizedVerified.endsWith(normalizedContact);
+          });
+          if (matchingContact) {
+            identity = matchingContact.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+            displayName = matchingContact.name;
+            found = true;
+          }
+        }
+        
+        if (!found) {
+          // Generate random identity if no match found
+          const randomDigits = Array.from({ length: 8 }, () => Math.floor(Math.random() * 8) + 2).join('');
+          identity = `WebUser_${randomDigits}`;
+          displayName = identity;
         }
       } else {
         // Generate random numbers 2-9 only (no 0 or 1 to avoid confusion)
@@ -391,7 +446,7 @@ export default function Mobley() {
       setConnectionError(error.message || 'Connection failed');
       setConnectionState(ConnectionState.Disconnected);
     }
-  }, [userName, verifiedPhone, expectedData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken]);
+  }, [userName, verifiedPhone, expectedData, contactsData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken]);
 
   // Auto-connect when authenticated and name is known
   useEffect(() => {
