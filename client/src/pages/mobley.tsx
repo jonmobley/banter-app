@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState } from "livekit-client";
@@ -803,7 +803,7 @@ export default function Mobley() {
               />
               {loginError && <p className="text-red-400 text-sm">{loginError}</p>}
               <button
-                onClick={handleSendCode}
+                onClick={sendVerificationCode}
                 disabled={loginLoading || !loginPhone}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-lg font-medium transition-colors"
                 data-testid="button-send-code"
@@ -827,7 +827,7 @@ export default function Mobley() {
               />
               {loginError && <p className="text-red-400 text-sm text-center">{loginError}</p>}
               <button
-                onClick={handleVerifyCode}
+                onClick={verifyLoginCode}
                 disabled={loginLoading || loginCode.length !== 6}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-lg font-medium transition-colors"
                 data-testid="button-verify-code"
