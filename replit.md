@@ -134,6 +134,15 @@ The application uses LiveKit for real-time voice conferencing:
 
 ## Recent Changes
 
+### January 2026 - Admin & Scheduling Features
+- Added `/admin` page with PIN authentication to view beta access email signups
+- Implemented SMS reminder system that sends notifications 15 minutes before scheduled banters
+- Created background scheduler (`server/scheduler.ts`) that auto-activates scheduled banters when their time arrives
+- Added "Join Banter" button to scheduled banter cards that navigates to /mobley
+- Updated Share functionality to share web link instead of obsolete phone number
+- Security improvements: Admin endpoints use POST with body instead of query strings
+- My Profile now persists email alongside name in localStorage
+
 ### January 2026 - LiveKit Migration
 - Migrated from Twilio Voice SDK to LiveKit for real-time voice conferencing
 - Removed all Twilio dependencies (`twilio`, `@twilio/voice-sdk`, `@ricky0123/vad-web`)
