@@ -819,21 +819,40 @@ export default function Mobley() {
               <input
                 type="text"
                 value={loginCode}
-                onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onChange={(e) => {
+                  const code = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setLoginCode(code);
+                  if (code.length === 6) {
+                    setTimeout(() => {
+                      setLoginLoading(true);
+                      setLoginError(null);
+                      fetch('/api/auth/verify-code', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phone: loginPhone, code })
+                      })
+                        .then(res => {
+                          if (!res.ok) throw new Error('Invalid code');
+                          return res.json();
+                        })
+                        .then(data => {
+                          setVerifiedPhone(data.phone);
+                          setAuthToken(data.authToken);
+                          localStorage.setItem('banter_verified_phone', data.phone);
+                          localStorage.setItem('banter_auth_token', data.authToken);
+                        })
+                        .catch(() => setLoginError('Invalid verification code'))
+                        .finally(() => setLoginLoading(false));
+                    }, 100);
+                  }
+                }}
                 placeholder="000000"
                 maxLength={6}
                 className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:border-emerald-500 text-center text-2xl tracking-widest"
                 data-testid="input-login-code"
               />
               {loginError && <p className="text-red-400 text-sm text-center">{loginError}</p>}
-              <button
-                onClick={verifyLoginCode}
-                disabled={loginLoading || loginCode.length !== 6}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-lg font-medium transition-colors"
-                data-testid="button-verify-code"
-              >
-                {loginLoading ? 'Verifying...' : 'Verify'}
-              </button>
+              {loginLoading && <p className="text-emerald-400 text-sm text-center">Verifying...</p>}
               <button
                 onClick={() => { setLoginStep('phone'); setLoginCode(''); setLoginError(null); }}
                 className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors"
