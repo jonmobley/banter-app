@@ -778,6 +778,80 @@ export default function Mobley() {
   const isConnected = connectionState === ConnectionState.Connected;
   const isConnecting = connectionState === ConnectionState.Connecting;
 
+  // Require authentication to access /mobley
+  if (!verifiedPhone || !authToken) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="text-center">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+              <Radio className="w-8 h-8 text-emerald-400" />
+            </div>
+            <h1 className="text-2xl font-bold mb-2">Banter</h1>
+            <p className="text-slate-400">Enter your phone number to join</p>
+          </div>
+
+          {loginStep === 'phone' ? (
+            <div className="space-y-4">
+              <input
+                type="tel"
+                value={loginPhone}
+                onChange={(e) => setLoginPhone(e.target.value)}
+                placeholder="Phone number"
+                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:border-emerald-500"
+                data-testid="input-login-phone"
+              />
+              {loginError && <p className="text-red-400 text-sm">{loginError}</p>}
+              <button
+                onClick={handleSendCode}
+                disabled={loginLoading || !loginPhone}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-lg font-medium transition-colors"
+                data-testid="button-send-code"
+              >
+                {loginLoading ? 'Sending...' : 'Send Code'}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-400 text-center">
+                Enter the 6-digit code sent to {loginPhone}
+              </p>
+              <input
+                type="text"
+                value={loginCode}
+                onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                maxLength={6}
+                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:border-emerald-500 text-center text-2xl tracking-widest"
+                data-testid="input-login-code"
+              />
+              {loginError && <p className="text-red-400 text-sm text-center">{loginError}</p>}
+              <button
+                onClick={handleVerifyCode}
+                disabled={loginLoading || loginCode.length !== 6}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-lg font-medium transition-colors"
+                data-testid="button-verify-code"
+              >
+                {loginLoading ? 'Verifying...' : 'Verify'}
+              </button>
+              <button
+                onClick={() => { setLoginStep('phone'); setLoginCode(''); setLoginError(null); }}
+                className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors"
+                data-testid="button-back-to-phone"
+              >
+                Use different number
+              </button>
+            </div>
+          )}
+
+          <p className="text-xs text-slate-500 text-center">
+            By continuing, you agree to receive SMS messages for verification.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <header className="flex items-center justify-between p-4 border-b border-slate-800">
