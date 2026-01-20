@@ -1,5 +1,7 @@
 import { storage } from "./storage";
 import { log } from "./index";
+import { sendReminderSMS } from "./twilio-sms";
+import { normalizePhone } from "@shared/schema";
 
 let schedulerInterval: NodeJS.Timeout | null = null;
 
@@ -14,38 +16,59 @@ export async function startScheduler(getHost: () => string) {
     try {
       const now = new Date();
 
-      // Check for banters that need reminders (5 min before)
+      // Check for banters that need reminders (15 min before)
       const bantersNeedingReminder = await storage.getBantersNeedingReminder(now);
       for (const banter of bantersNeedingReminder) {
         if (banter.reminderSentAt) {
           continue;
         }
 
-        log(`📱 Reminder needed for banter "${banter.name}"`, "scheduler");
-        
-        // Mark reminder as sent
-        await storage.updateScheduledBanter(banter.id, { reminderSentAt: new Date() });
+        log(`📱 Sending reminders for banter "${banter.name}"`, "scheduler");
 
-        // Get participants for logging
+        // Calculate minutes until start
+        const scheduledTime = new Date(banter.scheduledAt);
+        const minutesUntilStart = Math.round((scheduledTime.getTime() - now.getTime()) / (60 * 1000));
+
+        // Get participants and send SMS reminders
         const participants = await Promise.all(
           banter.participantIds.map(id => storage.getExpectedParticipant(id))
         );
 
+        let allSent = true;
         for (const participant of participants) {
           if (!participant) continue;
-          log(`📱 Reminder would be sent to ${participant.name} (${participant.phone})`, "scheduler");
+          try {
+            const normalizedPhone = normalizePhone(participant.phone);
+            const sent = await sendReminderSMS(normalizedPhone, banter.name, minutesUntilStart);
+            if (sent) {
+              log(`📱 Reminder sent to ${participant.name} (${participant.phone})`, "scheduler");
+            } else {
+              log(`⚠️ Failed to send reminder to ${participant.name}`, "scheduler");
+              allSent = false;
+            }
+          } catch (err: any) {
+            log(`⚠️ Error sending reminder to ${participant.name}: ${err.message}`, "scheduler");
+            allSent = false;
+          }
+        }
+
+        // Only mark reminder as sent after attempting all participants
+        // Even if some failed, mark it to prevent repeated attempts every 30s
+        await storage.updateScheduledBanter(banter.id, { reminderSentAt: new Date() });
+        if (!allSent) {
+          log(`⚠️ Some reminders failed for banter "${banter.name}"`, "scheduler");
         }
       }
 
       // Check for banters that should start now
       const pendingBanters = await storage.getPendingBantersForTime(now);
       for (const banter of pendingBanters) {
-        log(`🚀 Starting banter "${banter.name}"`, "scheduler");
+        log(`🚀 Activating banter "${banter.name}"`, "scheduler");
 
         // Mark as active
         await storage.updateScheduledBanter(banter.id, { status: 'active' });
 
-        // Log participants who should join
+        // Send "starting now" notifications if auto-call is enabled
         if (banter.autoCallEnabled === 'true') {
           const participants = await Promise.all(
             banter.participantIds.map(id => storage.getExpectedParticipant(id))
@@ -53,7 +76,15 @@ export async function startScheduler(getHost: () => string) {
 
           for (const participant of participants) {
             if (!participant) continue;
-            log(`📞 ${participant.name} should join the banter`, "scheduler");
+            try {
+              const normalizedPhone = normalizePhone(participant.phone);
+              const sent = await sendReminderSMS(normalizedPhone, banter.name, 0);
+              if (sent) {
+                log(`📞 Start notification sent to ${participant.name}`, "scheduler");
+              }
+            } catch (err: any) {
+              log(`⚠️ Error sending start notification to ${participant.name}: ${err.message}`, "scheduler");
+            }
           }
         }
       }

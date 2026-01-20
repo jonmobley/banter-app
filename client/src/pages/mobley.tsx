@@ -127,7 +127,9 @@ export default function Mobley() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showMyProfile, setShowMyProfile] = useState(false);
   const [profileName, setProfileName] = useState('');
-  const [profileEmail, setProfileEmail] = useState('');
+  const [profileEmail, setProfileEmail] = useState(() => {
+    return localStorage.getItem('banter_user_email') || '';
+  });
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [loginStep, setLoginStep] = useState<'phone' | 'code'>('phone');
   const [loginPhone, setLoginPhone] = useState('');
@@ -979,7 +981,7 @@ export default function Mobley() {
                 <button
                   onClick={() => { 
                     setProfileName(userName);
-                    setProfileEmail('');
+                    setProfileEmail(localStorage.getItem('banter_user_email') || '');
                     setShowMyProfile(true); 
                     setShowProfileMenu(false); 
                   }}
@@ -1560,6 +1562,11 @@ export default function Mobley() {
                 onClick={() => {
                   setUserName(profileName);
                   localStorage.setItem('banter_user_name', profileName);
+                  if (profileEmail) {
+                    localStorage.setItem('banter_user_email', profileEmail);
+                  } else {
+                    localStorage.removeItem('banter_user_email');
+                  }
                   setShowMyProfile(false);
                   toast({ title: "Profile updated" });
                 }}

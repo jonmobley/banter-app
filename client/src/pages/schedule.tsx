@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Calendar, Clock, Phone, Bell, X, Trash2, Users } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Clock, Phone, Bell, X, Trash2, Users, Radio } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -226,7 +226,7 @@ export default function Schedule() {
                           <Trash2 className="w-4 h-4 text-red-400" />
                         </button>
                       </div>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 mb-3">
                         {banter.autoCallEnabled === 'true' && (
                           <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full flex items-center gap-1">
                             <Phone className="w-3 h-3" />
@@ -236,7 +236,7 @@ export default function Schedule() {
                         {banter.reminderEnabled === 'true' && (
                           <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded-full flex items-center gap-1">
                             <Bell className="w-3 h-3" />
-                            5min reminder
+                            15min reminder
                           </span>
                         )}
                         <span className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded-full flex items-center gap-1">
@@ -244,6 +244,14 @@ export default function Schedule() {
                           {banter.participantIds.length} participants
                         </span>
                       </div>
+                      <Link
+                        href="/mobley"
+                        className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-2.5 rounded-full transition-colors"
+                        data-testid={`button-join-${banter.id}`}
+                      >
+                        <Radio className="w-4 h-4" />
+                        Join Banter
+                      </Link>
                     </div>
                   ))}
                 </div>

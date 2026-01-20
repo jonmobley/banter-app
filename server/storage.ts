@@ -59,6 +59,7 @@ export interface IStorage {
   
   // Beta Requests
   createBetaRequest(email: string): Promise<void>;
+  getBetaRequests(): Promise<{ id: string; email: string; createdAt: Date }[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -177,16 +178,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getBantersNeedingReminder(time: Date): Promise<ScheduledBanter[]> {
-    // Get banters that need a reminder (5 min before start, reminder enabled, still pending)
-    const fiveMinutesFromNow = new Date(time.getTime() + 5 * 60 * 1000);
+    // Get banters that need a reminder (15 min before start, reminder enabled, still pending)
+    const fifteenMinutesFromNow = new Date(time.getTime() + 15 * 60 * 1000);
     return await db.select().from(scheduledBanters).where(
       and(
         eq(scheduledBanters.status, 'pending'),
         eq(scheduledBanters.reminderEnabled, 'true'),
-        lte(scheduledBanters.scheduledAt, fiveMinutesFromNow),
+        lte(scheduledBanters.scheduledAt, fifteenMinutesFromNow),
         gt(scheduledBanters.scheduledAt, time)
       )
     );
+  }
+
+  async getBetaRequests(): Promise<{ id: string; email: string; createdAt: Date }[]> {
+    return await db.select().from(betaRequests).orderBy(betaRequests.createdAt);
   }
 
   async createBetaRequest(email: string): Promise<void> {

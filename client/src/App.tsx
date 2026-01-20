@@ -8,6 +8,7 @@ import Mobley from "@/pages/mobley";
 import Account from "@/pages/account";
 import Contacts from "@/pages/contacts";
 import Schedule from "@/pages/schedule";
+import Admin from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/account" component={Account} />
       <Route path="/contacts" component={Contacts} />
       <Route path="/schedule" component={Schedule} />
+      <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>
   );

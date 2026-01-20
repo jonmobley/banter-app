@@ -74,3 +74,26 @@ export async function sendVerificationSMS(to: string, code: string): Promise<boo
     return false;
   }
 }
+
+/**
+ * Send a reminder SMS for an upcoming scheduled banter
+ */
+export async function sendReminderSMS(to: string, banterName: string, minutesUntilStart: number): Promise<boolean> {
+  try {
+    const client = await getTwilioClient();
+    const fromNumber = await getTwilioFromPhoneNumber();
+    
+    const timeText = minutesUntilStart <= 1 ? 'starting now' : `starting in ${minutesUntilStart} minutes`;
+    
+    await client.messages.create({
+      body: `Banter Reminder: "${banterName}" is ${timeText}. Join at ${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'your Banter link'}/mobley`,
+      from: fromNumber,
+      to: to
+    });
+    
+    return true;
+  } catch (error: any) {
+    console.error('Failed to send reminder SMS:', error.message);
+    return false;
+  }
+}

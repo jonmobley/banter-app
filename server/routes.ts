@@ -217,6 +217,27 @@ export async function registerRoutes(
   });
 
   /**
+   * POST /api/beta-requests
+   * Get all beta access requests. Requires admin PIN in body.
+   */
+  app.post("/api/beta-requests", async (req, res) => {
+    try {
+      const { pin } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const requests = await storage.getBetaRequests();
+      res.json(requests);
+    } catch (error: any) {
+      log(`Error fetching beta requests: ${error.message}`, "beta");
+      res.status(500).json({ error: "Failed to fetch beta requests" });
+    }
+  });
+
+  /**
    * POST /api/auth/send-code
    * Send a verification code via SMS using Twilio.
    */

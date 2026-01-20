@@ -39,13 +39,22 @@ export default function Account() {
           </a>
 
           <button
-            onClick={() => {
+            onClick={async () => {
+              const shareUrl = `${window.location.origin}/mobley`;
               if (navigator.share) {
-                navigator.share({
-                  title: 'Join the Banter',
-                  text: 'Call (220) 242-3245 to join the group call!',
-                  url: 'tel:+12202423245'
-                });
+                try {
+                  await navigator.share({
+                    title: 'Join the Banter',
+                    text: 'Join our voice conference!',
+                    url: shareUrl
+                  });
+                } catch (e) {
+                  // User cancelled or share failed, fall back to clipboard
+                  await navigator.clipboard.writeText(shareUrl);
+                }
+              } else {
+                await navigator.clipboard.writeText(shareUrl);
+                alert('Link copied to clipboard!');
               }
             }}
             className="flex items-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-4 px-6 rounded-full transition-colors mb-6"
@@ -53,7 +62,7 @@ export default function Account() {
           >
             <Share className="w-5 h-5 text-emerald-400" />
             <span className="ml-3">Share</span>
-            <span className="ml-auto text-slate-400">(220) 242-3245</span>
+            <span className="ml-auto text-slate-400 text-xs truncate max-w-32">{window.location.host}/mobley</span>
           </button>
 
           <div className="flex flex-col gap-3">
