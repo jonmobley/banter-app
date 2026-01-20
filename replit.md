@@ -40,7 +40,7 @@ Browser users can choose between two talk modes (accessible via Audio Settings):
 
 | Concept | Description | Status |
 |---------|-------------|--------|
-| **Banter Groups** | Saved lists of contacts for quick invites | 🔮 Future |
+| **Banter Groups** | Saved lists of contacts for quick invites | ✅ Implemented |
 | **Admin** | Can create any Banter type, manage settings | ✅ Implemented |
 | **Host** | Runs a specific session (controls participants) | ✅ Implemented |
 | **Participant** | Can speak and listen | ✅ Implemented |
@@ -85,6 +85,8 @@ Key server files:
 - **Tables**:
   - `users` - User authentication (id, username, password)
   - `contacts` - Phone contact directory (id, name, phone)
+  - `groups` - Saved contact groups for quick invites (id, name, createdAt)
+  - `group_members` - Junction table linking groups to expected participants (id, groupId, participantId)
 
 ### Development vs Production
 - Development: Vite dev server with HMR proxied through Express
@@ -133,6 +135,15 @@ The application uses LiveKit for real-time voice conferencing:
 - Full shadcn/ui component suite via Radix UI primitives
 
 ## Recent Changes
+
+### January 2026 - Banter Groups Feature
+- Added `groups` and `group_members` tables to database schema
+- Implemented group CRUD operations in storage layer with member management
+- Created API endpoints for group management (all mutations require admin PIN)
+- Added Groups tab to Contacts page for creating, editing, and deleting groups
+- Built member management modal to add/remove participants from groups
+- Added "Quick add from group" feature on Schedule page for one-click participant selection
+- Group deletion cascades to remove all associated group members
 
 ### January 2026 - Admin & Scheduling Features
 - Added `/admin` page with PIN authentication to view beta access email signups
