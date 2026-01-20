@@ -1108,7 +1108,11 @@ export default function Mobley() {
       </div>
 
       {/* Bottom controls */}
-      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8 pb-8 px-6">
+      <div className={`fixed left-0 right-0 px-6 ${
+        isConnected || isConnecting 
+          ? 'bottom-0 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8 pb-8' 
+          : 'bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 pb-8 sm:pb-0'
+      }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
             <div className="flex items-center gap-3">
