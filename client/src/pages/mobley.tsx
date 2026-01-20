@@ -125,6 +125,9 @@ export default function Mobley() {
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showMyProfile, setShowMyProfile] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileEmail, setProfileEmail] = useState('');
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [loginStep, setLoginStep] = useState<'phone' | 'code'>('phone');
   const [loginPhone, setLoginPhone] = useState('');
@@ -249,6 +252,26 @@ export default function Mobley() {
     }
   }, [showAudioSettings, refreshAudioDevices]);
 
+  // Auto-fill name from expected participants when phone matches
+  useEffect(() => {
+    if (verifiedPhone && expectedData && !userName) {
+      const matchingParticipant = expectedData.find(p => {
+        const normalizedExpected = p.phone.replace(/\D/g, '');
+        const normalizedVerified = verifiedPhone.replace(/\D/g, '');
+        return normalizedExpected === normalizedVerified || 
+               normalizedExpected.endsWith(normalizedVerified) ||
+               normalizedVerified.endsWith(normalizedExpected);
+      });
+      if (matchingParticipant) {
+        setUserName(matchingParticipant.name);
+        localStorage.setItem('banter_user_name', matchingParticipant.name);
+      }
+    }
+  }, [verifiedPhone, expectedData, userName]);
+
+  // Track if we've already auto-connected this session
+  const hasAutoConnected = useRef(false);
+
   // Connect to LiveKit room
   const connectToRoom = useCallback(async () => {
     try {
@@ -367,6 +390,25 @@ export default function Mobley() {
       setConnectionState(ConnectionState.Disconnected);
     }
   }, [userName, verifiedPhone, expectedData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken]);
+
+  // Auto-connect when authenticated and name is known
+  useEffect(() => {
+    if (
+      verifiedPhone && 
+      authToken && 
+      userName && 
+      connectionState === ConnectionState.Disconnected && 
+      !hasAutoConnected.current &&
+      !connectionError
+    ) {
+      hasAutoConnected.current = true;
+      // Small delay to ensure everything is ready
+      const timer = setTimeout(() => {
+        connectToRoom();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [verifiedPhone, authToken, userName, connectionState, connectionError, connectToRoom]);
 
   // Disconnect from room
   const disconnectFromRoom = useCallback(async () => {
@@ -932,11 +974,23 @@ export default function Mobley() {
               <div className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-slate-700">
                   <p className="text-xs text-slate-400">Signed in as</p>
-                  <p className="text-sm text-white truncate">{verifiedPhone}</p>
+                  <p className="text-sm text-white truncate">{userName || verifiedPhone}</p>
                 </div>
                 <button
+                  onClick={() => { 
+                    setProfileName(userName);
+                    setProfileEmail('');
+                    setShowMyProfile(true); 
+                    setShowProfileMenu(false); 
+                  }}
+                  className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors"
+                  data-testid="button-my-profile"
+                >
+                  My Profile
+                </button>
+                <button
                   onClick={() => { handleLogout(); setShowProfileMenu(false); }}
-                  className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors"
+                  className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors border-t border-slate-700"
                   data-testid="button-signout"
                 >
                   Sign out
@@ -1452,6 +1506,67 @@ export default function Mobley() {
                 className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
               >
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMyProfile && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+            <h2 className="text-xl font-bold text-center mb-6">My Profile</h2>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Name</label>
+                <input
+                  type="text"
+                  placeholder="Your name"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+                  data-testid="input-profile-name"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Phone</label>
+                <input
+                  type="tel"
+                  value={verifiedPhone || ''}
+                  disabled
+                  className="w-full px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700 text-slate-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Email (optional)</label>
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={profileEmail}
+                  onChange={(e) => setProfileEmail(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+                  data-testid="input-profile-email"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowMyProfile(false)}
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setUserName(profileName);
+                  localStorage.setItem('banter_user_name', profileName);
+                  setShowMyProfile(false);
+                  toast({ title: "Profile updated" });
+                }}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-save-profile"
+              >
+                Save
               </button>
             </div>
           </div>

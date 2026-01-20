@@ -149,9 +149,9 @@ export default function Home() {
               <div className="w-14 h-14 rounded-xl bg-emerald-500/20 flex items-center justify-center mb-6">
                 <Zap className="w-7 h-7 text-emerald-400" />
               </div>
-              <h3 className="text-xl font-bold mb-3">Join Instantly</h3>
+              <h3 className="text-xl font-bold mb-3">Quick Setup</h3>
               <p className="text-slate-400 leading-relaxed">
-                Open the link and you're instantly connected. No app downloads, no account creation.
+                Verify your phone once, then connect with one tap. No apps to download, your browser is all you need.
               </p>
             </div>
             
