@@ -224,6 +224,11 @@ export default function Mobley() {
   }, [selectedAudioDevice]);
 
   useEffect(() => {
+    // Refresh on page load to auto-select default mic
+    refreshAudioDevices();
+  }, []);
+  
+  useEffect(() => {
     if (showAudioSettings) {
       refreshAudioDevices();
     }
