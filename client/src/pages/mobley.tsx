@@ -124,6 +124,8 @@ export default function Mobley() {
 
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   const [loginStep, setLoginStep] = useState<'phone' | 'code'>('phone');
   const [loginPhone, setLoginPhone] = useState('');
   const [loginCode, setLoginCode] = useState('');
@@ -227,6 +229,19 @@ export default function Mobley() {
     // Refresh on page load to auto-select default mic
     refreshAudioDevices();
   }, []);
+
+  // Close profile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showProfileMenu]);
   
   useEffect(() => {
     if (showAudioSettings) {
@@ -901,17 +916,34 @@ export default function Mobley() {
               <Plus className="w-5 h-5 text-emerald-400" />
             </button>
           )}
-          <button
-            onClick={() => verifiedPhone ? handleLogout() : setShowLoginModal(true)}
-            className={`p-3 rounded-full transition-colors ${
-              verifiedPhone 
-                ? 'bg-blue-500/20 hover:bg-blue-500/30' 
-                : 'bg-slate-800/50 hover:bg-slate-700'
-            }`}
-            data-testid="button-profile"
-          >
-            <User className={`w-5 h-5 ${verifiedPhone ? 'text-blue-400' : 'text-slate-400'}`} />
-          </button>
+          <div className="relative" ref={profileMenuRef}>
+            <button
+              onClick={() => verifiedPhone ? setShowProfileMenu(!showProfileMenu) : setShowLoginModal(true)}
+              className={`p-3 rounded-full transition-colors ${
+                verifiedPhone 
+                  ? 'bg-blue-500/20 hover:bg-blue-500/30' 
+                  : 'bg-slate-800/50 hover:bg-slate-700'
+              }`}
+              data-testid="button-profile"
+            >
+              <User className={`w-5 h-5 ${verifiedPhone ? 'text-blue-400' : 'text-slate-400'}`} />
+            </button>
+            {showProfileMenu && verifiedPhone && (
+              <div className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg overflow-hidden z-50">
+                <div className="px-4 py-3 border-b border-slate-700">
+                  <p className="text-xs text-slate-400">Signed in as</p>
+                  <p className="text-sm text-white truncate">{verifiedPhone}</p>
+                </div>
+                <button
+                  onClick={() => { handleLogout(); setShowProfileMenu(false); }}
+                  className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors"
+                  data-testid="button-signout"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
