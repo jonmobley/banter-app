@@ -1165,20 +1165,22 @@ export default function Mobley() {
             </button>
           ) : (
             <div className="flex flex-col gap-3">
-              <input
-                type="text"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                placeholder="Enter your name"
-                className="w-full bg-slate-800 border border-slate-700 rounded-full py-3 px-5 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-center"
-                data-testid="input-user-name"
-              />
+              <div className="text-center">
+                <label className="text-xs text-slate-400 mb-1 block">Your name</label>
+                <input
+                  type="text"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full bg-transparent border-b border-slate-600 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-center text-lg"
+                  data-testid="input-user-name"
+                />
+              </div>
               <button
                 onClick={connectToRoom}
                 className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
                 data-testid="button-connect"
               >
-                <Wifi className="w-5 h-5" />
                 Connect
               </button>
               <button
