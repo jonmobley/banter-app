@@ -572,6 +572,149 @@ export async function registerRoutes(
   });
 
   /**
+   * GET /api/groups
+   * Lists all groups with their member IDs.
+   */
+  app.get("/api/groups", async (_req, res) => {
+    try {
+      const groups = await storage.getGroupsWithMembers();
+      res.json(groups);
+    } catch (error: any) {
+      log(`Error fetching groups: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to fetch groups" });
+    }
+  });
+
+  /**
+   * POST /api/groups
+   * Creates a new group. Requires admin PIN.
+   */
+  app.post("/api/groups", async (req, res) => {
+    try {
+      const { pin, name } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: "Group name is required" });
+      }
+      
+      const group = await storage.createGroup({ name: name.trim() });
+      res.json({ ...group, memberIds: [] });
+    } catch (error: any) {
+      log(`Error creating group: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to create group" });
+    }
+  });
+
+  /**
+   * PATCH /api/groups/:id
+   * Updates a group name. Requires admin PIN.
+   */
+  app.patch("/api/groups/:id", async (req, res) => {
+    try {
+      const { pin, name } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: "Group name is required" });
+      }
+      
+      const updated = await storage.updateGroup(req.params.id, name.trim());
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Group not found" });
+      }
+      
+      const members = await storage.getGroupMembers(req.params.id);
+      res.json({ ...updated, memberIds: members.map(m => m.participantId) });
+    } catch (error: any) {
+      log(`Error updating group: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to update group" });
+    }
+  });
+
+  /**
+   * DELETE /api/groups/:id
+   * Deletes a group. Requires admin PIN.
+   */
+  app.delete("/api/groups/:id", async (req, res) => {
+    try {
+      const { pin } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      await storage.deleteGroup(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      log(`Error deleting group: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to delete group" });
+    }
+  });
+
+  /**
+   * POST /api/groups/:id/members
+   * Adds a member to a group. Requires admin PIN.
+   */
+  app.post("/api/groups/:id/members", async (req, res) => {
+    try {
+      const { pin, participantId } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      if (!participantId) {
+        return res.status(400).json({ error: "Participant ID is required" });
+      }
+      
+      await storage.addGroupMember(req.params.id, participantId);
+      
+      const group = await storage.getGroup(req.params.id);
+      const members = await storage.getGroupMembers(req.params.id);
+      res.json({ ...group, memberIds: members.map(m => m.participantId) });
+    } catch (error: any) {
+      log(`Error adding group member: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to add group member" });
+    }
+  });
+
+  /**
+   * DELETE /api/groups/:id/members/:participantId
+   * Removes a member from a group. Requires admin PIN.
+   */
+  app.delete("/api/groups/:id/members/:participantId", async (req, res) => {
+    try {
+      const { pin } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      await storage.removeGroupMember(req.params.id, req.params.participantId);
+      
+      const group = await storage.getGroup(req.params.id);
+      const members = await storage.getGroupMembers(req.params.id);
+      res.json({ ...group, memberIds: members.map(m => m.participantId) });
+    } catch (error: any) {
+      log(`Error removing group member: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to remove group member" });
+    }
+  });
+
+  /**
    * GET /api/banters
    * Lists all scheduled banters.
    */

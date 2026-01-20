@@ -136,3 +136,32 @@ export const insertBetaRequestSchema = createInsertSchema(betaRequests).pick({
 
 export type InsertBetaRequest = z.infer<typeof insertBetaRequestSchema>;
 export type BetaRequest = typeof betaRequests.$inferSelect;
+
+// Contact Groups
+export const groups = pgTable("groups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertGroupSchema = createInsertSchema(groups).pick({
+  name: true,
+});
+
+export type InsertGroup = z.infer<typeof insertGroupSchema>;
+export type Group = typeof groups.$inferSelect;
+
+// Group Members (junction table)
+export const groupMembers = pgTable("group_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  groupId: varchar("group_id").notNull(),
+  participantId: varchar("participant_id").notNull(),
+});
+
+export const insertGroupMemberSchema = createInsertSchema(groupMembers).pick({
+  groupId: true,
+  participantId: true,
+});
+
+export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
+export type GroupMember = typeof groupMembers.$inferSelect;

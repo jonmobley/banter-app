@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests } from "@shared/schema";
+import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, gt, lt, lte, sql } from "drizzle-orm";
@@ -60,6 +60,17 @@ export interface IStorage {
   // Beta Requests
   createBetaRequest(email: string): Promise<void>;
   getBetaRequests(): Promise<{ id: string; email: string; createdAt: Date }[]>;
+  
+  // Groups
+  getGroups(): Promise<Group[]>;
+  getGroup(id: string): Promise<Group | undefined>;
+  createGroup(group: InsertGroup): Promise<Group>;
+  updateGroup(id: string, name: string): Promise<Group | undefined>;
+  deleteGroup(id: string): Promise<void>;
+  getGroupMembers(groupId: string): Promise<GroupMember[]>;
+  addGroupMember(groupId: string, participantId: string): Promise<GroupMember>;
+  removeGroupMember(groupId: string, participantId: string): Promise<void>;
+  getGroupsWithMembers(): Promise<(Group & { memberIds: string[] })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -196,6 +207,58 @@ export class DatabaseStorage implements IStorage {
 
   async createBetaRequest(email: string): Promise<void> {
     await db.insert(betaRequests).values({ email });
+  }
+
+  async getGroups(): Promise<Group[]> {
+    return await db.select().from(groups).orderBy(groups.name);
+  }
+
+  async getGroup(id: string): Promise<Group | undefined> {
+    const [group] = await db.select().from(groups).where(eq(groups.id, id));
+    return group;
+  }
+
+  async createGroup(group: InsertGroup): Promise<Group> {
+    const [newGroup] = await db.insert(groups).values(group).returning();
+    return newGroup;
+  }
+
+  async updateGroup(id: string, name: string): Promise<Group | undefined> {
+    const [updated] = await db.update(groups).set({ name }).where(eq(groups.id, id)).returning();
+    return updated;
+  }
+
+  async deleteGroup(id: string): Promise<void> {
+    await db.delete(groupMembers).where(eq(groupMembers.groupId, id));
+    await db.delete(groups).where(eq(groups.id, id));
+  }
+
+  async getGroupMembers(groupId: string): Promise<GroupMember[]> {
+    return await db.select().from(groupMembers).where(eq(groupMembers.groupId, groupId));
+  }
+
+  async addGroupMember(groupId: string, participantId: string): Promise<GroupMember> {
+    const [member] = await db.insert(groupMembers).values({ groupId, participantId }).returning();
+    return member;
+  }
+
+  async removeGroupMember(groupId: string, participantId: string): Promise<void> {
+    await db.delete(groupMembers).where(
+      and(
+        eq(groupMembers.groupId, groupId),
+        eq(groupMembers.participantId, participantId)
+      )
+    );
+  }
+
+  async getGroupsWithMembers(): Promise<(Group & { memberIds: string[] })[]> {
+    const allGroups = await this.getGroups();
+    const allMembers = await db.select().from(groupMembers);
+    
+    return allGroups.map(group => ({
+      ...group,
+      memberIds: allMembers.filter(m => m.groupId === group.id).map(m => m.participantId)
+    }));
   }
 }
 
