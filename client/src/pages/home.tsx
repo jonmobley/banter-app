@@ -117,8 +117,8 @@ export default function Home() {
             </p>
           </div>
           
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="flex gap-4">
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="flex flex-col items-center text-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                 <Users className="w-6 h-6 text-emerald-400" />
               </div>
@@ -130,7 +130,7 @@ export default function Home() {
               </div>
             </div>
             
-            <div className="flex gap-4">
+            <div className="flex flex-col items-center text-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
                 <Clock className="w-6 h-6 text-blue-400" />
               </div>
@@ -142,7 +142,7 @@ export default function Home() {
               </div>
             </div>
             
-            <div className="flex gap-4">
+            <div className="flex flex-col items-center text-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0">
                 <Headphones className="w-6 h-6 text-purple-400" />
               </div>
@@ -150,18 +150,6 @@ export default function Home() {
                 <h3 className="text-lg font-bold mb-2">Crystal Clear Audio</h3>
                 <p className="text-slate-400">
                   Enterprise-grade voice infrastructure for reliable, high-quality audio every time.
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex gap-4">
-              <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0">
-                <Zap className="w-6 h-6 text-orange-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold mb-2">Instant Notifications</h3>
-                <p className="text-slate-400">
-                  Get reminders before scheduled banters. Never miss an important team conversation.
                 </p>
               </div>
             </div>
