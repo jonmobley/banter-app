@@ -79,8 +79,7 @@ export default function Home() {
           </h1>
           
           <p className="text-xl text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Push-to-talk voice communication for teams. 
-            Just open your browser and start talking.
+            Push-to-talk voice communication for teams.
           </p>
           
           <button
