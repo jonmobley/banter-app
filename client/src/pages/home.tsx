@@ -177,7 +177,6 @@ export default function Home() {
           </h2>
           <p className="text-slate-400 text-lg mb-10 max-w-2xl mx-auto">
             Be among the first to experience a new way to connect with your team.
-            No credit card required.
           </p>
           
           <button
