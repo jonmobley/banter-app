@@ -1,4 +1,4 @@
-import { Users, Zap, Shield, Clock, Globe, ChevronRight, Calendar, Headphones, Mail } from "lucide-react";
+import { Users, Zap, Shield, Clock, Globe, ChevronRight, Calendar, Headphones, Mail, X } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -6,19 +6,16 @@ export default function Home() {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const { toast } = useToast();
 
-  const scrollToForm = (e: React.MouseEvent) => {
+  const openModal = (e: React.MouseEvent) => {
     e.preventDefault();
-    const element = document.getElementById('request-access');
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Focus the email input after scrolling
-      setTimeout(() => {
-        const input = element.querySelector('input[type="email"]') as HTMLInputElement;
-        input?.focus();
-      }, 500);
-    }
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,7 +56,7 @@ export default function Home() {
             <span className="text-xl font-bold">Banter</span>
           </div>
           <button
-            onClick={scrollToForm}
+            onClick={openModal}
             className="bg-emerald-500 hover:bg-emerald-400 text-white font-medium px-4 py-2 rounded-full text-sm transition-colors"
             data-testid="link-request-access"
           >
@@ -82,41 +79,18 @@ export default function Home() {
           </h1>
           
           <p className="text-xl text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
-            Push-to-talk voice communication for teams. No apps, no downloads, no friction. 
+            Push-to-talk voice communication for teams. 
             Just open your browser and start talking.
           </p>
           
-          <div id="request-access" className="max-w-md mx-auto mb-16">
-            {isSubmitted ? (
-              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-8 text-center">
-                <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
-                  <Mail className="w-8 h-8 text-emerald-400" />
-                </div>
-                <h3 className="text-xl font-bold mb-2">You're on the list!</h3>
-                <p className="text-slate-400">We'll reach out when it's your turn to join.</p>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-6 py-4 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  data-testid="input-email"
-                />
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold px-8 py-4 rounded-full text-lg transition-colors whitespace-nowrap"
-                  data-testid="button-request-access"
-                >
-                  {isSubmitting ? "Submitting..." : "Request Beta Access"}
-                </button>
-              </form>
-            )}
-          </div>
+          <button
+            onClick={openModal}
+            className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-4 rounded-full text-lg transition-colors mb-16"
+            data-testid="button-request-access-hero"
+          >
+            Request Beta Access
+            <ChevronRight className="w-5 h-5" />
+          </button>
 
           <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-slate-500 text-sm">
             <div className="flex items-center gap-2">
@@ -130,49 +104,6 @@ export default function Home() {
             <div className="flex items-center gap-2">
               <Globe className="w-4 h-4" />
               <span>Works Anywhere</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20 px-6 bg-slate-900/50">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
-            <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-              Three simple ways to join the conversation
-            </p>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-slate-800/50 rounded-2xl p-8 border border-slate-700/50">
-              <div className="w-14 h-14 rounded-xl bg-emerald-500/20 flex items-center justify-center mb-6">
-                <Zap className="w-7 h-7 text-emerald-400" />
-              </div>
-              <h3 className="text-xl font-bold mb-3">Quick Setup</h3>
-              <p className="text-slate-400 leading-relaxed">
-                Verify your phone once, then connect with one tap. No apps to download, your browser is all you need.
-              </p>
-            </div>
-            
-            <div className="bg-slate-800/50 rounded-2xl p-8 border border-slate-700/50">
-              <div className="w-14 h-14 rounded-xl bg-blue-500/20 flex items-center justify-center mb-6">
-                <Globe className="w-7 h-7 text-blue-400" />
-              </div>
-              <h3 className="text-xl font-bold mb-3">Join from Browser</h3>
-              <p className="text-slate-400 leading-relaxed">
-                Click to join directly from your web browser. Perfect for desktop users who prefer not to use their phone.
-              </p>
-            </div>
-            
-            <div className="bg-slate-800/50 rounded-2xl p-8 border border-slate-700/50">
-              <div className="w-14 h-14 rounded-xl bg-purple-500/20 flex items-center justify-center mb-6">
-                <Calendar className="w-7 h-7 text-purple-400" />
-              </div>
-              <h3 className="text-xl font-bold mb-3">Schedule Banters</h3>
-              <p className="text-slate-400 leading-relaxed">
-                Plan your banters in advance. Set reminders and notify participants when it's time to connect.
-              </p>
             </div>
           </div>
         </div>
@@ -250,7 +181,7 @@ export default function Home() {
           </p>
           
           <button
-            onClick={scrollToForm}
+            onClick={openModal}
             className="inline-flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold px-8 py-4 rounded-full text-lg transition-colors"
             data-testid="button-request-access-bottom"
           >
@@ -276,6 +207,63 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-6">
+          <div className="bg-slate-900 rounded-2xl p-8 w-full max-w-md relative">
+            <button
+              onClick={closeModal}
+              className="absolute top-4 right-4 p-2 rounded-lg hover:bg-slate-800 transition-colors"
+              data-testid="button-close-modal"
+            >
+              <X className="w-5 h-5 text-slate-400" />
+            </button>
+            
+            {isSubmitted ? (
+              <div className="text-center py-4">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                  <Mail className="w-8 h-8 text-emerald-400" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">You're on the list!</h3>
+                <p className="text-slate-400 mb-6">We'll reach out when it's your turn to join.</p>
+                <button
+                  onClick={closeModal}
+                  className="bg-slate-700 hover:bg-slate-600 text-white font-medium px-6 py-3 rounded-full transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-2xl font-bold mb-2">Request Beta Access</h2>
+                <p className="text-slate-400 mb-6">Enter your email to join the waitlist.</p>
+                
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                    autoFocus
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3.5 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    style={{ fontSize: '16px' }}
+                    data-testid="input-email"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-semibold px-6 py-3.5 rounded-full text-lg transition-colors"
+                    data-testid="button-request-access"
+                  >
+                    {isSubmitting ? "Submitting..." : "Request Access"}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
