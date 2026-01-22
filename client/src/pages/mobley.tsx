@@ -657,6 +657,25 @@ export default function Mobley() {
     },
   });
 
+  const kickParticipant = useMutation({
+    mutationFn: async (identity: string) => {
+      const res = await fetch("/api/admin/kick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin, identity }),
+      });
+      if (!res.ok) throw new Error("Failed to kick");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      toast({ title: "Participant removed from call" });
+    },
+    onError: () => {
+      toast({ title: "Failed to remove participant", description: "Please try again.", variant: "destructive" });
+    },
+  });
+
   const removeExpected = useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/expected/${id}`, { 
@@ -1180,21 +1199,33 @@ export default function Mobley() {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => canShowControls && toggleParticipantMute.mutate({ identity: p.identity, muted: !p.muted })}
-                  className={`p-2 rounded-lg transition-colors ${
-                    p.muted 
-                      ? 'bg-red-500/20 hover:bg-red-500/30' 
-                      : 'bg-emerald-500/20 hover:bg-emerald-500/30'
-                  } ${!canShowControls ? 'cursor-default opacity-50' : ''}`}
-                  data-testid={`button-mute-${i}`}
-                >
-                  {p.muted ? (
-                    <VolumeX className="w-5 h-5 text-red-400" />
-                  ) : (
-                    <Volume2 className="w-5 h-5 text-emerald-400" />
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => canShowControls && toggleParticipantMute.mutate({ identity: p.identity, muted: !p.muted })}
+                    className={`p-2 rounded-lg transition-colors ${
+                      p.muted 
+                        ? 'bg-red-500/20 hover:bg-red-500/30' 
+                        : 'bg-emerald-500/20 hover:bg-emerald-500/30'
+                    } ${!canShowControls ? 'cursor-default opacity-50' : ''}`}
+                    data-testid={`button-mute-${i}`}
+                  >
+                    {p.muted ? (
+                      <VolumeX className="w-5 h-5 text-red-400" />
+                    ) : (
+                      <Volume2 className="w-5 h-5 text-emerald-400" />
+                    )}
+                  </button>
+                  {canShowControls && !isMyParticipant(p.identity) && (
+                    <button
+                      onClick={() => kickParticipant.mutate(p.identity)}
+                      className="p-2 rounded-lg bg-slate-700/50 hover:bg-red-500/30 transition-colors"
+                      title="Remove from call"
+                      data-testid={`button-kick-${i}`}
+                    >
+                      <X className="w-5 h-5 text-slate-400 hover:text-red-400" />
+                    </button>
                   )}
-                </button>
+                </div>
               </div>
             );
           })}
