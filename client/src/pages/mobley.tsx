@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState } from "livekit-client";
+import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
 import { useToast } from "@/hooks/use-toast";
 
 type TalkMode = 'ptt' | 'auto';
@@ -389,16 +389,37 @@ export default function Mobley() {
       // Use the server-returned identity for consistency
       const actualIdentity = serverIdentity || identity;
 
-      // Create and connect to the room
+      // Create and connect to the room with audio-optimized settings
       const newRoom = new Room({
         adaptiveStream: true,
         dynacast: true,
+        // Disable video entirely for audio-only conferencing
+        videoCaptureDefaults: false,
+        // Optimized audio capture settings for voice
         audioCaptureDefaults: {
           echoCancellation,
           noiseSuppression,
           autoGainControl,
-          deviceId: selectedAudioDevice || undefined
-        }
+          deviceId: selectedAudioDevice || undefined,
+          // Mono channel is optimal for voice (reduces bandwidth, no benefit from stereo for speech)
+          channelCount: 1,
+          // 48kHz sample rate for best Opus codec quality
+          sampleRate: 48000,
+          // Optimize for speech rather than music
+          sampleSize: 16,
+        },
+        // Audio publish defaults for optimal voice quality
+        publishDefaults: {
+          // Use Opus codec with optimal settings for voice
+          audioPreset: AudioPresets.speech,
+          // Disable video publishing
+          videoCodec: undefined,
+          simulcast: false,
+          // DTX (Discontinuous Transmission) saves bandwidth during silence
+          dtx: true,
+          // RED (Redundant Encoding) for better packet loss recovery
+          red: true,
+        },
       });
 
       // Set up event listeners

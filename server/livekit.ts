@@ -5,7 +5,7 @@
  * Uses environment variables for API credentials.
  */
 
-import { AccessToken, RoomServiceClient } from 'livekit-server-sdk';
+import { AccessToken, RoomServiceClient, TrackSource } from 'livekit-server-sdk';
 
 const LIVEKIT_URL = process.env.LIVEKIT_URL || 'wss://banter-4d7r2g6h.livekit.cloud';
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY;
@@ -58,12 +58,16 @@ export async function generateToken(
     ttl: '6h' // Token valid for 6 hours
   });
   
+  // Audio-only permissions for optimized voice conferencing
+  // No video publish/subscribe reduces bandwidth and latency
   at.addGrant({
     room: roomName,
     roomJoin: true,
     canPublish: options.canPublish !== false,
     canSubscribe: options.canSubscribe !== false,
     canPublishData: options.canPublishData !== false,
+    // Audio-only: disable video sources
+    canPublishSources: [TrackSource.MICROPHONE], // Only allow microphone, no camera/screen
   });
   
   return await at.toJwt();
