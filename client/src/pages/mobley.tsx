@@ -1520,7 +1520,7 @@ export default function Mobley() {
                   data-testid="button-ptt"
                 >
                   {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {isMuted ? 'Hold to Talk' : 'Live'}
+                  {isMuted ? 'Hold' : 'Live'}
                 </button>
               ) : talkMode === 'always' ? (
                 <div
@@ -1528,7 +1528,7 @@ export default function Mobley() {
                   data-testid="status-always-on"
                 >
                   <Radio className="w-5 h-5" />
-                  Always On
+                  On
                 </div>
               ) : (
                 <button
@@ -1676,7 +1676,7 @@ export default function Mobley() {
                   }`}
                 >
                   <Mic className={`w-5 h-5 ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-slate-400'}`} />
-                  <span className={`text-xs font-medium ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-white'}`}>Hold to Talk</span>
+                  <span className={`text-xs font-medium ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-white'}`}>Hold</span>
                 </button>
                 <button
                   onClick={() => changeTalkMode('auto')}
@@ -1687,7 +1687,7 @@ export default function Mobley() {
                   }`}
                 >
                   <Volume2 className={`w-5 h-5 ${talkMode === 'auto' ? 'text-emerald-400' : 'text-slate-400'}`} />
-                  <span className={`text-xs font-medium ${talkMode === 'auto' ? 'text-emerald-400' : 'text-white'}`}>Toggle</span>
+                  <span className={`text-xs font-medium ${talkMode === 'auto' ? 'text-emerald-400' : 'text-white'}`}>Tap</span>
                 </button>
                 <button
                   onClick={() => changeTalkMode('always')}
@@ -1698,7 +1698,7 @@ export default function Mobley() {
                   }`}
                 >
                   <Radio className={`w-5 h-5 ${talkMode === 'always' ? 'text-emerald-400' : 'text-slate-400'}`} />
-                  <span className={`text-xs font-medium ${talkMode === 'always' ? 'text-emerald-400' : 'text-white'}`}>Always On</span>
+                  <span className={`text-xs font-medium ${talkMode === 'always' ? 'text-emerald-400' : 'text-white'}`}>On</span>
                 </button>
               </div>
             </div>
