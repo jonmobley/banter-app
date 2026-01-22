@@ -393,8 +393,6 @@ export default function Mobley() {
       const newRoom = new Room({
         adaptiveStream: true,
         dynacast: true,
-        // Disable video entirely for audio-only conferencing
-        videoCaptureDefaults: false,
         // Optimized audio capture settings for voice
         audioCaptureDefaults: {
           echoCancellation,
@@ -410,8 +408,8 @@ export default function Mobley() {
         },
         // Audio publish defaults for optimal voice quality
         publishDefaults: {
-          // Use Opus codec with optimal settings for voice
-          audioPreset: AudioPresets.speech,
+          // Custom audio preset: 32 kbps - recommended for walkie-talkie apps (don't go lower than 24kbps)
+          audioPreset: { maxBitrate: 32000 },
           // Disable video publishing
           videoCodec: undefined,
           simulcast: false,
