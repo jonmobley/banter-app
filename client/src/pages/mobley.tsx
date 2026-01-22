@@ -102,43 +102,45 @@ export default function Mobley() {
     return audioContextRef.current;
   }, []);
   
-  // Play chirp sound (synthetic beep using Web Audio API)
+  // Preload chirp audio for instant playback
+  const chirpAudioRef = useRef<HTMLAudioElement | null>(null);
+  
+  useEffect(() => {
+    // Preload the chirp sound
+    const audio = new Audio('/assets/audio/chirp.mp3');
+    audio.preload = 'auto';
+    audio.volume = 0.5;
+    chirpAudioRef.current = audio;
+    
+    return () => {
+      if (chirpAudioRef.current) {
+        chirpAudioRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Play chirp sound using preloaded audio file
   const playChirp = useCallback((type: 'start' | 'end'): Promise<void> => {
     return new Promise((resolve) => {
       try {
-        const ctx = getAudioContext();
-        const oscillator = ctx.createOscillator();
-        const gainNode = ctx.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(ctx.destination);
-        
-        // Different frequencies for start/end chirps
-        if (type === 'start') {
-          // Rising tone for "talk permit"
-          oscillator.frequency.setValueAtTime(800, ctx.currentTime);
-          oscillator.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.15);
-          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-          gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.15);
+        if (chirpAudioRef.current) {
+          // Clone the audio for overlapping plays
+          const audio = chirpAudioRef.current.cloneNode() as HTMLAudioElement;
+          audio.volume = 0.5;
+          audio.currentTime = 0;
+          audio.play().catch(() => {});
+          
+          // Resolve after chirp with buffer time for network wake-up
+          setTimeout(resolve, type === 'start' ? 200 : 100);
         } else {
-          // Falling tone for "talk end"
-          oscillator.frequency.setValueAtTime(1200, ctx.currentTime);
-          oscillator.frequency.linearRampToValueAtTime(600, ctx.currentTime + 0.1);
-          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-          gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
+          resolve();
         }
-        
-        oscillator.start(ctx.currentTime);
-        oscillator.stop(ctx.currentTime + (type === 'start' ? 0.2 : 0.15));
-        
-        // Resolve after chirp completes (includes buffer time for network)
-        setTimeout(resolve, type === 'start' ? 200 : 100);
       } catch (err) {
         console.error('Failed to play chirp:', err);
-        resolve(); // Don't block on error
+        resolve();
       }
     });
-  }, [getAudioContext]);
+  }, []);
   
   // Mute/unmute all remote audio elements (for half-duplex mode)
   const setRemoteAudioMuted = useCallback((muted: boolean) => {
