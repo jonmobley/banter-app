@@ -1321,6 +1321,22 @@ export default function Mobley() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {canShowControls && !isMyParticipant(p.identity) && (
+                    <button
+                      onClick={() => {
+                        if (!adminPin) {
+                          setShowPinModal(true);
+                        } else {
+                          kickParticipant.mutate(p.identity);
+                        }
+                      }}
+                      className="p-1 rounded-md hover:bg-red-500/30 transition-colors"
+                      title="Remove from call"
+                      data-testid={`button-kick-${i}`}
+                    >
+                      <X className="w-3.5 h-3.5 text-slate-500 hover:text-red-400" />
+                    </button>
+                  )}
                   {/* Status badge - Speaking replaces Muted/Live when active */}
                   {speakingState[p.identity] ? (
                     <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/20 rounded-full animate-pulse">
@@ -1345,22 +1361,6 @@ export default function Mobley() {
                         </>
                       )}
                     </div>
-                  )}
-                  {canShowControls && !isMyParticipant(p.identity) && (
-                    <button
-                      onClick={() => {
-                        if (!adminPin) {
-                          setShowPinModal(true);
-                        } else {
-                          kickParticipant.mutate(p.identity);
-                        }
-                      }}
-                      className="p-2 rounded-lg bg-slate-700/50 hover:bg-red-500/30 transition-colors"
-                      title="Remove from call"
-                      data-testid={`button-kick-${i}`}
-                    >
-                      <X className="w-5 h-5 text-slate-400 hover:text-red-400" />
-                    </button>
                   )}
                 </div>
               </div>
