@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
 import { useToast } from "@/hooks/use-toast";
 
-type TalkMode = 'ptt' | 'auto';
+type TalkMode = 'ptt' | 'auto' | 'always';
 
 interface Participant {
   identity: string;
@@ -191,10 +191,10 @@ export default function Mobley() {
     return saved !== null ? saved === 'true' : true;
   });
 
-  // Talk mode: PTT (push-to-talk) or Auto
+  // Talk mode: PTT (push-to-talk), Auto (toggle), or Always On
   const [talkMode, setTalkMode] = useState<TalkMode>(() => {
     const saved = localStorage.getItem('banter_talk_mode');
-    return (saved === 'auto' || saved === 'ptt') ? saved : 'ptt';
+    return (saved === 'auto' || saved === 'ptt' || saved === 'always') ? saved : 'ptt';
   });
 
   // Phone verification state
@@ -696,7 +696,7 @@ export default function Mobley() {
     setTalkMode(mode);
     localStorage.setItem('banter_talk_mode', mode);
     
-    if (mode === 'auto' && room?.localParticipant) {
+    if ((mode === 'auto' || mode === 'always') && room?.localParticipant) {
       await room.localParticipant.setMicrophoneEnabled(true);
       setIsMuted(false);
     }
@@ -1522,6 +1522,14 @@ export default function Mobley() {
                   {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
                   {isMuted ? 'Hold to Talk' : 'Live'}
                 </button>
+              ) : talkMode === 'always' ? (
+                <div
+                  className="flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse"
+                  data-testid="status-always-on"
+                >
+                  <Radio className="w-5 h-5" />
+                  Always On
+                </div>
               ) : (
                 <button
                   onClick={toggleMute}
@@ -1661,25 +1669,36 @@ export default function Mobley() {
               <div className="flex gap-2">
                 <button
                   onClick={() => changeTalkMode('ptt')}
-                  className={`flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-colors ${
+                  className={`flex-1 flex flex-col items-center gap-1 px-3 py-3 rounded-xl transition-colors ${
                     talkMode === 'ptt'
                       ? 'bg-emerald-500/20 border-2 border-emerald-500'
                       : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
                   }`}
                 >
                   <Mic className={`w-5 h-5 ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-slate-400'}`} />
-                  <span className={`text-sm font-medium ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-white'}`}>Hold to Talk</span>
+                  <span className={`text-xs font-medium ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-white'}`}>Hold to Talk</span>
                 </button>
                 <button
                   onClick={() => changeTalkMode('auto')}
-                  className={`flex-1 flex flex-col items-center gap-1 px-4 py-3 rounded-xl transition-colors ${
+                  className={`flex-1 flex flex-col items-center gap-1 px-3 py-3 rounded-xl transition-colors ${
                     talkMode === 'auto'
                       ? 'bg-emerald-500/20 border-2 border-emerald-500'
                       : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
                   }`}
                 >
                   <Volume2 className={`w-5 h-5 ${talkMode === 'auto' ? 'text-emerald-400' : 'text-slate-400'}`} />
-                  <span className={`text-sm font-medium ${talkMode === 'auto' ? 'text-emerald-400' : 'text-white'}`}>Toggle</span>
+                  <span className={`text-xs font-medium ${talkMode === 'auto' ? 'text-emerald-400' : 'text-white'}`}>Toggle</span>
+                </button>
+                <button
+                  onClick={() => changeTalkMode('always')}
+                  className={`flex-1 flex flex-col items-center gap-1 px-3 py-3 rounded-xl transition-colors ${
+                    talkMode === 'always'
+                      ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                      : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
+                  }`}
+                >
+                  <Radio className={`w-5 h-5 ${talkMode === 'always' ? 'text-emerald-400' : 'text-slate-400'}`} />
+                  <span className={`text-xs font-medium ${talkMode === 'always' ? 'text-emerald-400' : 'text-white'}`}>Always On</span>
                 </button>
               </div>
             </div>
