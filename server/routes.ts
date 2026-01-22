@@ -1045,18 +1045,33 @@ export async function registerRoutes(
         // Continue without role check
       }
       
-      const token = await generateToken(stableIdentity, DEFAULT_ROOM_NAME, {
+      // Check if user is assigned to a channel
+      let roomName = DEFAULT_ROOM_NAME;
+      let channelNumber: number | null = null;
+      try {
+        const channel = await storage.getParticipantChannel(stableIdentity);
+        if (channel) {
+          roomName = `banter-channel-${channel.number}`;
+          channelNumber = channel.number;
+          log(`📺 User ${stableIdentity} assigned to channel ${channel.number} (${channel.name})`, "livekit");
+        }
+      } catch (error) {
+        // Continue with default room
+      }
+      
+      const token = await generateToken(stableIdentity, roomName, {
         canPublish,
         canSubscribe: true,
         name: name || identity
       });
       
-      log(`🎫 Generated LiveKit token for ${stableIdentity} (name: ${name || identity})`, "livekit");
+      log(`🎫 Generated LiveKit token for ${stableIdentity} (name: ${name || identity}) in room ${roomName}`, "livekit");
       
       res.json({ 
         token,
         identity: stableIdentity,
-        roomName: DEFAULT_ROOM_NAME,
+        roomName,
+        channelNumber,
         url: getLiveKitUrl()
       });
     } catch (error: any) {
