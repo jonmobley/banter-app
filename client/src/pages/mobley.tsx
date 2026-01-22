@@ -1201,7 +1201,14 @@ export default function Mobley() {
                 </div>
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => canShowControls && toggleParticipantMute.mutate({ identity: p.identity, muted: !p.muted })}
+                    onClick={() => {
+                      if (!canShowControls) return;
+                      if (!adminPin) {
+                        setShowPinModal(true);
+                      } else {
+                        toggleParticipantMute.mutate({ identity: p.identity, muted: !p.muted });
+                      }
+                    }}
                     className={`p-2 rounded-lg transition-colors ${
                       p.muted 
                         ? 'bg-red-500/20 hover:bg-red-500/30' 
@@ -1217,7 +1224,13 @@ export default function Mobley() {
                   </button>
                   {canShowControls && !isMyParticipant(p.identity) && (
                     <button
-                      onClick={() => kickParticipant.mutate(p.identity)}
+                      onClick={() => {
+                        if (!adminPin) {
+                          setShowPinModal(true);
+                        } else {
+                          kickParticipant.mutate(p.identity);
+                        }
+                      }}
                       className="p-2 rounded-lg bg-slate-700/50 hover:bg-red-500/30 transition-colors"
                       title="Remove from call"
                       data-testid={`button-kick-${i}`}
