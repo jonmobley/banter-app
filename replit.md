@@ -165,3 +165,21 @@ The application uses LiveKit for real-time voice conferencing:
 - Fixed participant tracking to use actual track mute state instead of permissions
 - Note: Phone calling features removed - LiveKit is web-only
 - Twilio SMS restored for authentication magic codes (phone verification)
+
+### January 2026 - Audio Quality & Walkie-Talkie Enhancements
+- Optimized audio settings: Mono channel, 48kHz sample rate, 32kbps bitrate (Opus codec)
+- Added DTX (Discontinuous Transmission) for bandwidth savings during silence
+- Added RED (Redundant Encoding) for better packet loss recovery
+- Token permissions now restrict to microphone-only (no video)
+- Implemented half-duplex mode: incoming audio muted when PTT pressed (prevents echo)
+- Added chirp sounds on PTT start/end using Web Audio API (fixes "first word cutoff" issue)
+- iOS Safari audio unlock on first user interaction
+- Updated PTT button to use pointer events for better mobile support
+
+### January 2026 - Capacitor Native App Support
+- Added Capacitor for building native iOS/Android apps
+- Created custom `capacitor-pushtotalk` plugin scaffold for Apple's PushToTalk framework (iOS 16+)
+- Native iOS structure in `ios/` directory
+- Native Android structure in `android/` directory
+- See `NATIVE_BUILD.md` for build instructions
+- Hardware button support (EarPods center button) requires native build + Apple approval
