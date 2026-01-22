@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -162,3 +162,34 @@ export const insertGroupMemberSchema = createInsertSchema(groupMembers).pick({
 
 export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
 export type GroupMember = typeof groupMembers.$inferSelect;
+
+// Channels (for splitting participants into separate audio rooms)
+export const channels = pgTable("channels", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  number: integer("number").notNull(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertChannelSchema = createInsertSchema(channels).pick({
+  number: true,
+  name: true,
+});
+
+export type InsertChannel = z.infer<typeof insertChannelSchema>;
+export type Channel = typeof channels.$inferSelect;
+
+// Channel Assignments (which participant is in which channel)
+export const channelAssignments = pgTable("channel_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  channelId: varchar("channel_id").notNull(),
+  participantIdentity: text("participant_identity").notNull(), // LiveKit identity
+});
+
+export const insertChannelAssignmentSchema = createInsertSchema(channelAssignments).pick({
+  channelId: true,
+  participantIdentity: true,
+});
+
+export type InsertChannelAssignment = z.infer<typeof insertChannelAssignmentSchema>;
+export type ChannelAssignment = typeof channelAssignments.$inferSelect;

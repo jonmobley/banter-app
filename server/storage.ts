@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers } from "@shared/schema";
+import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, gt, lt, lte, sql } from "drizzle-orm";
@@ -71,6 +71,17 @@ export interface IStorage {
   addGroupMember(groupId: string, participantId: string): Promise<GroupMember>;
   removeGroupMember(groupId: string, participantId: string): Promise<void>;
   getGroupsWithMembers(): Promise<(Group & { memberIds: string[] })[]>;
+  
+  // Channels
+  getChannels(): Promise<Channel[]>;
+  getChannel(id: string): Promise<Channel | undefined>;
+  createChannel(channel: InsertChannel): Promise<Channel>;
+  updateChannel(id: string, number: number, name: string): Promise<Channel | undefined>;
+  deleteChannel(id: string): Promise<void>;
+  getChannelAssignments(): Promise<ChannelAssignment[]>;
+  assignToChannel(channelId: string, participantIdentity: string): Promise<ChannelAssignment>;
+  removeFromChannel(participantIdentity: string): Promise<void>;
+  getParticipantChannel(participantIdentity: string): Promise<Channel | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -261,6 +272,54 @@ export class DatabaseStorage implements IStorage {
       ...group,
       memberIds: allMembers.filter(m => m.groupId === group.id).map(m => m.participantId)
     }));
+  }
+
+  // Channel methods
+  async getChannels(): Promise<Channel[]> {
+    return await db.select().from(channels).orderBy(channels.number);
+  }
+
+  async getChannel(id: string): Promise<Channel | undefined> {
+    const [channel] = await db.select().from(channels).where(eq(channels.id, id));
+    return channel;
+  }
+
+  async createChannel(channel: InsertChannel): Promise<Channel> {
+    const [newChannel] = await db.insert(channels).values(channel).returning();
+    return newChannel;
+  }
+
+  async updateChannel(id: string, number: number, name: string): Promise<Channel | undefined> {
+    const [updated] = await db.update(channels).set({ number, name }).where(eq(channels.id, id)).returning();
+    return updated;
+  }
+
+  async deleteChannel(id: string): Promise<void> {
+    // Remove all assignments for this channel first
+    await db.delete(channelAssignments).where(eq(channelAssignments.channelId, id));
+    await db.delete(channels).where(eq(channels.id, id));
+  }
+
+  async getChannelAssignments(): Promise<ChannelAssignment[]> {
+    return await db.select().from(channelAssignments);
+  }
+
+  async assignToChannel(channelId: string, participantIdentity: string): Promise<ChannelAssignment> {
+    // Remove any existing assignment first
+    await db.delete(channelAssignments).where(eq(channelAssignments.participantIdentity, participantIdentity));
+    // Create new assignment
+    const [assignment] = await db.insert(channelAssignments).values({ channelId, participantIdentity }).returning();
+    return assignment;
+  }
+
+  async removeFromChannel(participantIdentity: string): Promise<void> {
+    await db.delete(channelAssignments).where(eq(channelAssignments.participantIdentity, participantIdentity));
+  }
+
+  async getParticipantChannel(participantIdentity: string): Promise<Channel | undefined> {
+    const [assignment] = await db.select().from(channelAssignments).where(eq(channelAssignments.participantIdentity, participantIdentity));
+    if (!assignment) return undefined;
+    return this.getChannel(assignment.channelId);
   }
 }
 
