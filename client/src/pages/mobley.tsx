@@ -65,7 +65,9 @@ export default function Mobley() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isAdmin, setIsAdmin] = useState(true);
-  const [adminPin, setAdminPin] = useState("");
+  const [adminPin, setAdminPin] = useState(() => {
+    return localStorage.getItem('banter_admin_pin') || '';
+  });
   const [showPinModal, setShowPinModal] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [pinError, setPinError] = useState(false);
