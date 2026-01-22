@@ -1265,7 +1265,7 @@ export default function Mobley() {
       </header>
 
       <div className="flex-1 overflow-auto px-4 pb-48">
-        <div className="space-y-2 mt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
           {participants.map((p, i) => {
             const isSpeaking = speakingState[p.identity] || false;
             const role = getParticipantRole(p.identity);
@@ -1301,43 +1301,49 @@ export default function Mobley() {
             return (
               <div 
                 key={p.identity} 
-                className={`group flex items-center gap-3 rounded-lg px-4 py-3 transition-colors duration-200 ${getCardStyle()}`}
+                className={`group relative flex flex-col items-center rounded-xl p-4 transition-colors duration-200 ${getCardStyle()}`}
                 data-testid={`participant-${i}`}
               >
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-200 ${getAvatarStyle()}`}>
-                  <span className={`text-base font-medium ${getTextColor()}`}>
+                {/* Kick button - top right corner */}
+                {canShowControls && !isMyParticipant(p.identity) && (
+                  <button
+                    onClick={() => {
+                      if (!adminPin) {
+                        setShowPinModal(true);
+                      } else {
+                        kickParticipant.mutate(p.identity);
+                      }
+                    }}
+                    className="absolute top-2 right-2 p-1 rounded-md hover:bg-red-500/30 transition-all sm:opacity-0 sm:group-hover:opacity-100"
+                    title="Remove from call"
+                    data-testid={`button-kick-${i}`}
+                  >
+                    <X className="w-3.5 h-3.5 text-slate-500 hover:text-red-400" />
+                  </button>
+                )}
+                
+                {/* Avatar */}
+                <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors duration-200 ${getAvatarStyle()} ${isSpeaking ? 'animate-pulse' : ''}`}>
+                  <span className={`text-xl font-medium ${getTextColor()}`}>
                     {p.name ? p.name.charAt(0).toUpperCase() : '?'}
                   </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium truncate">{p.name || p.identity}</p>
-                    {isMyParticipant(p.identity) && (
-                      <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">You</span>
-                    )}
-                    {role === 'host' && (
-                      <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">Host</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {canShowControls && !isMyParticipant(p.identity) && (
-                    <button
-                      onClick={() => {
-                        if (!adminPin) {
-                          setShowPinModal(true);
-                        } else {
-                          kickParticipant.mutate(p.identity);
-                        }
-                      }}
-                      className="p-1 rounded-md hover:bg-red-500/30 transition-all sm:opacity-0 sm:group-hover:opacity-100"
-                      title="Remove from call"
-                      data-testid={`button-kick-${i}`}
-                    >
-                      <X className="w-3.5 h-3.5 text-slate-500 hover:text-red-400" />
-                    </button>
+                
+                {/* Name */}
+                <p className="font-medium text-sm mt-2 text-center truncate w-full">{p.name || p.identity}</p>
+                
+                {/* Badges */}
+                <div className="flex items-center gap-1 mt-1">
+                  {isMyParticipant(p.identity) && (
+                    <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">You</span>
                   )}
-                  {/* Status badge - Speaking replaces Muted/Live when active */}
+                  {role === 'host' && (
+                    <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">Host</span>
+                  )}
+                </div>
+                
+                {/* Status */}
+                <div className="mt-2">
                   {speakingState[p.identity] ? (
                     <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/20 rounded-full animate-pulse">
                       <Radio className="w-3 h-3 text-emerald-400" />
@@ -1392,31 +1398,18 @@ export default function Mobley() {
               return (
                 <div 
                   key={ep.id} 
-                  className={`flex items-center gap-3 rounded-lg px-4 py-3 ${getExpectedCardStyle()}`}
+                  className={`group relative flex flex-col items-center rounded-xl p-4 ${getExpectedCardStyle()}`}
                   data-testid={`expected-${i}`}
                 >
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${getExpectedAvatarStyle()}`}>
-                    <span className={`text-base font-medium ${getExpectedTextColor()}`}>
-                      {ep.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className={`font-medium truncate ${getExpectedTextColor()}`}>{ep.name}</p>
-                      {ep.role === 'host' && (
-                        <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">Host</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-500 truncate">{formatPhone(ep.phone)}</p>
-                  </div>
+                  {/* Menu button - top right corner */}
                   {canShowControls && (
-                    <div className="relative" ref={openDropdown === ep.id ? dropdownRef : undefined}>
+                    <div className="absolute top-2 right-2" ref={openDropdown === ep.id ? dropdownRef : undefined}>
                       <button
                         onClick={(e) => handleOpenDropdown(ep.id, e)}
-                        className="p-2 rounded-lg bg-slate-600/30 hover:bg-slate-600/50 transition-colors"
+                        className="p-1 rounded-md hover:bg-slate-600/50 transition-all sm:opacity-0 sm:group-hover:opacity-100"
                         data-testid={`button-menu-${i}`}
                       >
-                        <MoreVertical className="w-5 h-5 text-slate-400" />
+                        <MoreVertical className="w-4 h-4 text-slate-400" />
                       </button>
                       {openDropdown === ep.id && (
                         <div 
@@ -1478,6 +1471,30 @@ export default function Mobley() {
                       )}
                     </div>
                   )}
+                  
+                  {/* Avatar */}
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center ${getExpectedAvatarStyle()}`}>
+                    <span className={`text-xl font-medium ${getExpectedTextColor()}`}>
+                      {ep.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  
+                  {/* Name */}
+                  <p className={`font-medium text-sm mt-2 text-center truncate w-full ${getExpectedTextColor()}`}>{ep.name}</p>
+                  
+                  {/* Badges */}
+                  <div className="flex items-center gap-1 mt-1">
+                    {ep.role === 'host' && (
+                      <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">Host</span>
+                    )}
+                  </div>
+                  
+                  {/* Status */}
+                  <div className="mt-2">
+                    <div className="flex items-center gap-1 px-2 py-1 bg-slate-600/30 rounded-full">
+                      <span className="text-xs text-slate-500">Not joined</span>
+                    </div>
+                  </div>
                 </div>
               );
             })}
