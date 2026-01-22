@@ -72,10 +72,8 @@ function verifyAuthToken(token: string): string | null {
       return null;
     }
     
-    const data = `${phone}:${expiryStr}`;
-    const expectedSignature = crypto.createHmac('sha256', getAuthSecret()).update(data).digest('hex');
-    
-    if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+    const expectedSignature = crypto.createHmac('sha256', getAuthSecret()).update(`${phone}:${expiryStr}`).digest('hex');
+    if (signature !== expectedSignature) {
       log(`Invalid auth token signature for ${phone}`, "auth");
       return null;
     }
@@ -84,6 +82,25 @@ function verifyAuthToken(token: string): string | null {
   } catch {
     return null;
   }
+}
+
+function isAdminPhone(phone: string | null): boolean {
+  if (!phone) return false;
+  const adminPhone = process.env.ADMIN_PHONE;
+  if (!adminPhone) return false;
+  
+  const normalizedAdmin = adminPhone.replace(/\D/g, '');
+  const normalizedUser = phone.replace(/\D/g, '');
+  
+  return normalizedAdmin === normalizedUser || 
+         normalizedAdmin.endsWith(normalizedUser) || 
+         normalizedUser.endsWith(normalizedAdmin);
+}
+
+function verifyAdminAuth(authToken: string | null): boolean {
+  if (!authToken) return false;
+  const phone = verifyAuthToken(authToken);
+  return isAdminPhone(phone);
 }
 
 // Track speaking state for each participant
@@ -222,10 +239,9 @@ export async function registerRoutes(
    */
   app.post("/api/beta-requests", async (req, res) => {
     try {
-      const { pin } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-
-      if (!adminPin || pin !== adminPin) {
+      const { authToken } = req.body;
+      
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
@@ -399,23 +415,21 @@ export async function registerRoutes(
 
   /**
    * POST /api/admin/verify
-   * Verifies the admin PIN code.
+   * Verifies if the current user is an admin based on their phone number.
    */
   app.post("/api/admin/verify", (req, res) => {
-    const { pin } = req.body;
-    const adminPin = process.env.ADMIN_PIN;
+    const { authToken } = req.body;
     
-    if (!adminPin) {
-      log("ADMIN_PIN not configured", "api");
-      return res.status(500).json({ error: "Admin PIN not configured" });
+    if (!process.env.ADMIN_PHONE) {
+      log("ADMIN_PHONE not configured", "api");
+      return res.status(500).json({ error: "Admin not configured" });
     }
     
-    if (pin === adminPin) {
-      log("Admin PIN verified successfully", "api");
-      return res.json({ success: true });
+    if (verifyAdminAuth(authToken)) {
+      log("Admin verified successfully", "api");
+      return res.json({ success: true, isAdmin: true });
     } else {
-      log("Invalid admin PIN attempt", "api");
-      return res.status(401).json({ error: "Invalid PIN" });
+      return res.json({ success: true, isAdmin: false });
     }
   });
 
@@ -425,10 +439,8 @@ export async function registerRoutes(
    */
   app.post("/api/admin/mute", async (req, res) => {
     try {
-      const { pin, identity, muted } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, identity, muted } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -453,10 +465,8 @@ export async function registerRoutes(
    */
   app.post("/api/admin/kick", async (req, res) => {
     try {
-      const { pin, identity } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, identity } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -495,10 +505,8 @@ export async function registerRoutes(
    */
   app.post("/api/expected", async (req, res) => {
     try {
-      const { pin, name, phone } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, name, phone } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -519,10 +527,8 @@ export async function registerRoutes(
    */
   app.delete("/api/expected/:id", async (req, res) => {
     try {
-      const { pin } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -540,10 +546,8 @@ export async function registerRoutes(
    */
   app.patch("/api/expected/:id", async (req, res) => {
     try {
-      const { pin, name, phone, email, role } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, name, phone, email, role } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -591,10 +595,8 @@ export async function registerRoutes(
    */
   app.post("/api/groups", async (req, res) => {
     try {
-      const { pin, name } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, name } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -616,10 +618,8 @@ export async function registerRoutes(
    */
   app.patch("/api/groups/:id", async (req, res) => {
     try {
-      const { pin, name } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, name } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -647,10 +647,8 @@ export async function registerRoutes(
    */
   app.delete("/api/groups/:id", async (req, res) => {
     try {
-      const { pin } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -668,10 +666,8 @@ export async function registerRoutes(
    */
   app.post("/api/groups/:id/members", async (req, res) => {
     try {
-      const { pin, participantId } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, participantId } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -696,10 +692,8 @@ export async function registerRoutes(
    */
   app.delete("/api/groups/:id/members/:participantId", async (req, res) => {
     try {
-      const { pin } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -745,10 +739,8 @@ export async function registerRoutes(
    */
   app.post("/api/channels", async (req, res) => {
     try {
-      const { pin, number, name } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, number, name } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -770,10 +762,8 @@ export async function registerRoutes(
    */
   app.patch("/api/channels/:id", async (req, res) => {
     try {
-      const { pin, number, name } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, number, name } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -802,10 +792,8 @@ export async function registerRoutes(
    */
   app.delete("/api/channels/:id", async (req, res) => {
     try {
-      const { pin } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -823,10 +811,8 @@ export async function registerRoutes(
    */
   app.post("/api/channels/:id/assign", async (req, res) => {
     try {
-      const { pin, participantIdentity } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, participantIdentity } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -853,10 +839,8 @@ export async function registerRoutes(
    */
   app.post("/api/channels/unassign", async (req, res) => {
     try {
-      const { pin, participantIdentity } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, participantIdentity } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -912,10 +896,8 @@ export async function registerRoutes(
    */
   app.post("/api/banters", async (req, res) => {
     try {
-      const { pin, name, scheduledAt, autoCallEnabled, reminderEnabled, participantIds } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, name, scheduledAt, autoCallEnabled, reminderEnabled, participantIds } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -945,10 +927,8 @@ export async function registerRoutes(
    */
   app.patch("/api/banters/:id", async (req, res) => {
     try {
-      const { pin, name, scheduledAt, autoCallEnabled, reminderEnabled, participantIds, status } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken, name, scheduledAt, autoCallEnabled, reminderEnabled, participantIds, status } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -979,10 +959,8 @@ export async function registerRoutes(
    */
   app.delete("/api/banters/:id", async (req, res) => {
     try {
-      const { pin } = req.body;
-      const adminPin = process.env.ADMIN_PIN;
-      
-      if (!adminPin || pin !== adminPin) {
+      const { authToken } = req.body;
+      if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
       

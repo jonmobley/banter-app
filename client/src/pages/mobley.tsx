@@ -71,14 +71,8 @@ function normalizePhone(phone: string): string {
 export default function Mobley() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [isAdmin, setIsAdmin] = useState(true);
-  const [adminPin, setAdminPin] = useState(() => {
-    return localStorage.getItem('banter_admin_pin') || '';
-  });
-  const [showPinModal, setShowPinModal] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
-  const [pinError, setPinError] = useState(false);
-  const [pinDigits, setPinDigits] = useState(["", "", "", ""]);
   const [callDuration, setCallDuration] = useState(0);
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
   const [speakingState, setSpeakingState] = useState<Record<string, boolean>>({});
@@ -767,36 +761,33 @@ export default function Mobley() {
     }
   }, []);
 
-  // Admin mutations
-  const verifyPin = useMutation({
-    mutationFn: async (pin: string) => {
-      const res = await fetch("/api/admin/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin }),
+  // Check admin status when auth token changes
+  useEffect(() => {
+    if (!authToken) {
+      setIsAdmin(false);
+      return;
+    }
+    
+    fetch("/api/admin/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ authToken }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        setIsAdmin(data.isAdmin === true);
+      })
+      .catch(() => {
+        setIsAdmin(false);
       });
-      if (!res.ok) throw new Error("Invalid PIN");
-      return res.json();
-    },
-    onSuccess: (_, pin) => {
-      setIsAdmin(true);
-      setShowPinModal(false);
-      setPinError(false);
-      localStorage.setItem('banter_admin_pin', pin);
-      setPinDigits(["", "", "", ""]);
-    },
-    onError: () => {
-      setPinError(true);
-      setPinDigits(["", "", "", ""]);
-    },
-  });
+  }, [authToken]);
 
   const toggleParticipantMute = useMutation({
     mutationFn: async ({ identity, muted }: { identity: string; muted: boolean }) => {
       const res = await fetch("/api/admin/mute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, identity, muted }),
+        body: JSON.stringify({ authToken, identity, muted }),
       });
       if (!res.ok) throw new Error("Failed to mute");
       return res.json();
@@ -814,7 +805,7 @@ export default function Mobley() {
       const res = await fetch("/api/admin/kick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, identity }),
+        body: JSON.stringify({ authToken, identity }),
       });
       if (!res.ok) throw new Error("Failed to kick");
       return res.json();
@@ -833,7 +824,7 @@ export default function Mobley() {
       const res = await fetch(`/api/expected/${id}`, { 
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin }),
+        body: JSON.stringify({ authToken }),
       });
       if (!res.ok) throw new Error("Failed to remove");
       return res.json();
@@ -852,7 +843,7 @@ export default function Mobley() {
       const res = await fetch(`/api/expected/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, role }),
+        body: JSON.stringify({ authToken, role }),
       });
       if (!res.ok) throw new Error("Failed to update role");
       return res.json();
@@ -872,7 +863,7 @@ export default function Mobley() {
       const res = await fetch("/api/channels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, number, name }),
+        body: JSON.stringify({ authToken, number, name }),
       });
       if (!res.ok) throw new Error("Failed to create channel");
       return res.json();
@@ -893,7 +884,7 @@ export default function Mobley() {
       const res = await fetch(`/api/channels/${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin }),
+        body: JSON.stringify({ authToken }),
       });
       if (!res.ok) throw new Error("Failed to delete channel");
       return res.json();
@@ -912,7 +903,7 @@ export default function Mobley() {
       const res = await fetch(`/api/channels/${channelId}/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, participantIdentity }),
+        body: JSON.stringify({ authToken, participantIdentity }),
       });
       if (!res.ok) throw new Error("Failed to assign to channel");
       return res.json();
@@ -931,7 +922,7 @@ export default function Mobley() {
       const res = await fetch("/api/channels/unassign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, participantIdentity }),
+        body: JSON.stringify({ authToken, participantIdentity }),
       });
       if (!res.ok) throw new Error("Failed to unassign from channel");
       return res.json();
@@ -1001,7 +992,7 @@ export default function Mobley() {
       const res = await fetch("/api/expected", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, name: newExpectedName, phone: newExpectedPhone }),
+        body: JSON.stringify({ authToken, name: newExpectedName, phone: newExpectedPhone }),
       });
       if (!res.ok) throw new Error("Failed to add");
       return res.json();
@@ -1031,7 +1022,7 @@ export default function Mobley() {
       const res = await fetch(`/api/expected/${editingParticipant.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, name: editName, phone: editPhone, email: editEmail || null }),
+        body: JSON.stringify({ authToken, name: editName, phone: editPhone, email: editEmail || null }),
       });
       if (!res.ok) throw new Error("Failed to update");
       return res.json();
@@ -1115,32 +1106,6 @@ export default function Mobley() {
     localStorage.removeItem('banter_verified_phone');
     localStorage.removeItem('banter_auth_token');
     toast({ title: "Signed out" });
-  };
-
-  const handlePinDigit = (index: number, value: string) => {
-    if (value.length > 1) return;
-    const newDigits = [...pinDigits];
-    newDigits[index] = value;
-    setPinDigits(newDigits);
-    setPinError(false);
-
-    if (value && index < 3) {
-      const nextInput = document.getElementById(`pin-${index + 1}`);
-      nextInput?.focus();
-    }
-
-    if (newDigits.every(d => d !== "")) {
-      const pin = newDigits.join("");
-      setAdminPin(pin);
-      verifyPin.mutate(pin);
-    }
-  };
-
-  const handlePinKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === "Backspace" && !pinDigits[index] && index > 0) {
-      const prevInput = document.getElementById(`pin-${index - 1}`);
-      prevInput?.focus();
-    }
   };
 
   const handleConfirmDelete = () => {
@@ -1424,13 +1389,7 @@ export default function Mobley() {
                 {/* Kick button - top right corner */}
                 {canShowControls && !isMyParticipant(p.identity) && (
                   <button
-                    onClick={() => {
-                      if (!adminPin) {
-                        setShowPinModal(true);
-                      } else {
-                        kickParticipant.mutate(p.identity);
-                      }
-                    }}
+                    onClick={() => kickParticipant.mutate(p.identity)}
                     className="absolute top-2 right-2 p-1 rounded-md hover:bg-red-500/30 transition-all sm:opacity-0 sm:group-hover:opacity-100"
                     title="Remove from call"
                     data-testid={`button-kick-${i}`}
@@ -1745,40 +1704,6 @@ export default function Mobley() {
       </div>
 
       {/* Modals */}
-      {showPinModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
-          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-            <h2 className="text-xl font-bold text-center mb-2">Admin Access</h2>
-            <p className="text-sm text-slate-400 text-center mb-6">Enter 4-digit PIN</p>
-            <div className="flex justify-center gap-3 mb-6">
-              {pinDigits.map((digit, i) => (
-                <input
-                  key={i}
-                  id={`pin-${i}`}
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={1}
-                  value={digit}
-                  onChange={(e) => handlePinDigit(i, e.target.value.replace(/\D/g, ""))}
-                  onKeyDown={(e) => handlePinKeyDown(i, e)}
-                  className={`w-14 h-14 text-center text-2xl font-bold rounded-lg bg-slate-800 border-2 outline-none transition-colors ${
-                    pinError ? 'border-red-500' : 'border-slate-700 focus:border-emerald-500'
-                  }`}
-                  data-testid={`input-pin-${i}`}
-                />
-              ))}
-            </div>
-            {pinError && <p className="text-red-400 text-sm text-center mb-4">Invalid PIN. Try again.</p>}
-            <button
-              onClick={() => { setShowPinModal(false); setPinDigits(["", "", "", ""]); setPinError(false); }}
-              className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       {showDisconnectConfirm && (
         <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">

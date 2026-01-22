@@ -47,3 +47,6 @@ integrations = ["twilio:1.0.0"]
 [userenv.shared]
 LIVEKIT_URL = "wss://banter-4d7r2g6h.livekit.cloud"
 ADMIN_PIN = "1234"
+ADMIN_PHONE = "+13179891958"
+ADMIN_NAME = "Jon Mobley"
+ADMIN_EMAIL = "jonmobley@gmail.com"
