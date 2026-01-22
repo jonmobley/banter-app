@@ -166,7 +166,7 @@ export type GroupMember = typeof groupMembers.$inferSelect;
 // Channels (for splitting participants into separate audio rooms)
 export const channels = pgTable("channels", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  number: integer("number").notNull(),
+  number: integer("number").notNull().unique(),
   name: text("name").notNull(),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
@@ -183,7 +183,7 @@ export type Channel = typeof channels.$inferSelect;
 export const channelAssignments = pgTable("channel_assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   channelId: varchar("channel_id").notNull(),
-  participantIdentity: text("participant_identity").notNull(), // LiveKit identity
+  participantIdentity: text("participant_identity").notNull().unique(), // LiveKit identity - unique ensures one channel per participant
 });
 
 export const insertChannelAssignmentSchema = createInsertSchema(channelAssignments).pick({

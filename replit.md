@@ -33,7 +33,7 @@ Browser users can choose between two talk modes (accessible via Audio Settings):
 |------|-------------|--------|
 | **Banter** | Always-on single room, 24/7 drop-in | ✅ Implemented |
 | **Banter Scheduled** | Planned call with time, invites, reminders, auto-call | ✅ Implemented |
-| **Banter Channels** | Multi-room walkie-talkie with host controls, monitoring | 🔮 Future |
+| **Banter Channels** | Multi-room walkie-talkie with host controls, monitoring | ✅ Implemented |
 | **Banter Broadcast** | One speaker, unlimited listeners | 🔮 Future |
 
 ### Supporting Concepts
@@ -135,6 +135,16 @@ The application uses LiveKit for real-time voice conferencing:
 - Full shadcn/ui component suite via Radix UI primitives
 
 ## Recent Changes
+
+### January 2026 - Banter Channels Feature
+- Added `channels` and `channel_assignments` tables to database schema with unique constraints
+- Implemented channel CRUD operations in storage layer with participant assignment management
+- Created API endpoints for channel management (all mutations require admin PIN)
+- Updated LiveKit token endpoint to route participants to channel-specific rooms (e.g., `banter-channel-1`)
+- Added channel management modal for admins to create, edit, delete channels and assign participants
+- Channel indicator in header shows current channel when connected
+- Channels button in bottom bar for admins when connected
+- Each channel is a separate LiveKit room, ensuring audio isolation between channels
 
 ### January 2026 - Banter Groups Feature
 - Added `groups` and `group_members` tables to database schema
