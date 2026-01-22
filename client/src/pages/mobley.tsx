@@ -1301,7 +1301,7 @@ export default function Mobley() {
             return (
               <div 
                 key={p.identity} 
-                className={`flex items-center gap-3 rounded-lg px-4 py-3 transition-colors duration-200 ${getCardStyle()}`}
+                className={`group flex items-center gap-3 rounded-lg px-4 py-3 transition-colors duration-200 ${getCardStyle()}`}
                 data-testid={`participant-${i}`}
               >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-200 ${getAvatarStyle()}`}>
@@ -1330,7 +1330,7 @@ export default function Mobley() {
                           kickParticipant.mutate(p.identity);
                         }
                       }}
-                      className="p-1 rounded-md hover:bg-red-500/30 transition-colors"
+                      className="p-1 rounded-md hover:bg-red-500/30 transition-all sm:opacity-0 sm:group-hover:opacity-100"
                       title="Remove from call"
                       data-testid={`button-kick-${i}`}
                     >
