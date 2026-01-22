@@ -714,6 +714,184 @@ export async function registerRoutes(
     }
   });
 
+  // ========== CHANNEL ROUTES ==========
+
+  /**
+   * GET /api/channels
+   * Lists all channels with their assignments.
+   */
+  app.get("/api/channels", async (_req, res) => {
+    try {
+      const allChannels = await storage.getChannels();
+      const allAssignments = await storage.getChannelAssignments();
+      
+      const channelsWithAssignments = allChannels.map(channel => ({
+        ...channel,
+        participants: allAssignments
+          .filter(a => a.channelId === channel.id)
+          .map(a => a.participantIdentity)
+      }));
+      
+      res.json(channelsWithAssignments);
+    } catch (error: any) {
+      log(`Error fetching channels: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to fetch channels" });
+    }
+  });
+
+  /**
+   * POST /api/channels
+   * Creates a new channel. Requires admin PIN.
+   */
+  app.post("/api/channels", async (req, res) => {
+    try {
+      const { pin, number, name } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      if (typeof number !== 'number' || !name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: "Channel number and name are required" });
+      }
+      
+      const channel = await storage.createChannel({ number, name: name.trim() });
+      res.json({ ...channel, participants: [] });
+    } catch (error: any) {
+      log(`Error creating channel: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to create channel" });
+    }
+  });
+
+  /**
+   * PATCH /api/channels/:id
+   * Updates a channel. Requires admin PIN.
+   */
+  app.patch("/api/channels/:id", async (req, res) => {
+    try {
+      const { pin, number, name } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      if (typeof number !== 'number' || !name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: "Channel number and name are required" });
+      }
+      
+      const updated = await storage.updateChannel(req.params.id, number, name.trim());
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Channel not found" });
+      }
+      
+      const assignments = await storage.getChannelAssignments();
+      const participants = assignments.filter(a => a.channelId === req.params.id).map(a => a.participantIdentity);
+      res.json({ ...updated, participants });
+    } catch (error: any) {
+      log(`Error updating channel: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to update channel" });
+    }
+  });
+
+  /**
+   * DELETE /api/channels/:id
+   * Deletes a channel. Requires admin PIN.
+   */
+  app.delete("/api/channels/:id", async (req, res) => {
+    try {
+      const { pin } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      await storage.deleteChannel(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      log(`Error deleting channel: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to delete channel" });
+    }
+  });
+
+  /**
+   * POST /api/channels/:id/assign
+   * Assigns a participant to a channel. Requires admin PIN.
+   */
+  app.post("/api/channels/:id/assign", async (req, res) => {
+    try {
+      const { pin, participantIdentity } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      if (!participantIdentity) {
+        return res.status(400).json({ error: "Participant identity is required" });
+      }
+      
+      await storage.assignToChannel(req.params.id, participantIdentity);
+      
+      const channel = await storage.getChannel(req.params.id);
+      const assignments = await storage.getChannelAssignments();
+      const participants = assignments.filter(a => a.channelId === req.params.id).map(a => a.participantIdentity);
+      
+      res.json({ ...channel, participants });
+    } catch (error: any) {
+      log(`Error assigning to channel: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to assign to channel" });
+    }
+  });
+
+  /**
+   * POST /api/channels/unassign
+   * Removes a participant from any channel. Requires admin PIN.
+   */
+  app.post("/api/channels/unassign", async (req, res) => {
+    try {
+      const { pin, participantIdentity } = req.body;
+      const adminPin = process.env.ADMIN_PIN;
+      
+      if (!adminPin || pin !== adminPin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      if (!participantIdentity) {
+        return res.status(400).json({ error: "Participant identity is required" });
+      }
+      
+      await storage.removeFromChannel(participantIdentity);
+      res.json({ success: true });
+    } catch (error: any) {
+      log(`Error unassigning from channel: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to unassign from channel" });
+    }
+  });
+
+  /**
+   * GET /api/channels/my-channel
+   * Gets the current user's channel assignment.
+   */
+  app.get("/api/channels/my-channel", async (req, res) => {
+    try {
+      const identity = req.query.identity as string;
+      
+      if (!identity) {
+        return res.status(400).json({ error: "Identity is required" });
+      }
+      
+      const channel = await storage.getParticipantChannel(identity);
+      res.json({ channel: channel || null });
+    } catch (error: any) {
+      log(`Error getting participant channel: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to get participant channel" });
+    }
+  });
+
   /**
    * GET /api/banters
    * Lists all scheduled banters.
