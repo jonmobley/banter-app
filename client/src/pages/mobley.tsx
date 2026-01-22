@@ -28,6 +28,13 @@ interface ParticipantsData {
   conferenceActive: boolean;
 }
 
+interface Channel {
+  id: string;
+  number: number;
+  name: string;
+  participants: string[];
+}
+
 function formatPhone(phone: string): string {
   if (!phone || phone === 'Unknown') return 'Unknown';
   const cleaned = phone.replace(/\D/g, '');
@@ -225,6 +232,12 @@ export default function Mobley() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
+  // Channel management state
+  const [showChannelModal, setShowChannelModal] = useState(false);
+  const [currentChannel, setCurrentChannel] = useState<{ id: string; number: number; name: string } | null>(null);
+  const [newChannelNumber, setNewChannelNumber] = useState(1);
+  const [newChannelName, setNewChannelName] = useState('');
+
   // WebSocket connection for real-time updates
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -308,6 +321,16 @@ export default function Mobley() {
       if (!res.ok) throw new Error("Failed to fetch contacts");
       return res.json();
     },
+  });
+
+  const { data: channelsData } = useQuery<Channel[]>({
+    queryKey: ["/api/channels"],
+    queryFn: async () => {
+      const res = await fetch("/api/channels");
+      if (!res.ok) throw new Error("Failed to fetch channels");
+      return res.json();
+    },
+    refetchInterval: 5000,
   });
 
   // Enumerate audio devices
@@ -467,10 +490,18 @@ export default function Mobley() {
         throw new Error(errorData.error || 'Failed to get connection token');
       }
 
-      const { token, url, identity: serverIdentity } = await res.json();
+      const { token, url, identity: serverIdentity, channelNumber, roomName } = await res.json();
       
       // Use the server-returned identity for consistency
       const actualIdentity = serverIdentity || identity;
+      
+      // Track current channel if assigned
+      if (channelNumber) {
+        const assignedChannel = channelsData?.find(c => c.number === channelNumber);
+        setCurrentChannel(assignedChannel ? { id: assignedChannel.id, number: assignedChannel.number, name: assignedChannel.name } : null);
+      } else {
+        setCurrentChannel(null);
+      }
 
       // Create and connect to the room with audio-optimized settings
       const newRoom = new Room({
@@ -614,7 +645,7 @@ export default function Mobley() {
       setConnectionError(error.message || 'Connection failed');
       setConnectionState(ConnectionState.Disconnected);
     }
-  }, [userName, verifiedPhone, expectedData, contactsData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken]);
+  }, [userName, verifiedPhone, expectedData, contactsData, channelsData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken]);
 
   // Auto-connect when authenticated and name is known
   useEffect(() => {
@@ -832,6 +863,85 @@ export default function Mobley() {
     },
     onError: () => {
       toast({ title: "Failed to update role", description: "Please try again.", variant: "destructive" });
+    },
+  });
+
+  // Channel mutations
+  const createChannel = useMutation({
+    mutationFn: async ({ number, name }: { number: number; name: string }) => {
+      const res = await fetch("/api/channels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin, number, name }),
+      });
+      if (!res.ok) throw new Error("Failed to create channel");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/channels"] });
+      toast({ title: "Channel created" });
+      setNewChannelNumber(n => n + 1);
+      setNewChannelName('');
+    },
+    onError: () => {
+      toast({ title: "Failed to create channel", description: "Please try again.", variant: "destructive" });
+    },
+  });
+
+  const deleteChannel = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/channels/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin }),
+      });
+      if (!res.ok) throw new Error("Failed to delete channel");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/channels"] });
+      toast({ title: "Channel deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete channel", description: "Please try again.", variant: "destructive" });
+    },
+  });
+
+  const assignToChannel = useMutation({
+    mutationFn: async ({ channelId, participantIdentity }: { channelId: string; participantIdentity: string }) => {
+      const res = await fetch(`/api/channels/${channelId}/assign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin, participantIdentity }),
+      });
+      if (!res.ok) throw new Error("Failed to assign to channel");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/channels"] });
+      toast({ title: "Participant assigned to channel" });
+    },
+    onError: () => {
+      toast({ title: "Failed to assign participant", description: "Please try again.", variant: "destructive" });
+    },
+  });
+
+  const unassignFromChannel = useMutation({
+    mutationFn: async (participantIdentity: string) => {
+      const res = await fetch("/api/channels/unassign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: adminPin, participantIdentity }),
+      });
+      if (!res.ok) throw new Error("Failed to unassign from channel");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/channels"] });
+      toast({ title: "Participant removed from channel" });
+    },
+    onError: () => {
+      toast({ title: "Failed to remove from channel", description: "Please try again.", variant: "destructive" });
     },
   });
 
@@ -1204,9 +1314,16 @@ export default function Mobley() {
             <Users className="w-5 h-5 text-emerald-400" />
           </div>
           <div>
-            <h1 className="font-semibold">Banter</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-semibold">Banter</h1>
+              {isConnected && currentChannel && (
+                <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full">
+                  CH {currentChannel.number}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-400">
-              {isConnected ? `Connected • ${formatDuration(callDuration)}` : 
+              {isConnected ? `Connected${currentChannel ? ` to ${currentChannel.name}` : ''} • ${formatDuration(callDuration)}` : 
                conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
             </p>
           </div>
@@ -1517,6 +1634,16 @@ export default function Mobley() {
               >
                 <Settings className="w-5 h-5" />
               </button>
+              {canShowControls && (
+                <button
+                  onClick={() => setShowChannelModal(true)}
+                  className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-full transition-all active:scale-95"
+                  data-testid="button-channels"
+                  title="Manage Channels"
+                >
+                  <Radio className="w-5 h-5" />
+                </button>
+              )}
               {talkMode === 'ptt' ? (
                 <button
                   onPointerDown={(e) => {
@@ -1781,6 +1908,123 @@ export default function Mobley() {
             <button
               onClick={() => setShowAudioSettings(false)}
               className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showChannelModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-md max-h-[80vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-center mb-6">Channels</h2>
+            
+            {/* Create new channel */}
+            <div className="mb-6 p-4 bg-slate-800/50 rounded-xl">
+              <p className="text-sm text-slate-400 mb-3">Create New Channel</p>
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="number"
+                  value={newChannelNumber}
+                  onChange={(e) => setNewChannelNumber(parseInt(e.target.value) || 1)}
+                  className="w-16 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-center"
+                  min="1"
+                />
+                <input
+                  type="text"
+                  placeholder="Channel name"
+                  value={newChannelName}
+                  onChange={(e) => setNewChannelName(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  if (newChannelName.trim()) {
+                    createChannel.mutate({ number: newChannelNumber, name: newChannelName.trim() });
+                  }
+                }}
+                disabled={!newChannelName.trim() || createChannel.isPending}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-600 text-white font-medium py-2 rounded-lg transition-colors"
+              >
+                {createChannel.isPending ? 'Creating...' : 'Create Channel'}
+              </button>
+            </div>
+
+            {/* Existing channels */}
+            <div className="space-y-4 mb-6">
+              {channelsData?.map((channel) => (
+                <div key={channel.id} className="p-4 bg-slate-800/50 rounded-xl">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <span className="text-lg font-bold text-amber-400">CH {channel.number}</span>
+                      <span className="ml-2 text-slate-300">{channel.name}</span>
+                    </div>
+                    <button
+                      onClick={() => deleteChannel.mutate(channel.id)}
+                      disabled={deleteChannel.isPending}
+                      className="p-1.5 rounded-md hover:bg-red-500/30 text-slate-400 hover:text-red-400"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  {/* Participants in this channel */}
+                  <div className="mb-3">
+                    <p className="text-xs text-slate-500 mb-2">
+                      {channel.participants.length} participant{channel.participants.length !== 1 ? 's' : ''}
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {channel.participants.map((identity) => {
+                        const name = participantsData?.participants.find(p => p.identity === identity)?.name || identity;
+                        return (
+                          <span
+                            key={identity}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-slate-700 rounded-full text-xs"
+                          >
+                            {name}
+                            <button
+                              onClick={() => unassignFromChannel.mutate(identity)}
+                              className="text-slate-400 hover:text-red-400"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  {/* Add participant dropdown */}
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        assignToChannel.mutate({ channelId: channel.id, participantIdentity: e.target.value });
+                        e.target.value = '';
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-sm"
+                    defaultValue=""
+                  >
+                    <option value="">Add participant...</option>
+                    {participantsData?.participants
+                      .filter(p => !channel.participants.includes(p.identity))
+                      .map(p => (
+                        <option key={p.identity} value={p.identity}>{p.name || p.identity}</option>
+                      ))}
+                  </select>
+                </div>
+              ))}
+              
+              {(!channelsData || channelsData.length === 0) && (
+                <p className="text-slate-400 text-center py-4">No channels created yet</p>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowChannelModal(false)}
+              className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
             >
               Done
             </button>
