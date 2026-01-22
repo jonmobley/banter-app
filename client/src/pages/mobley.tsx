@@ -1200,31 +1200,31 @@ export default function Mobley() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {/* Speaking indicator */}
-                  {speakingState[p.identity] && (
+                  {/* Status badge - Speaking replaces Muted/Live when active */}
+                  {speakingState[p.identity] ? (
                     <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/20 rounded-full animate-pulse">
                       <Radio className="w-3 h-3 text-emerald-400" />
                       <span className="text-xs text-emerald-400">Speaking</span>
                     </div>
+                  ) : (
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${
+                      p.muted 
+                        ? 'bg-slate-600/50' 
+                        : 'bg-emerald-500/20'
+                    }`}>
+                      {p.muted ? (
+                        <>
+                          <MicOff className="w-3 h-3 text-slate-400" />
+                          <span className="text-xs text-slate-400">Muted</span>
+                        </>
+                      ) : (
+                        <>
+                          <Mic className="w-3 h-3 text-emerald-400" />
+                          <span className="text-xs text-emerald-400">Live</span>
+                        </>
+                      )}
+                    </div>
                   )}
-                  {/* Mute status badge */}
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${
-                    p.muted 
-                      ? 'bg-slate-600/50' 
-                      : 'bg-emerald-500/20'
-                  }`}>
-                    {p.muted ? (
-                      <>
-                        <MicOff className="w-3 h-3 text-slate-400" />
-                        <span className="text-xs text-slate-400">Muted</span>
-                      </>
-                    ) : (
-                      <>
-                        <Mic className="w-3 h-3 text-emerald-400" />
-                        <span className="text-xs text-emerald-400">Live</span>
-                      </>
-                    )}
-                  </div>
                   {canShowControls && !isMyParticipant(p.identity) && (
                     <button
                       onClick={() => {
