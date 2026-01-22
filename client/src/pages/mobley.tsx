@@ -83,6 +83,9 @@ export default function Mobley() {
   const [isMuted, setIsMuted] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [localIdentity, setLocalIdentity] = useState<string | null>(null);
+  
+  // Track attached audio elements for cleanup
+  const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   // Audio device selection
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
@@ -413,6 +416,48 @@ export default function Mobley() {
         queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
       });
 
+      // Helper to attach audio track
+      const attachAudioTrack = (track: any, participant: any) => {
+        if (track.kind === Track.Kind.Audio) {
+          const key = `${participant.identity}-${track.sid}`;
+          // Remove existing element if any
+          const existing = audioElementsRef.current.get(key);
+          if (existing) {
+            existing.remove();
+          }
+          const audioElement = track.attach();
+          audioElement.id = `audio-${key}`;
+          document.body.appendChild(audioElement);
+          audioElementsRef.current.set(key, audioElement);
+        }
+      };
+
+      // Handle remote audio tracks - attach them for playback
+      newRoom.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        attachAudioTrack(track, participant);
+      });
+
+      // Clean up audio elements when tracks are unsubscribed
+      newRoom.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
+        if (track.kind === Track.Kind.Audio) {
+          const key = `${participant.identity}-${track.sid}`;
+          const audioElement = audioElementsRef.current.get(key);
+          if (audioElement) {
+            track.detach(audioElement);
+            audioElement.remove();
+            audioElementsRef.current.delete(key);
+          }
+        }
+      });
+      
+      // Clean up all audio elements on disconnect
+      newRoom.on(RoomEvent.Disconnected, () => {
+        audioElementsRef.current.forEach((el, key) => {
+          el.remove();
+        });
+        audioElementsRef.current.clear();
+      });
+
       newRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
         const newSpeakingState: Record<string, boolean> = {};
         speakers.forEach(speaker => {
@@ -435,9 +480,28 @@ export default function Mobley() {
       // Use the actual LiveKit identity (from room.localParticipant or server response)
       setLocalIdentity(newRoom.localParticipant?.identity || actualIdentity);
 
-      // Start muted by default
-      await newRoom.localParticipant.setMicrophoneEnabled(false);
-      setIsMuted(true);
+      // Attach any already-subscribed audio tracks from participants who joined before us
+      newRoom.remoteParticipants.forEach((participant) => {
+        participant.audioTrackPublications.forEach((publication) => {
+          if (publication.track && publication.isSubscribed) {
+            attachAudioTrack(publication.track, participant);
+          }
+        });
+      });
+
+      // First enable microphone to create the audio track and get permission
+      // Then immediately mute it (this ensures the track exists for later unmuting)
+      try {
+        await newRoom.localParticipant.setMicrophoneEnabled(true);
+        // Small delay to ensure track is created
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await newRoom.localParticipant.setMicrophoneEnabled(false);
+        setIsMuted(true);
+      } catch (micError) {
+        console.error('Failed to initialize microphone:', micError);
+        // Still allow connection even if mic fails
+        setIsMuted(true);
+      }
 
       queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
       
