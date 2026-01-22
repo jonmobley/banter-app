@@ -88,6 +88,87 @@ export default function Mobley() {
   
   // Track attached audio elements for cleanup
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  
+  // Walkie-talkie mode state
+  const [isAudioUnlocked, setIsAudioUnlocked] = useState(false);
+  const [isTalking, setIsTalking] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  
+  // Get or create AudioContext for chirp sounds
+  const getAudioContext = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return audioContextRef.current;
+  }, []);
+  
+  // Play chirp sound (synthetic beep using Web Audio API)
+  const playChirp = useCallback((type: 'start' | 'end'): Promise<void> => {
+    return new Promise((resolve) => {
+      try {
+        const ctx = getAudioContext();
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        
+        // Different frequencies for start/end chirps
+        if (type === 'start') {
+          // Rising tone for "talk permit"
+          oscillator.frequency.setValueAtTime(800, ctx.currentTime);
+          oscillator.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.15);
+          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+          gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.15);
+        } else {
+          // Falling tone for "talk end"
+          oscillator.frequency.setValueAtTime(1200, ctx.currentTime);
+          oscillator.frequency.linearRampToValueAtTime(600, ctx.currentTime + 0.1);
+          gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+          gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.1);
+        }
+        
+        oscillator.start(ctx.currentTime);
+        oscillator.stop(ctx.currentTime + (type === 'start' ? 0.2 : 0.15));
+        
+        // Resolve after chirp completes (includes buffer time for network)
+        setTimeout(resolve, type === 'start' ? 200 : 100);
+      } catch (err) {
+        console.error('Failed to play chirp:', err);
+        resolve(); // Don't block on error
+      }
+    });
+  }, [getAudioContext]);
+  
+  // Mute/unmute all remote audio elements (for half-duplex mode)
+  const setRemoteAudioMuted = useCallback((muted: boolean) => {
+    audioElementsRef.current.forEach((audioElement) => {
+      audioElement.muted = muted;
+    });
+  }, []);
+  
+  // iOS Safari audio unlock - must be called on first user interaction
+  const unlockAudio = useCallback(() => {
+    if (isAudioUnlocked) return;
+    
+    try {
+      const ctx = getAudioContext();
+      // Resume context if suspended (required for iOS)
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      // Play a silent buffer to unlock audio
+      const buffer = ctx.createBuffer(1, 1, 22050);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+      
+      setIsAudioUnlocked(true);
+    } catch (err) {
+      console.error('Failed to unlock audio:', err);
+    }
+  }, [isAudioUnlocked, getAudioContext]);
 
   // Audio device selection
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
@@ -572,20 +653,41 @@ export default function Mobley() {
     }
   }, [room, isMuted]);
 
-  // PTT handlers
+  // PTT handlers with half-duplex logic
   const startTalking = useCallback(async () => {
-    if (room?.localParticipant && isMuted) {
-      await room.localParticipant.setMicrophoneEnabled(true);
-      setIsMuted(false);
-    }
-  }, [room, isMuted]);
+    if (isTalking || !room?.localParticipant) return;
+    
+    setIsTalking(true);
+    
+    // Step 1: Mute incoming audio (half-duplex - prevents echo)
+    setRemoteAudioMuted(true);
+    
+    // Step 2: Play "talk permit" chirp and wait for it
+    // This delay prevents first syllable from being cut off
+    await playChirp('start');
+    
+    // Step 3: Enable microphone
+    await room.localParticipant.setMicrophoneEnabled(true);
+    setIsMuted(false);
+  }, [room, isTalking, setRemoteAudioMuted, playChirp]);
 
   const stopTalking = useCallback(async () => {
-    if (room?.localParticipant && !isMuted && talkMode === 'ptt') {
-      await room.localParticipant.setMicrophoneEnabled(false);
-      setIsMuted(true);
-    }
-  }, [room, isMuted, talkMode]);
+    if (!isTalking || !room?.localParticipant || talkMode !== 'ptt') return;
+    
+    setIsTalking(false);
+    
+    // Step 1: Disable microphone immediately
+    await room.localParticipant.setMicrophoneEnabled(false);
+    setIsMuted(true);
+    
+    // Step 2: Play "talk end" chirp
+    playChirp('end');
+    
+    // Step 3: Unmute incoming audio after a brief delay (prevents hearing own echo tail)
+    setTimeout(() => {
+      setRemoteAudioMuted(false);
+    }, 150);
+  }, [room, isTalking, talkMode, setRemoteAudioMuted, playChirp]);
 
   // Change talk mode
   const changeTalkMode = useCallback(async (mode: TalkMode) => {
@@ -1400,13 +1502,15 @@ export default function Mobley() {
               </button>
               {talkMode === 'ptt' ? (
                 <button
-                  onMouseDown={startTalking}
-                  onMouseUp={stopTalking}
-                  onMouseLeave={stopTalking}
-                  onTouchStart={startTalking}
-                  onTouchEnd={stopTalking}
-                  onTouchCancel={stopTalking}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none ${
+                  onPointerDown={(e) => {
+                    e.preventDefault(); // Prevent text selection
+                    unlockAudio(); // iOS Safari audio unlock
+                    startTalking();
+                  }}
+                  onPointerUp={stopTalking}
+                  onPointerLeave={stopTalking}
+                  onPointerCancel={stopTalking}
+                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none touch-none ${
                     isMuted 
                       ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
                       : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
@@ -1461,7 +1565,10 @@ export default function Mobley() {
                 />
               </div>
               <button
-                onClick={connectToRoom}
+                onClick={() => {
+                  unlockAudio(); // iOS Safari audio unlock on first interaction
+                  connectToRoom();
+                }}
                 className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
                 data-testid="button-connect"
               >
