@@ -189,9 +189,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getBantersNeedingReminder(time: Date): Promise<ScheduledBanter[]> {
-    // Get banters that need a reminder (15 min before start, reminder enabled, still pending)
+    // Get banters that need a reminder (15 min before start, reminder enabled, still pending, not already sent)
     const fifteenMinutesFromNow = new Date(time.getTime() + 15 * 60 * 1000);
-    return await db.select().from(scheduledBanters).where(
+    const results = await db.select().from(scheduledBanters).where(
       and(
         eq(scheduledBanters.status, 'pending'),
         eq(scheduledBanters.reminderEnabled, 'true'),
@@ -199,6 +199,8 @@ export class DatabaseStorage implements IStorage {
         gt(scheduledBanters.scheduledAt, time)
       )
     );
+    // Filter out banters where reminder was already sent
+    return results.filter(b => b.reminderSentAt === null);
   }
 
   async getBetaRequests(): Promise<{ id: string; email: string; createdAt: Date }[]> {

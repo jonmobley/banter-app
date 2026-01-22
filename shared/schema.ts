@@ -82,9 +82,6 @@ export function normalizePhone(phone: string): string {
   if (digits.length === 10) {
     digits = '1' + digits;
   }
-  if (!digits.startsWith('1') && digits.length === 10) {
-    digits = '1' + digits;
-  }
   return '+' + digits;
 }
 
