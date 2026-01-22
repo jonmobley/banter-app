@@ -659,18 +659,16 @@ export default function Mobley() {
   const startTalking = useCallback(async () => {
     if (isTalking || !room?.localParticipant) return;
     
+    // Instant visual feedback
     setIsTalking(true);
+    setIsMuted(false);
     
-    // Step 1: Mute incoming audio (half-duplex - prevents echo)
+    // Mute incoming audio (half-duplex - prevents echo)
     setRemoteAudioMuted(true);
     
-    // Step 2: Play "talk permit" chirp and wait for it
-    // This delay prevents first syllable from being cut off
-    await playChirp('start');
-    
-    // Step 3: Enable microphone
+    // Play chirp and enable mic in parallel
+    playChirp('start');
     await room.localParticipant.setMicrophoneEnabled(true);
-    setIsMuted(false);
   }, [room, isTalking, setRemoteAudioMuted, playChirp]);
 
   const stopTalking = useCallback(async () => {
@@ -1512,36 +1510,36 @@ export default function Mobley() {
                   onPointerUp={stopTalking}
                   onPointerLeave={stopTalking}
                   onPointerCancel={stopTalking}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all select-none touch-none ${
+                  className={`w-28 h-28 flex flex-col items-center justify-center rounded-full font-semibold transition-all select-none touch-none ${
                     isMuted 
-                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
-                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
+                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600' 
+                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 border-4 border-emerald-400'
                   }`}
                   data-testid="button-ptt"
                 >
-                  {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {isMuted ? 'Hold' : 'Live'}
+                  {isMuted ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
+                  <span className="text-sm mt-1">{isMuted ? 'Hold' : 'Live'}</span>
                 </button>
               ) : talkMode === 'always' ? (
                 <div
-                  className="flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse"
+                  className="w-28 h-28 flex flex-col items-center justify-center rounded-full font-semibold bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 border-4 border-emerald-400"
                   data-testid="status-always-on"
                 >
-                  <Radio className="w-5 h-5" />
-                  On
+                  <Radio className="w-8 h-8" />
+                  <span className="text-sm mt-1">On</span>
                 </div>
               ) : (
                 <button
                   onClick={toggleMute}
-                  className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 rounded-full font-semibold transition-all ${
+                  className={`w-28 h-28 flex flex-col items-center justify-center rounded-full font-semibold transition-all ${
                     isMuted 
-                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-2 border-slate-600' 
-                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25 animate-pulse'
+                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600' 
+                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 border-4 border-emerald-400'
                   }`}
                   data-testid="button-toggle-mute"
                 >
-                  {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                  {isMuted ? 'Tap to Unmute' : 'Live'}
+                  {isMuted ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
+                  <span className="text-sm mt-1">{isMuted ? 'Tap' : 'Live'}</span>
                 </button>
               )}
               <button
