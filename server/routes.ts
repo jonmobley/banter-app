@@ -269,20 +269,50 @@ export async function registerRoutes(
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
       await storage.createVerificationCode(normalizedPhone, code, expiresAt);
 
-      // Send SMS via Twilio
       const { sendVerificationSMS } = await import('./twilio-sms.js');
       const sent = await sendVerificationSMS(normalizedPhone, code);
       
       if (sent) {
         log(`📱 Verification code sent to ${normalizedPhone}`, "auth");
       } else {
-        // Fall back to logging in development if SMS fails
         log(`📱 SMS failed, verification code for ${normalizedPhone}: ${code}`, "auth");
       }
       
       res.json({ success: true, message: "Verification code sent" });
     } catch (error: any) {
       log(`Error sending verification code: ${error.message}`, "auth");
+      res.status(500).json({ error: "Failed to send verification code" });
+    }
+  });
+
+  /**
+   * POST /api/auth/send-email-code
+   * Send a verification code via email using Resend.
+   */
+  app.post("/api/auth/send-email-code", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      await storage.createEmailVerificationCode(normalizedEmail, code, expiresAt);
+
+      const { sendVerificationEmail } = await import('./resend-email.js');
+      const sent = await sendVerificationEmail(normalizedEmail, code);
+      
+      if (sent) {
+        log(`📧 Verification code sent to ${normalizedEmail}`, "auth");
+      } else {
+        log(`📧 Email failed, verification code for ${normalizedEmail}: ${code}`, "auth");
+      }
+      
+      res.json({ success: true, message: "Verification code sent" });
+    } catch (error: any) {
+      log(`Error sending email verification code: ${error.message}`, "auth");
       res.status(500).json({ error: "Failed to send verification code" });
     }
   });
@@ -312,6 +342,35 @@ export async function registerRoutes(
       res.json({ success: true, phone: normalizedPhone, authToken });
     } catch (error: any) {
       log(`Error verifying code: ${error.message}`, "auth");
+      res.status(500).json({ error: "Failed to verify code" });
+    }
+  });
+
+  /**
+   * POST /api/auth/verify-email-code
+   * Verify the email code and return authenticated email.
+   */
+  app.post("/api/auth/verify-email-code", async (req, res) => {
+    try {
+      const { email, code } = req.body;
+      if (!email || !code) {
+        return res.status(400).json({ error: "Email and code are required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const valid = await storage.verifyEmailCode(normalizedEmail, code);
+      
+      if (!valid) {
+        return res.status(401).json({ error: "Invalid or expired code" });
+      }
+
+      await storage.deleteEmailVerificationCodes(normalizedEmail);
+      const authToken = createAuthToken(normalizedEmail);
+
+      log(`✅ Verified email ${normalizedEmail}`, "auth");
+      res.json({ success: true, email: normalizedEmail, authToken });
+    } catch (error: any) {
+      log(`Error verifying email code: ${error.message}`, "auth");
       res.status(500).json({ error: "Failed to verify code" });
     }
   });

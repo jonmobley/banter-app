@@ -220,11 +220,16 @@ export default function Mobley() {
     return localStorage.getItem('banter_user_email') || '';
   });
   const profileMenuRef = useRef<HTMLDivElement>(null);
-  const [loginStep, setLoginStep] = useState<'phone' | 'code'>('phone');
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
+  const [loginStep, setLoginStep] = useState<'input' | 'code'>('input');
   const [loginPhone, setLoginPhone] = useState('');
+  const [loginEmail, setLoginEmail] = useState('');
   const [loginCode, setLoginCode] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [verifiedEmail, setVerifiedEmail] = useState<string | null>(() => {
+    return localStorage.getItem('banter_verified_email');
+  });
 
   // Channel management state
   const [showChannelModal, setShowChannelModal] = useState(false);
@@ -1055,12 +1060,21 @@ export default function Mobley() {
     setLoginLoading(true);
     setLoginError(null);
     try {
-      const res = await fetch('/api/auth/send-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: loginPhone })
-      });
-      if (!res.ok) throw new Error('Failed to send code');
+      if (loginMethod === 'phone') {
+        const res = await fetch('/api/auth/send-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: loginPhone })
+        });
+        if (!res.ok) throw new Error('Failed to send code');
+      } else {
+        const res = await fetch('/api/auth/send-email-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: loginEmail })
+        });
+        if (!res.ok) throw new Error('Failed to send code');
+      }
       setLoginStep('code');
     } catch {
       setLoginError('Failed to send verification code');
@@ -1073,17 +1087,31 @@ export default function Mobley() {
     setLoginLoading(true);
     setLoginError(null);
     try {
-      const res = await fetch('/api/auth/verify-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: loginPhone, code: loginCode })
-      });
-      if (!res.ok) throw new Error('Invalid code');
-      const data = await res.json();
-      setVerifiedPhone(data.phone);
-      setAuthToken(data.authToken);
-      localStorage.setItem('banter_verified_phone', data.phone);
-      localStorage.setItem('banter_auth_token', data.authToken);
+      if (loginMethod === 'phone') {
+        const res = await fetch('/api/auth/verify-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: loginPhone, code: loginCode })
+        });
+        if (!res.ok) throw new Error('Invalid code');
+        const data = await res.json();
+        setVerifiedPhone(data.phone);
+        setAuthToken(data.authToken);
+        localStorage.setItem('banter_verified_phone', data.phone);
+        localStorage.setItem('banter_auth_token', data.authToken);
+      } else {
+        const res = await fetch('/api/auth/verify-email-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: loginEmail, code: loginCode })
+        });
+        if (!res.ok) throw new Error('Invalid code');
+        const data = await res.json();
+        setVerifiedEmail(data.email);
+        setAuthToken(data.authToken);
+        localStorage.setItem('banter_verified_email', data.email);
+        localStorage.setItem('banter_auth_token', data.authToken);
+      }
       setShowLoginModal(false);
       resetLoginModal();
     } catch {
@@ -1094,19 +1122,26 @@ export default function Mobley() {
   };
 
   const resetLoginModal = () => {
-    setLoginStep('phone');
+    setLoginStep('input');
     setLoginPhone('');
+    setLoginEmail('');
     setLoginCode('');
     setLoginError(null);
   };
+  
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail);
 
   const handleLogout = () => {
     setVerifiedPhone(null);
+    setVerifiedEmail(null);
     setAuthToken(null);
     localStorage.removeItem('banter_verified_phone');
+    localStorage.removeItem('banter_verified_email');
     localStorage.removeItem('banter_auth_token');
     toast({ title: "Signed out" });
   };
+  
+  const isSignedIn = verifiedPhone || verifiedEmail;
 
   const handleConfirmDelete = () => {
     if (confirmDeleteId) {
@@ -1119,6 +1154,11 @@ export default function Mobley() {
   const isMyParticipant = (identity: string): boolean => {
     return localIdentity === identity;
   };
+
+  const roleOrder = { host: 0, participant: 1, listener: 2 };
+  const realParticipants = participantsData?.participants || [];
+  const conferenceActive = participantsData?.conferenceActive || false;
+  const expectedParticipants = [...(expectedData || [])].sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
 
   const getParticipantRole = (identity: string): ExpectedParticipant['role'] | null => {
     const ep = expectedParticipants.find(e => {
@@ -1135,11 +1175,6 @@ export default function Mobley() {
   };
 
   const canShowControls = isAdmin || isUserHost();
-  const roleOrder = { host: 0, participant: 1, listener: 2 };
-
-  const realParticipants = participantsData?.participants || [];
-  const conferenceActive = participantsData?.conferenceActive || false;
-  const expectedParticipants = [...(expectedData || [])].sort((a, b) => roleOrder[a.role] - roleOrder[b.role]);
 
   const participants = [...realParticipants].sort((a, b) => {
     const roleA = getParticipantRole(a.identity) || 'participant';
@@ -1188,23 +1223,48 @@ export default function Mobley() {
               <Radio className="w-8 h-8 text-emerald-400" />
             </div>
             <h1 className="text-2xl font-bold mb-2">Banter</h1>
-            <p className="text-slate-400">Enter your phone number to join</p>
+            <p className="text-slate-400">Sign in to join</p>
           </div>
 
-          {loginStep === 'phone' ? (
+          {loginStep === 'input' ? (
             <div className="space-y-4">
-              <input
-                type="tel"
-                value={loginPhone}
-                onChange={(e) => setLoginPhone(e.target.value)}
-                placeholder="Phone number"
-                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:border-emerald-500"
-                data-testid="input-login-phone"
-              />
+              <div className="flex rounded-lg overflow-hidden mb-2">
+                <button
+                  onClick={() => setLoginMethod('phone')}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${loginMethod === 'phone' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                >
+                  Phone
+                </button>
+                <button
+                  onClick={() => setLoginMethod('email')}
+                  className={`flex-1 py-2 text-sm font-medium transition-colors ${loginMethod === 'email' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                >
+                  Email
+                </button>
+              </div>
+              {loginMethod === 'phone' ? (
+                <input
+                  type="tel"
+                  value={loginPhone}
+                  onChange={(e) => setLoginPhone(e.target.value)}
+                  placeholder="Phone number"
+                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:border-emerald-500"
+                  data-testid="input-login-phone"
+                />
+              ) : (
+                <input
+                  type="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="Email address"
+                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg focus:outline-none focus:border-emerald-500"
+                  data-testid="input-login-email"
+                />
+              )}
               {loginError && <p className="text-red-400 text-sm">{loginError}</p>}
               <button
                 onClick={sendVerificationCode}
-                disabled={loginLoading || !loginPhone}
+                disabled={loginLoading || (loginMethod === 'phone' ? !loginPhone : !isEmailValid)}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-lg font-medium transition-colors"
                 data-testid="button-send-code"
               >
@@ -1214,7 +1274,7 @@ export default function Mobley() {
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-slate-400 text-center">
-                Enter the 6-digit code sent to {loginPhone}
+                Enter the 6-digit code sent to {loginMethod === 'phone' ? loginPhone : loginEmail}
               </p>
               <input
                 type="text"
@@ -1223,27 +1283,7 @@ export default function Mobley() {
                   const code = e.target.value.replace(/\D/g, '').slice(0, 6);
                   setLoginCode(code);
                   if (code.length === 6) {
-                    setTimeout(() => {
-                      setLoginLoading(true);
-                      setLoginError(null);
-                      fetch('/api/auth/verify-code', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ phone: loginPhone, code })
-                      })
-                        .then(res => {
-                          if (!res.ok) throw new Error('Invalid code');
-                          return res.json();
-                        })
-                        .then(data => {
-                          setVerifiedPhone(data.phone);
-                          setAuthToken(data.authToken);
-                          localStorage.setItem('banter_verified_phone', data.phone);
-                          localStorage.setItem('banter_auth_token', data.authToken);
-                        })
-                        .catch(() => setLoginError('Invalid verification code'))
-                        .finally(() => setLoginLoading(false));
-                    }, 100);
+                    setTimeout(() => verifyLoginCode(), 100);
                   }
                 }}
                 placeholder="000000"
@@ -1254,17 +1294,17 @@ export default function Mobley() {
               {loginError && <p className="text-red-400 text-sm text-center">{loginError}</p>}
               {loginLoading && <p className="text-emerald-400 text-sm text-center">Verifying...</p>}
               <button
-                onClick={() => { setLoginStep('phone'); setLoginCode(''); setLoginError(null); }}
+                onClick={() => { setLoginStep('input'); setLoginCode(''); setLoginError(null); }}
                 className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors"
-                data-testid="button-back-to-phone"
+                data-testid="button-back-to-input"
               >
-                Use different number
+                Use different {loginMethod === 'phone' ? 'number' : 'email'}
               </button>
             </div>
           )}
 
           <p className="text-xs text-slate-500 text-center">
-            By continuing, you agree to receive SMS messages for verification.
+            By continuing, you agree to receive verification {loginMethod === 'phone' ? 'SMS messages' : 'emails'}.
           </p>
         </div>
       </div>
@@ -1305,21 +1345,21 @@ export default function Mobley() {
           )}
           <div className="relative" ref={profileMenuRef}>
             <button
-              onClick={() => verifiedPhone ? setShowProfileMenu(!showProfileMenu) : setShowLoginModal(true)}
+              onClick={() => isSignedIn ? setShowProfileMenu(!showProfileMenu) : setShowLoginModal(true)}
               className={`p-3 rounded-full transition-colors ${
-                verifiedPhone 
+                isSignedIn 
                   ? 'bg-blue-500/20 hover:bg-blue-500/30' 
                   : 'bg-slate-800/50 hover:bg-slate-700'
               }`}
               data-testid="button-profile"
             >
-              <User className={`w-5 h-5 ${verifiedPhone ? 'text-blue-400' : 'text-slate-400'}`} />
+              <User className={`w-5 h-5 ${isSignedIn ? 'text-blue-400' : 'text-slate-400'}`} />
             </button>
-            {showProfileMenu && verifiedPhone && (
+            {showProfileMenu && isSignedIn && (
               <div className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg overflow-hidden z-50">
                 <div className="px-4 py-3 border-b border-slate-700">
                   <p className="text-xs text-slate-400">Signed in as</p>
-                  <p className="text-sm text-white truncate">{userName || verifiedPhone}</p>
+                  <p className="text-sm text-white truncate">{userName || verifiedPhone || verifiedEmail}</p>
                 </div>
                 <button
                   onClick={() => { 
@@ -1962,18 +2002,47 @@ export default function Mobley() {
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-2">Sign In</h2>
             <p className="text-sm text-slate-400 text-center mb-6">
-              {loginStep === 'phone' ? 'Enter your phone number' : 'Enter the code we texted you'}
+              {loginStep === 'input' 
+                ? (loginMethod === 'phone' ? 'Enter your phone number' : 'Enter your email') 
+                : `Enter the code we ${loginMethod === 'phone' ? 'texted' : 'emailed'} you`}
             </p>
             
-            {loginStep === 'phone' ? (
-              <input
-                type="tel"
-                placeholder="(555) 555-5555"
-                value={loginPhone}
-                onChange={(e) => setLoginPhone(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none mb-6 text-center"
-                style={{ fontSize: '16px' }}
-              />
+            {loginStep === 'input' ? (
+              <>
+                <div className="flex rounded-lg overflow-hidden mb-4">
+                  <button
+                    onClick={() => setLoginMethod('phone')}
+                    className={`flex-1 py-2 text-sm font-medium transition-colors ${loginMethod === 'phone' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                  >
+                    Phone
+                  </button>
+                  <button
+                    onClick={() => setLoginMethod('email')}
+                    className={`flex-1 py-2 text-sm font-medium transition-colors ${loginMethod === 'email' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                  >
+                    Email
+                  </button>
+                </div>
+                {loginMethod === 'phone' ? (
+                  <input
+                    type="tel"
+                    placeholder="(555) 555-5555"
+                    value={loginPhone}
+                    onChange={(e) => setLoginPhone(e.target.value)}
+                    className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none mb-6 text-center"
+                    style={{ fontSize: '16px' }}
+                  />
+                ) : (
+                  <input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none mb-6 text-center"
+                    style={{ fontSize: '16px' }}
+                  />
+                )}
+              </>
             ) : (
               <input
                 type="tel"
@@ -1989,16 +2058,16 @@ export default function Mobley() {
             
             <div className="space-y-3">
               <button
-                onClick={loginStep === 'phone' ? sendVerificationCode : verifyLoginCode}
-                disabled={loginLoading || (loginStep === 'phone' ? !isPhoneValid : loginCode.length !== 6)}
+                onClick={loginStep === 'input' ? sendVerificationCode : verifyLoginCode}
+                disabled={loginLoading || (loginStep === 'input' ? (loginMethod === 'phone' ? !isPhoneValid : !isEmailValid) : loginCode.length !== 6)}
                 className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors"
               >
-                {loginLoading ? 'Loading...' : loginStep === 'phone' ? 'Send Code' : 'Verify'}
+                {loginLoading ? 'Loading...' : loginStep === 'input' ? 'Send Code' : 'Verify'}
               </button>
               
               {loginStep === 'code' && (
-                <button onClick={() => setLoginStep('phone')} className="w-full text-slate-400 hover:text-white text-sm transition-colors">
-                  Use a different number
+                <button onClick={() => setLoginStep('input')} className="w-full text-slate-400 hover:text-white text-sm transition-colors">
+                  Use a different {loginMethod === 'phone' ? 'number' : 'email'}
                 </button>
               )}
               

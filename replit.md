@@ -193,3 +193,14 @@ The application uses LiveKit for real-time voice conferencing:
 - Native Android structure in `android/` directory
 - See `NATIVE_BUILD.md` for build instructions
 - Hardware button support (EarPods center button) requires native build + Apple approval
+
+### January 2026 - Email Authentication & Admin Phone-Based Auth
+- Added email magic code login option alongside existing phone SMS login
+- Created `server/resend-email.ts` with Resend integration for sending verification emails
+- Added `POST /api/auth/send-email-code` and `POST /api/auth/verify-email-code` endpoints
+- Updated `verification_codes` table to support both phone and email fields
+- Updated storage layer with `createEmailVerificationCode`, `verifyEmailCode`, `deleteEmailVerificationCodes`
+- Frontend login UI now has Phone/Email toggle tabs for choosing login method
+- Removed PIN-based admin authentication in favor of phone number verification
+- Admin status now determined by matching auth token phone to `ADMIN_PHONE` environment variable
+- `POST /api/admin/verify` endpoint checks if authenticated user is admin

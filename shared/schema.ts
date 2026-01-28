@@ -62,13 +62,15 @@ export type ExpectedParticipant = typeof expectedParticipants.$inferSelect;
 
 export const verificationCodes = pgTable("verification_codes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  phone: text("phone").notNull(),
+  phone: text("phone"),
+  email: text("email"),
   code: text("code").notNull(),
   expiresAt: timestamp("expires_at").notNull(),
 });
 
 export const insertVerificationCodeSchema = createInsertSchema(verificationCodes).pick({
   phone: true,
+  email: true,
   code: true,
   expiresAt: true,
 });

@@ -144,10 +144,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createVerificationCode(phone: string, code: string, expiresAt: Date): Promise<void> {
-    // Delete any existing codes for this phone first
     await db.delete(verificationCodes).where(eq(verificationCodes.phone, phone));
-    // Insert new code
     await db.insert(verificationCodes).values({ phone, code, expiresAt });
+  }
+
+  async createEmailVerificationCode(email: string, code: string, expiresAt: Date): Promise<void> {
+    await db.delete(verificationCodes).where(eq(verificationCodes.email, email));
+    await db.insert(verificationCodes).values({ email, code, expiresAt });
   }
 
   async verifyCode(phone: string, code: string): Promise<boolean> {
@@ -162,8 +165,24 @@ export class DatabaseStorage implements IStorage {
     return !!match;
   }
 
+  async verifyEmailCode(email: string, code: string): Promise<boolean> {
+    const now = new Date();
+    const [match] = await db.select().from(verificationCodes).where(
+      and(
+        eq(verificationCodes.email, email),
+        eq(verificationCodes.code, code),
+        gt(verificationCodes.expiresAt, now)
+      )
+    );
+    return !!match;
+  }
+
   async deleteVerificationCodes(phone: string): Promise<void> {
     await db.delete(verificationCodes).where(eq(verificationCodes.phone, phone));
+  }
+
+  async deleteEmailVerificationCodes(email: string): Promise<void> {
+    await db.delete(verificationCodes).where(eq(verificationCodes.email, email));
   }
 
   async getScheduledBanters(): Promise<ScheduledBanter[]> {
