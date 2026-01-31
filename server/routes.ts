@@ -329,9 +329,11 @@ export async function registerRoutes(
       }
 
       const normalizedPhone = normalizePhone(phone);
+      log(`🔍 Verifying code ${code} for phone ${normalizedPhone}`, "auth");
       const valid = await storage.verifyCode(normalizedPhone, code);
       
       if (!valid) {
+        log(`❌ Invalid code ${code} for phone ${normalizedPhone}`, "auth");
         return res.status(401).json({ error: "Invalid or expired code" });
       }
 
