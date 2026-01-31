@@ -267,15 +267,18 @@ export async function registerRoutes(
       const normalizedPhone = normalizePhone(phone);
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      
+      log(`📱 Saving code ${code} for ${normalizedPhone}, expires ${expiresAt.toISOString()}`, "auth");
       await storage.createVerificationCode(normalizedPhone, code, expiresAt);
+      log(`📱 Code saved successfully for ${normalizedPhone}`, "auth");
 
       const { sendVerificationSMS } = await import('./twilio-sms.js');
       const sent = await sendVerificationSMS(normalizedPhone, code);
       
       if (sent) {
-        log(`📱 Verification code sent to ${normalizedPhone}`, "auth");
+        log(`📱 SMS sent to ${normalizedPhone}`, "auth");
       } else {
-        log(`📱 SMS failed, verification code for ${normalizedPhone}: ${code}`, "auth");
+        log(`📱 SMS failed for ${normalizedPhone}, code was: ${code}`, "auth");
       }
       
       res.json({ success: true, message: "Verification code sent" });
