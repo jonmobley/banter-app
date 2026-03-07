@@ -65,10 +65,8 @@ export async function startScheduler(getHost: () => string) {
       for (const banter of pendingBanters) {
         log(`🚀 Activating banter "${banter.name}"`, "scheduler");
 
-        // Mark as active
         await storage.updateScheduledBanter(banter.id, { status: 'active' });
 
-        // Send "starting now" notifications if auto-call is enabled
         if (banter.autoCallEnabled === 'true') {
           const participants = await Promise.all(
             banter.participantIds.map(id => storage.getExpectedParticipant(id))
@@ -80,11 +78,24 @@ export async function startScheduler(getHost: () => string) {
               const normalizedPhone = normalizePhone(participant.phone);
               const sent = await sendReminderSMS(normalizedPhone, banter.name, 0);
               if (sent) {
-                log(`📞 Start notification sent to ${participant.name}`, "scheduler");
+                log(`📱 Start notification sent to ${participant.name}`, "scheduler");
               }
             } catch (err: any) {
               log(`⚠️ Error sending start notification to ${participant.name}: ${err.message}`, "scheduler");
             }
+          }
+        }
+      }
+
+      // Mark active banters as completed after 2 hours past their scheduled time
+      const activeBanters = await storage.getScheduledBanters();
+      for (const banter of activeBanters) {
+        if (banter.status === 'active') {
+          const scheduledTime = new Date(banter.scheduledAt).getTime();
+          const twoHoursAfter = scheduledTime + 2 * 60 * 60 * 1000;
+          if (now.getTime() > twoHoursAfter) {
+            await storage.updateScheduledBanter(banter.id, { status: 'completed' });
+            log(`✅ Banter "${banter.name}" marked as completed`, "scheduler");
           }
         }
       }

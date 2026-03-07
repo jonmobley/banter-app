@@ -1,5 +1,4 @@
-import { type User, type InsertUser, type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments, normalizePhone } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, gt, lt, lte, sql } from "drizzle-orm";
 import pg from "pg";
@@ -26,10 +25,6 @@ export async function testDatabaseConnection(): Promise<boolean> {
 }
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  
   // Contacts
   getContacts(): Promise<Contact[]>;
   getContactByPhone(phone: string): Promise<Contact | undefined>;
@@ -85,30 +80,15 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  async getUser(id: string): Promise<User | undefined> {
-    return undefined;
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return undefined;
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    return { ...insertUser, id };
-  }
 
   async getContacts(): Promise<Contact[]> {
     return await db.select().from(contacts);
   }
 
   async getContactByPhone(phone: string): Promise<Contact | undefined> {
-    // Normalize phone for matching
-    const normalizedPhone = phone.replace(/\D/g, '');
+    const normalized = normalizePhone(phone);
     const allContacts = await db.select().from(contacts);
-    return allContacts.find(c => c.phone.replace(/\D/g, '') === normalizedPhone || 
-                                  c.phone.replace(/\D/g, '').endsWith(normalizedPhone) ||
-                                  normalizedPhone.endsWith(c.phone.replace(/\D/g, '')));
+    return allContacts.find(c => normalizePhone(c.phone) === normalized);
   }
 
   async createContact(contact: InsertContact): Promise<Contact> {
@@ -140,17 +120,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async removeExpectedParticipant(id: string): Promise<void> {
-    await db.delete(expectedParticipants).where(eq(expectedParticipants.id, id));
+    await db.transaction(async (tx) => {
+      await tx.delete(groupMembers).where(eq(groupMembers.participantId, id));
+      await tx.delete(expectedParticipants).where(eq(expectedParticipants.id, id));
+    });
   }
 
   async createVerificationCode(phone: string, code: string, expiresAt: Date): Promise<void> {
-    await db.delete(verificationCodes).where(eq(verificationCodes.phone, phone));
-    await db.insert(verificationCodes).values({ phone, code, expiresAt });
+    await db.transaction(async (tx) => {
+      await tx.delete(verificationCodes).where(eq(verificationCodes.phone, phone));
+      await tx.insert(verificationCodes).values({ phone, code, expiresAt });
+    });
   }
 
   async createEmailVerificationCode(email: string, code: string, expiresAt: Date): Promise<void> {
-    await db.delete(verificationCodes).where(eq(verificationCodes.email, email));
-    await db.insert(verificationCodes).values({ email, code, expiresAt });
+    await db.transaction(async (tx) => {
+      await tx.delete(verificationCodes).where(eq(verificationCodes.email, email));
+      await tx.insert(verificationCodes).values({ email, code, expiresAt });
+    });
   }
 
   async verifyCode(phone: string, code: string): Promise<boolean> {
@@ -324,10 +311,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async assignToChannel(channelId: string, participantIdentity: string): Promise<ChannelAssignment> {
-    // Remove any existing assignment first
-    await db.delete(channelAssignments).where(eq(channelAssignments.participantIdentity, participantIdentity));
-    // Create new assignment
-    const [assignment] = await db.insert(channelAssignments).values({ channelId, participantIdentity }).returning();
+    const [assignment] = await db.transaction(async (tx) => {
+      await tx.delete(channelAssignments).where(eq(channelAssignments.participantIdentity, participantIdentity));
+      return tx.insert(channelAssignments).values({ channelId, participantIdentity }).returning();
+    });
     return assignment;
   }
 

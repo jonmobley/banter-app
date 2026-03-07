@@ -204,3 +204,23 @@ The application uses LiveKit for real-time voice conferencing:
 - Removed PIN-based admin authentication in favor of phone number verification
 - Admin status now determined by matching auth token phone to `ADMIN_PHONE` environment variable
 - `POST /api/admin/verify` endpoint checks if authenticated user is admin
+
+### March 2026 - Comprehensive Security & Quality Audit
+- **Security: Fixed admin phone matching** - Changed from loose `.endsWith()` to strict E.164 equality
+- **Security: Added rate limiting** - Max 3 send-code and 5 verify-code attempts per 15 minutes per phone/email
+- **Security: Added API authentication** - All GET endpoints (`/api/contacts`, `/api/expected`, `/api/groups`, `/api/channels`, `/api/banters`) now require auth token via Bearer header
+- **Security: Contact/expected mutations** now require admin auth token
+- **Bug fix: SMS/email send failure** - `send-code` endpoints now return error (not success) when delivery fails, and clean up the verification code from DB
+- **Auth migration: Removed all PIN-based auth** - `admin.tsx`, `contacts.tsx`, `schedule.tsx` now use auth token from `banter_auth_token` localStorage instead of `banter_admin_pin`
+- **Data integrity: Transactions** - `createVerificationCode`, `createEmailVerificationCode`, `assignToChannel`, `removeExpectedParticipant` now use database transactions
+- **Data integrity: Orphan cleanup** - Deleting an expected participant now also removes their group member entries
+- **Data integrity: Duplicate contacts** - API returns 409 with helpful message instead of 500 on duplicate phone
+- **Scheduler fix: Banter lifecycle** - Active banters now auto-complete 2 hours after scheduled time
+- **Label fix: Auto-notify** - Renamed "Auto-call" to "Auto-notify" (SMS-only, not voice call)
+- **Label fix: Reminder time** - Frontend now correctly shows "15 min before" matching backend behavior
+- **UX: Contact search** - Added search/filter bar to contacts list
+- **UX: Auth guard** - Contacts, Schedule, and Admin pages now show "Please sign in" with link to /mobley when not authenticated
+- **Cleanup: Removed unused `users` table** and related dead code from schema and storage
+- **Cleanup: Fixed phone normalization** - `getContactByPhone` and LiveKit participant matching now use strict E.164 comparison
+- **SMS links: Production URL** - Reminder SMS now uses `REPLIT_DEPLOYMENT_URL` when available for correct production links
+- **Half-duplex safety** - Disconnect now explicitly unmutes remote audio to prevent stuck-muted state

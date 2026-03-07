@@ -21,7 +21,31 @@ import { WebSocketServer, WebSocket } from "ws";
 import { normalizePhone } from "@shared/schema";
 import crypto from "crypto";
 
-// Secret key for signing auth tokens - must be a strong, persistent secret
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(key: string, maxAttempts: number, windowMs: number): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+  if (entry.count >= maxAttempts) {
+    return false;
+  }
+  entry.count++;
+  return true;
+}
+
+setInterval(() => {
+  const now = Date.now();
+  const keysToDelete: string[] = [];
+  rateLimitMap.forEach((entry, key) => {
+    if (now > entry.resetAt) keysToDelete.push(key);
+  });
+  keysToDelete.forEach(key => rateLimitMap.delete(key));
+}, 60000);
+
 let _authSecret: string | null = null;
 
 function getAuthSecret(): string {
@@ -50,10 +74,11 @@ function getAuthSecret(): string {
   return _authSecret;
 }
 
-function createAuthToken(phone: string): string {
-  const normalizedPhone = normalizePhone(phone);
+function createAuthToken(identifier: string): string {
+  const isEmail = identifier.includes('@');
+  const normalizedId = isEmail ? identifier.toLowerCase().trim() : normalizePhone(identifier);
   const expiry = Date.now() + 24 * 60 * 60 * 1000;
-  const data = `${normalizedPhone}:${expiry}`;
+  const data = `${normalizedId}:${expiry}`;
   const signature = crypto.createHmac('sha256', getAuthSecret()).update(data).digest('hex');
   return Buffer.from(`${data}:${signature}`).toString('base64');
 }
@@ -84,17 +109,16 @@ function verifyAuthToken(token: string): string | null {
   }
 }
 
-function isAdminPhone(phone: string | null): boolean {
-  if (!phone) return false;
+function isAdminPhone(identifier: string | null): boolean {
+  if (!identifier) return false;
+  if (identifier.includes('@')) return false;
   const adminPhone = process.env.ADMIN_PHONE;
   if (!adminPhone) return false;
   
-  const normalizedAdmin = adminPhone.replace(/\D/g, '');
-  const normalizedUser = phone.replace(/\D/g, '');
+  const normalizedAdmin = normalizePhone(adminPhone);
+  const normalizedUser = normalizePhone(identifier);
   
-  return normalizedAdmin === normalizedUser || 
-         normalizedAdmin.endsWith(normalizedUser) || 
-         normalizedUser.endsWith(normalizedAdmin);
+  return normalizedAdmin === normalizedUser;
 }
 
 function verifyAdminAuth(authToken: string | null): boolean {
@@ -265,23 +289,27 @@ export async function registerRoutes(
       }
 
       const normalizedPhone = normalizePhone(phone);
+      
+      if (!checkRateLimit(`send:${normalizedPhone}`, 3, 15 * 60 * 1000)) {
+        return res.status(429).json({ error: "Too many attempts. Please wait 15 minutes." });
+      }
+
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
       
-      log(`📱 Saving code ${code} for ${normalizedPhone}, expires ${expiresAt.toISOString()}`, "auth");
       await storage.createVerificationCode(normalizedPhone, code, expiresAt);
-      log(`📱 Code saved successfully for ${normalizedPhone}`, "auth");
 
       const { sendVerificationSMS } = await import('./twilio-sms.js');
       const sent = await sendVerificationSMS(normalizedPhone, code);
       
       if (sent) {
         log(`📱 SMS sent to ${normalizedPhone}`, "auth");
+        res.json({ success: true, message: "Verification code sent" });
       } else {
-        log(`📱 SMS failed for ${normalizedPhone}, code was: ${code}`, "auth");
+        await storage.deleteVerificationCodes(normalizedPhone);
+        log(`📱 SMS failed for ${normalizedPhone}`, "auth");
+        res.status(500).json({ error: "Failed to send SMS. Please try again." });
       }
-      
-      res.json({ success: true, message: "Verification code sent" });
     } catch (error: any) {
       log(`Error sending verification code: ${error.message}`, "auth");
       res.status(500).json({ error: "Failed to send verification code" });
@@ -300,6 +328,11 @@ export async function registerRoutes(
       }
 
       const normalizedEmail = email.toLowerCase().trim();
+      
+      if (!checkRateLimit(`send:${normalizedEmail}`, 3, 15 * 60 * 1000)) {
+        return res.status(429).json({ error: "Too many attempts. Please wait 15 minutes." });
+      }
+
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
       await storage.createEmailVerificationCode(normalizedEmail, code, expiresAt);
@@ -309,11 +342,12 @@ export async function registerRoutes(
       
       if (sent) {
         log(`📧 Verification code sent to ${normalizedEmail}`, "auth");
+        res.json({ success: true, message: "Verification code sent" });
       } else {
-        log(`📧 Email failed, verification code for ${normalizedEmail}: ${code}`, "auth");
+        await storage.deleteEmailVerificationCodes(normalizedEmail);
+        log(`📧 Email failed for ${normalizedEmail}`, "auth");
+        res.status(500).json({ error: "Failed to send email. Please try again." });
       }
-      
-      res.json({ success: true, message: "Verification code sent" });
     } catch (error: any) {
       log(`Error sending email verification code: ${error.message}`, "auth");
       res.status(500).json({ error: "Failed to send verification code" });
@@ -332,7 +366,12 @@ export async function registerRoutes(
       }
 
       const normalizedPhone = normalizePhone(phone);
-      log(`🔍 Verifying code ${code} for phone ${normalizedPhone}`, "auth");
+      
+      if (!checkRateLimit(`verify:${normalizedPhone}`, 5, 15 * 60 * 1000)) {
+        return res.status(429).json({ error: "Too many attempts. Please wait 15 minutes." });
+      }
+
+      log(`🔍 Verifying code for phone ${normalizedPhone}`, "auth");
       const valid = await storage.verifyCode(normalizedPhone, code);
       
       if (!valid) {
@@ -363,6 +402,11 @@ export async function registerRoutes(
       }
 
       const normalizedEmail = email.toLowerCase().trim();
+      
+      if (!checkRateLimit(`verify:${normalizedEmail}`, 5, 15 * 60 * 1000)) {
+        return res.status(429).json({ error: "Too many attempts. Please wait 15 minutes." });
+      }
+
       const valid = await storage.verifyEmailCode(normalizedEmail, code);
       
       if (!valid) {
@@ -384,8 +428,12 @@ export async function registerRoutes(
    * GET /api/contacts
    * Lists all saved contacts.
    */
-  app.get("/api/contacts", async (_req, res) => {
+  app.get("/api/contacts", async (req, res) => {
     try {
+      const authToken = req.headers.authorization?.replace('Bearer ', '') || null;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const contacts = await storage.getContacts();
       res.json(contacts);
     } catch (error: any) {
@@ -400,13 +448,23 @@ export async function registerRoutes(
    */
   app.post("/api/contacts", async (req, res) => {
     try {
-      const { name, phone } = req.body;
+      const { authToken, name, phone } = req.body;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       if (!name || !phone) {
         return res.status(400).json({ error: "Name and phone are required" });
+      }
+      const existing = await storage.getContactByPhone(phone);
+      if (existing) {
+        return res.status(409).json({ error: "A contact with this phone number already exists" });
       }
       const contact = await storage.createContact({ name, phone });
       res.json(contact);
     } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: "A contact with this phone number already exists" });
+      }
       log(`Error creating contact: ${error.message}`, "api");
       res.status(500).json({ error: "Failed to create contact" });
     }
@@ -418,6 +476,10 @@ export async function registerRoutes(
    */
   app.delete("/api/contacts/:id", async (req, res) => {
     try {
+      const { authToken } = req.body;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       await storage.deleteContact(req.params.id);
       res.json({ success: true });
     } catch (error: any) {
@@ -553,8 +615,12 @@ export async function registerRoutes(
    * GET /api/expected
    * Lists all expected participants.
    */
-  app.get("/api/expected", async (_req, res) => {
+  app.get("/api/expected", async (req, res) => {
     try {
+      const authToken = req.headers.authorization?.replace('Bearer ', '') || null;
+      if (!authToken || !verifyAuthToken(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const expected = await storage.getExpectedParticipants();
       res.json(expected);
     } catch (error: any) {
@@ -643,8 +709,12 @@ export async function registerRoutes(
    * GET /api/groups
    * Lists all groups with their member IDs.
    */
-  app.get("/api/groups", async (_req, res) => {
+  app.get("/api/groups", async (req, res) => {
     try {
+      const authToken = req.headers.authorization?.replace('Bearer ', '') || null;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const groups = await storage.getGroupsWithMembers();
       res.json(groups);
     } catch (error: any) {
@@ -778,8 +848,12 @@ export async function registerRoutes(
    * GET /api/channels
    * Lists all channels with their assignments.
    */
-  app.get("/api/channels", async (_req, res) => {
+  app.get("/api/channels", async (req, res) => {
     try {
+      const authToken = req.headers.authorization?.replace('Bearer ', '') || null;
+      if (!authToken || !verifyAuthToken(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const allChannels = await storage.getChannels();
       const allAssignments = await storage.getChannelAssignments();
       
@@ -944,8 +1018,12 @@ export async function registerRoutes(
    * GET /api/banters
    * Lists all scheduled banters.
    */
-  app.get("/api/banters", async (_req, res) => {
+  app.get("/api/banters", async (req, res) => {
     try {
+      const authToken = req.headers.authorization?.replace('Bearer ', '') || null;
+      if (!authToken || !verifyAuthToken(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const banters = await storage.getScheduledBanters();
       res.json(banters);
     } catch (error: any) {
@@ -1071,11 +1149,7 @@ export async function registerRoutes(
         const participants = await storage.getExpectedParticipants();
         const matchingParticipant = participants.find(p => {
           if (verifiedPhone) {
-            const normalizedExpected = p.phone.replace(/\D/g, '');
-            const normalizedVerified = verifiedPhone.replace(/\D/g, '');
-            return normalizedExpected === normalizedVerified || 
-                   normalizedExpected.endsWith(normalizedVerified) ||
-                   normalizedVerified.endsWith(normalizedExpected);
+            return normalizePhone(p.phone) === normalizePhone(verifiedPhone);
           }
           return p.name === name || p.name === identity;
         });

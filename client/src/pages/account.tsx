@@ -12,8 +12,11 @@ export default function Account() {
   const { data: contacts = [] } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
     queryFn: async () => {
-      const res = await fetch("/api/contacts");
-      if (!res.ok) throw new Error("Failed to fetch contacts");
+      const authToken = localStorage.getItem('banter_auth_token') || '';
+      const res = await fetch("/api/contacts", {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (!res.ok) return [];
       return res.json();
     },
   });

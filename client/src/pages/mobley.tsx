@@ -306,7 +306,10 @@ export default function Mobley() {
   const { data: expectedData, isLoading: expectedLoading } = useQuery<ExpectedParticipant[]>({
     queryKey: ["/api/expected"],
     queryFn: async () => {
-      const res = await fetch("/api/expected");
+      const token = localStorage.getItem('banter_auth_token') || '';
+      const res = await fetch("/api/expected", {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to fetch expected");
       return res.json();
     },
@@ -325,7 +328,10 @@ export default function Mobley() {
   const { data: channelsData } = useQuery<Channel[]>({
     queryKey: ["/api/channels"],
     queryFn: async () => {
-      const res = await fetch("/api/channels");
+      const token = localStorage.getItem('banter_auth_token') || '';
+      const res = await fetch("/api/channels", {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to fetch channels");
       return res.json();
     },
@@ -668,13 +674,15 @@ export default function Mobley() {
   // Disconnect from room
   const disconnectFromRoom = useCallback(async () => {
     if (room) {
+      setRemoteAudioMuted(false);
+      setIsTalking(false);
       await room.disconnect();
       setRoom(null);
       setLocalIdentity(null);
       setConnectionState(ConnectionState.Disconnected);
       queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
     }
-  }, [room, queryClient]);
+  }, [room, queryClient, setRemoteAudioMuted]);
 
   // Toggle mute
   const toggleMute = useCallback(async () => {

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { UserPlus, Plus, X, ArrowLeft, Users, Pencil, Trash2, Check } from "lucide-react";
+import { UserPlus, Plus, X, ArrowLeft, Users, Pencil, Trash2, Check, Search } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -62,6 +62,7 @@ export default function Contacts() {
   const [newPhone, setNewPhone] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -70,8 +71,19 @@ export default function Contacts() {
   const [managingGroup, setManagingGroup] = useState<Group | null>(null);
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
   
-  const adminPin = localStorage.getItem('banter_admin_pin') || '';
+  const authToken = localStorage.getItem('banter_auth_token') || '';
   
+  if (!authToken) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-6">
+        <p className="text-slate-400 mb-4" data-testid="text-sign-in-prompt">Please sign in on the main page first</p>
+        <Link href="/mobley" className="text-emerald-400 hover:text-emerald-300 transition-colors" data-testid="link-sign-in">
+          Go to sign in
+        </Link>
+      </div>
+    );
+  }
+
   const handlePhoneChange = (value: string) => {
     setNewPhone(value);
     const validation = validatePhone(value);
@@ -88,7 +100,9 @@ export default function Contacts() {
   const { data: contacts = [], isLoading: contactsLoading } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
     queryFn: async () => {
-      const res = await fetch("/api/contacts");
+      const res = await fetch("/api/contacts", {
+        headers: { 'Authorization': 'Bearer ' + authToken },
+      });
       if (!res.ok) throw new Error("Failed to fetch contacts");
       return res.json();
     },
@@ -97,7 +111,9 @@ export default function Contacts() {
   const { data: participants = [] } = useQuery<ExpectedParticipant[]>({
     queryKey: ["/api/expected"],
     queryFn: async () => {
-      const res = await fetch("/api/expected");
+      const res = await fetch("/api/expected", {
+        headers: { 'Authorization': 'Bearer ' + authToken },
+      });
       if (!res.ok) throw new Error("Failed to fetch participants");
       return res.json();
     },
@@ -106,7 +122,9 @@ export default function Contacts() {
   const { data: groups = [], isLoading: groupsLoading } = useQuery<Group[]>({
     queryKey: ["/api/groups"],
     queryFn: async () => {
-      const res = await fetch("/api/groups");
+      const res = await fetch("/api/groups", {
+        headers: { 'Authorization': 'Bearer ' + authToken },
+      });
       if (!res.ok) throw new Error("Failed to fetch groups");
       return res.json();
     },
@@ -117,9 +135,12 @@ export default function Contacts() {
       const res = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone }),
+        body: JSON.stringify({ authToken, name, phone }),
       });
-      if (!res.ok) throw new Error("Failed to add contact");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || data.error || "Failed to add contact");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -129,14 +150,23 @@ export default function Contacts() {
       setShowAddContact(false);
       toast({ title: "Contact added", description: "New contact has been saved." });
     },
-    onError: () => {
-      toast({ title: "Failed to add contact", description: "Please try again.", variant: "destructive" });
+    onError: (error: Error) => {
+      const isDuplicate = error.message.toLowerCase().includes("already exists") || error.message.toLowerCase().includes("duplicate");
+      toast({
+        title: "Failed to add contact",
+        description: isDuplicate ? "A contact with this phone number already exists" : "Please try again.",
+        variant: "destructive",
+      });
     },
   });
 
   const deleteContact = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/contacts/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/contacts/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authToken }),
+      });
       if (!res.ok) throw new Error("Failed to delete contact");
       return res.json();
     },
@@ -154,7 +184,7 @@ export default function Contacts() {
       const res = await fetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, name }),
+        body: JSON.stringify({ authToken, name }),
       });
       if (!res.ok) throw new Error("Failed to create group");
       return res.json();
@@ -175,7 +205,7 @@ export default function Contacts() {
       const res = await fetch(`/api/groups/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, name }),
+        body: JSON.stringify({ authToken, name }),
       });
       if (!res.ok) throw new Error("Failed to update group");
       return res.json();
@@ -195,7 +225,7 @@ export default function Contacts() {
       const res = await fetch(`/api/groups/${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin }),
+        body: JSON.stringify({ authToken }),
       });
       if (!res.ok) throw new Error("Failed to delete group");
       return res.json();
@@ -215,7 +245,7 @@ export default function Contacts() {
       const res = await fetch(`/api/groups/${groupId}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin, participantId }),
+        body: JSON.stringify({ authToken, participantId }),
       });
       if (!res.ok) throw new Error("Failed to add member");
       return res.json();
@@ -234,7 +264,7 @@ export default function Contacts() {
       const res = await fetch(`/api/groups/${groupId}/members/${participantId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin }),
+        body: JSON.stringify({ authToken }),
       });
       if (!res.ok) throw new Error("Failed to remove member");
       return res.json();
@@ -273,6 +303,12 @@ export default function Contacts() {
     const p = participants.find(p => p.id === id);
     return p?.name || 'Unknown';
   };
+
+  const filteredContacts = contacts.filter((c) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return c.name.toLowerCase().includes(query) || c.phone.toLowerCase().includes(query);
+  });
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
@@ -376,6 +412,19 @@ export default function Contacts() {
                 </form>
               )}
 
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search contacts..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-slate-800/50 rounded-xl pl-10 pr-4 py-3 outline-none focus:ring-2 ring-emerald-500 text-sm"
+                  style={{ fontSize: '16px' }}
+                  data-testid="input-search-contacts"
+                />
+              </div>
+
               {contactsLoading ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
@@ -388,9 +437,9 @@ export default function Contacts() {
                     </div>
                   ))}
                 </div>
-              ) : contacts.length > 0 ? (
+              ) : filteredContacts.length > 0 ? (
                 <div className="space-y-2">
-                  {contacts.map((c) => (
+                  {filteredContacts.map((c) => (
                     <div 
                       key={c.id} 
                       className="flex items-center gap-3 bg-slate-800/40 rounded-lg px-4 py-3"
@@ -414,6 +463,10 @@ export default function Contacts() {
                       </button>
                     </div>
                   ))}
+                </div>
+              ) : contacts.length > 0 && searchQuery ? (
+                <div className="text-center py-12">
+                  <p className="text-slate-500 mb-2">No contacts match your search</p>
                 </div>
               ) : (
                 <div className="text-center py-12">

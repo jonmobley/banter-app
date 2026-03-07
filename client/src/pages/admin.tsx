@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Mail, Calendar, Shield } from "lucide-react";
+import { ArrowLeft, Mail, Calendar } from "lucide-react";
 import { Link } from "wouter";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 
 interface BetaRequest {
   id: string;
@@ -21,48 +21,30 @@ function formatDate(dateStr: string): string {
 }
 
 export default function Admin() {
-  const [adminPin, setAdminPin] = useState(() => localStorage.getItem('banter_admin_pin') || '');
-  const [pinInput, setPinInput] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const authToken = localStorage.getItem('banter_auth_token');
 
   const { data: betaRequests = [], isLoading, refetch } = useQuery<BetaRequest[]>({
-    queryKey: ["/api/beta-requests", adminPin],
+    queryKey: ["/api/beta-requests", authToken],
     queryFn: async () => {
-      if (!adminPin) return [];
+      if (!authToken) return [];
       const res = await fetch("/api/beta-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin }),
+        body: JSON.stringify({ authToken }),
       });
       if (!res.ok) {
         if (res.status === 401) {
-          localStorage.removeItem('banter_admin_pin');
-          setAdminPin('');
-          throw new Error("Invalid admin PIN");
+          throw new Error("Invalid auth token");
         }
         throw new Error("Failed to fetch beta requests");
       }
       return res.json();
     },
-    enabled: !!adminPin,
+    enabled: !!authToken,
     retry: false,
   });
 
-  const handlePinSubmit = () => {
-    if (pinInput.length === 4) {
-      localStorage.setItem('banter_admin_pin', pinInput);
-      setAdminPin(pinInput);
-      setError(null);
-    }
-  };
-
-  useEffect(() => {
-    if (pinInput.length === 4) {
-      handlePinSubmit();
-    }
-  }, [pinInput]);
-
-  if (!adminPin) {
+  if (!authToken) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col">
         <header className="flex items-center gap-4 px-4 py-4 border-b border-slate-800">
@@ -76,19 +58,16 @@ export default function Admin() {
           <h1 className="text-xl font-bold" data-testid="text-title">Admin</h1>
         </header>
         <div className="flex-1 flex flex-col items-center justify-center px-6">
-          <Shield className="w-16 h-16 text-slate-600 mb-4" />
-          <h2 className="text-lg font-medium mb-6">Enter Admin PIN</h2>
-          <input
-            type="password"
-            inputMode="numeric"
-            maxLength={4}
-            value={pinInput}
-            onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
-            placeholder="****"
-            className="w-32 text-center text-2xl tracking-widest px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
-            data-testid="input-admin-pin"
-          />
-          {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
+          <div className="text-center">
+            <p className="text-slate-300 mb-4">Please sign in on the main page first</p>
+            <Link 
+              href="/mobley"
+              className="text-emerald-500 hover:text-emerald-400 transition-colors"
+              data-testid="link-signin"
+            >
+              Go to main page
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -105,18 +84,6 @@ export default function Admin() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <h1 className="text-xl font-bold" data-testid="text-title">Admin</h1>
-        <div className="flex-1" />
-        <button
-          onClick={() => {
-            localStorage.removeItem('banter_admin_pin');
-            setAdminPin('');
-            setPinInput('');
-          }}
-          className="text-sm text-slate-400 hover:text-white transition-colors"
-          data-testid="button-logout"
-        >
-          Sign out
-        </button>
       </header>
 
       <div className="flex-1 overflow-auto px-4 py-6">

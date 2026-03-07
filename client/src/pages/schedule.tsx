@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Calendar, Clock, Phone, Bell, X, Trash2, Users, Radio } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Clock, Bell, X, Trash2, Users, Radio } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -44,7 +44,7 @@ export default function Schedule() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [adminPin] = useState(() => localStorage.getItem('banter_admin_pin') || '');
+  const [authToken] = useState(() => localStorage.getItem('banter_auth_token') || '');
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [banterName, setBanterName] = useState("");
@@ -63,15 +63,17 @@ export default function Schedule() {
   };
 
   useEffect(() => {
-    if (!adminPin) {
+    if (!authToken) {
       navigate('/mobley');
     }
-  }, [adminPin, navigate]);
+  }, [authToken, navigate]);
 
   const { data: banters = [], isLoading: bantersLoading } = useQuery<ScheduledBanter[]>({
     queryKey: ["/api/banters"],
     queryFn: async () => {
-      const res = await fetch("/api/banters");
+      const res = await fetch("/api/banters", {
+        headers: { 'Authorization': 'Bearer ' + authToken },
+      });
       if (!res.ok) throw new Error("Failed to fetch banters");
       return res.json();
     },
@@ -81,7 +83,9 @@ export default function Schedule() {
   const { data: expectedParticipants = [] } = useQuery<ExpectedParticipant[]>({
     queryKey: ["/api/expected"],
     queryFn: async () => {
-      const res = await fetch("/api/expected");
+      const res = await fetch("/api/expected", {
+        headers: { 'Authorization': 'Bearer ' + authToken },
+      });
       if (!res.ok) throw new Error("Failed to fetch expected");
       return res.json();
     },
@@ -90,7 +94,9 @@ export default function Schedule() {
   const { data: groups = [] } = useQuery<Group[]>({
     queryKey: ["/api/groups"],
     queryFn: async () => {
-      const res = await fetch("/api/groups");
+      const res = await fetch("/api/groups", {
+        headers: { 'Authorization': 'Bearer ' + authToken },
+      });
       if (!res.ok) throw new Error("Failed to fetch groups");
       return res.json();
     },
@@ -103,7 +109,7 @@ export default function Schedule() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pin: adminPin,
+          authToken,
           name: banterName,
           scheduledAt: scheduledAt.toISOString(),
           autoCallEnabled,
@@ -130,7 +136,7 @@ export default function Schedule() {
       const res = await fetch(`/api/banters/${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin: adminPin }),
+        body: JSON.stringify({ authToken }),
       });
       if (!res.ok) throw new Error("Failed to delete banter");
       return res.json();
@@ -251,8 +257,8 @@ export default function Schedule() {
                       <div className="flex flex-wrap gap-2 mb-3">
                         {banter.autoCallEnabled === 'true' && (
                           <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full flex items-center gap-1">
-                            <Phone className="w-3 h-3" />
-                            Auto-call
+                            <Bell className="w-3 h-3" />
+                            Auto-notify
                           </span>
                         )}
                         {banter.reminderEnabled === 'true' && (
@@ -429,10 +435,10 @@ export default function Schedule() {
               <div className="space-y-3">
                 <label className="flex items-center justify-between p-4 rounded-xl bg-slate-800 cursor-pointer">
                   <div className="flex items-center gap-3">
-                    <Phone className="w-5 h-5 text-emerald-400" />
+                    <Bell className="w-5 h-5 text-emerald-400" />
                     <div>
-                      <p className="font-medium">Auto-call participants</p>
-                      <p className="text-sm text-slate-400">Call everyone when the banter starts</p>
+                      <p className="font-medium">Auto-notify participants</p>
+                      <p className="text-sm text-slate-400">Text everyone when the banter starts</p>
                     </div>
                   </div>
                   <input
@@ -449,7 +455,7 @@ export default function Schedule() {
                     <Bell className="w-5 h-5 text-blue-400" />
                     <div>
                       <p className="font-medium">Send reminder</p>
-                      <p className="text-sm text-slate-400">Text participants 5 min before</p>
+                      <p className="text-sm text-slate-400">Text participants 15 min before</p>
                     </div>
                   </div>
                   <input
