@@ -224,3 +224,10 @@ The application uses LiveKit for real-time voice conferencing:
 - **Cleanup: Fixed phone normalization** - `getContactByPhone` and LiveKit participant matching now use strict E.164 comparison
 - **SMS links: Production URL** - Reminder SMS now uses `REPLIT_DEPLOYMENT_URL` when available for correct production links
 - **Half-duplex safety** - Disconnect now explicitly unmutes remote audio to prevent stuck-muted state
+
+### March 2026 - Live Event Crew Features
+- **Self-service channel switching** - Any authenticated user can switch channels via channel picker modal (not just admin). Server validates identity matches auth token to prevent IDOR. Channels button visible to all users when channels exist.
+- **All-call broadcast** - Admin can activate/deactivate all-call mode via `POST /api/channels/all-call`. All connected clients receive WS broadcast and auto-reconnect to `banter-all-call` room. State bootstrapped on WS connect. Red pulsing "ALL CALL ACTIVE" banner shown to all users.
+- **PWA support** - Added `manifest.json`, service worker (`sw.js`), and PWA meta tags for "Add to Home Screen" on iOS/Android. Display mode: standalone.
+- **Wake Lock** - Screen stays awake during active calls via Web Wake Lock API. Reacquires on visibility change. Released on disconnect.
+- **Alert Crew SMS** - Admin can send instant "Join Now" SMS to all expected participants with phone numbers via `POST /api/alert-crew`. Rate limited to 1 per 5 minutes. Confirmation dialog before sending.

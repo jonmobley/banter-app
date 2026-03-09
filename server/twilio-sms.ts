@@ -76,6 +76,27 @@ export async function sendVerificationSMS(to: string, code: string): Promise<boo
 }
 
 /**
+ * Send an instant "Join Now" alert SMS to a crew member
+ */
+export async function sendAlertSMS(to: string, joinLink: string): Promise<boolean> {
+  try {
+    const client = await getTwilioClient();
+    const fromNumber = await getTwilioFromPhoneNumber();
+    
+    await client.messages.create({
+      body: `Join Banter now! ${joinLink}`,
+      from: fromNumber,
+      to: to
+    });
+    
+    return true;
+  } catch (error: any) {
+    console.error('Failed to send alert SMS:', error.message);
+    return false;
+  }
+}
+
+/**
  * Send a reminder SMS for an upcoming scheduled banter
  */
 export async function sendReminderSMS(to: string, banterName: string, minutesUntilStart: number): Promise<boolean> {

@@ -147,6 +147,16 @@ function broadcastSpeakingState() {
   });
 }
 
+// Broadcast any message to all frontend clients
+function broadcastToFrontend(data: any) {
+  const message = JSON.stringify(data);
+  frontendClients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+}
+
 // Broadcast participant events to all frontend clients
 function broadcastParticipantEvent(event: string, data: any) {
   const message = JSON.stringify({
@@ -170,6 +180,9 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // All-call state (shared across routes and WebSocket)
+  let allCallActive = false;
+
   // Set up WebSocket server for frontend clients
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
   
@@ -183,6 +196,9 @@ export async function registerRoutes(
       stateObj[identity] = speaking;
     });
     ws.send(JSON.stringify({ type: 'speaking', data: stateObj }));
+    
+    // Send current all-call state on connect
+    ws.send(JSON.stringify({ type: 'all-call', active: allCallActive }));
     
     // Handle messages from frontend (speaking state updates)
     ws.on('message', (data) => {
@@ -1015,6 +1031,74 @@ export async function registerRoutes(
   });
 
   /**
+   * POST /api/channels/switch
+   * Allows any authenticated user to switch their own channel.
+   */
+  app.post("/api/channels/switch", async (req, res) => {
+    try {
+      const { authToken, channelId, identity } = req.body;
+      const verifiedId = authToken ? verifyAuthToken(authToken) : null;
+      if (!verifiedId) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (!identity) {
+        return res.status(400).json({ error: "Identity is required" });
+      }
+      if (identity !== verifiedId && !isAdminPhone(verifiedId)) {
+        return res.status(403).json({ error: "Cannot switch another user's channel" });
+      }
+
+      if (channelId) {
+        const channel = await storage.getChannel(channelId);
+        if (!channel) {
+          return res.status(404).json({ error: "Channel not found" });
+        }
+        await storage.assignToChannel(channelId, identity);
+        log(`📺 ${identity} switched to channel ${channel.number} (${channel.name})`, "channels");
+        broadcastToFrontend({ type: 'channel-switch', identity, channelId, channelNumber: channel.number, channelName: channel.name });
+        res.json({ success: true, channel });
+      } else {
+        await storage.removeFromChannel(identity);
+        log(`📺 ${identity} switched to main room`, "channels");
+        broadcastToFrontend({ type: 'channel-switch', identity, channelId: null, channelNumber: null, channelName: null });
+        res.json({ success: true, channel: null });
+      }
+    } catch (error: any) {
+      log(`Error switching channel: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to switch channel" });
+    }
+  });
+
+  /**
+   * POST /api/channels/all-call
+   * Admin activates/deactivates all-call mode (broadcast to all channels).
+   */
+  app.post("/api/channels/all-call", async (req, res) => {
+    try {
+      const { authToken, active } = req.body;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      allCallActive = !!active;
+      log(`📢 All-call ${allCallActive ? 'ACTIVATED' : 'DEACTIVATED'} by admin`, "channels");
+      broadcastToFrontend({ type: 'all-call', active: allCallActive });
+      res.json({ success: true, active: allCallActive });
+    } catch (error: any) {
+      log(`Error toggling all-call: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to toggle all-call" });
+    }
+  });
+
+  /**
+   * GET /api/channels/all-call
+   * Returns current all-call state.
+   */
+  app.get("/api/channels/all-call", async (_req, res) => {
+    res.json({ active: allCallActive });
+  });
+
+  /**
    * GET /api/banters
    * Lists all scheduled banters.
    */
@@ -1115,6 +1199,69 @@ export async function registerRoutes(
   });
 
   /**
+   * POST /api/alert-crew
+   * Sends an instant "Join Now" SMS to crew members. Requires admin auth.
+   * Rate limited to 1 alert per 5 minutes.
+   */
+  app.post("/api/alert-crew", async (req, res) => {
+    try {
+      const { authToken: clientAuthToken, participantIds } = req.body;
+      if (!verifyAdminAuth(clientAuthToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      if (!checkRateLimit('alert-crew', 1, 5 * 60 * 1000)) {
+        return res.status(429).json({ error: "Alert already sent recently. Please wait 5 minutes." });
+      }
+
+      const joinLink = process.env.REPLIT_DEPLOYMENT_URL
+        ? `${process.env.REPLIT_DEPLOYMENT_URL}/mobley`
+        : process.env.REPLIT_DEV_DOMAIN
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}/mobley`
+          : 'your Banter link';
+
+      let targets: { name: string; phone: string }[] = [];
+
+      if (participantIds && Array.isArray(participantIds) && participantIds.length > 0) {
+        const allExpected = await storage.getExpectedParticipants();
+        targets = allExpected
+          .filter(p => participantIds.includes(p.id) && p.phone)
+          .map(p => ({ name: p.name, phone: p.phone }));
+      } else {
+        const allExpected = await storage.getExpectedParticipants();
+        targets = allExpected
+          .filter(p => p.phone)
+          .map(p => ({ name: p.name, phone: p.phone }));
+      }
+
+      if (targets.length === 0) {
+        return res.status(400).json({ error: "No participants with phone numbers to alert" });
+      }
+
+      const { sendAlertSMS } = await import('./twilio-sms.js');
+      let sent = 0;
+      let failed = 0;
+      for (const target of targets) {
+        const normalizedPhone = normalizePhone(target.phone);
+        const success = await sendAlertSMS(normalizedPhone, joinLink);
+        if (success) {
+          sent++;
+          log(`📲 Alert SMS sent to ${target.name} (${normalizedPhone})`, "alert");
+        } else {
+          failed++;
+          log(`📲 Alert SMS failed for ${target.name} (${normalizedPhone})`, "alert");
+        }
+      }
+
+      log(`📲 Alert crew complete: ${sent} sent, ${failed} failed out of ${targets.length}`, "alert");
+      res.json({ success: true, sent, failed, total: targets.length });
+    } catch (error: any) {
+      log(`Error sending crew alert: ${error.message}`, "alert");
+      res.status(500).json({ error: "Failed to send crew alert" });
+    }
+  });
+
+  /**
    * POST /api/livekit/token
    * Generates a LiveKit access token for joining the room.
    * Requires either admin PIN or valid auth token for security.
@@ -1161,18 +1308,23 @@ export async function registerRoutes(
         // Continue without role check
       }
       
-      // Check if user is assigned to a channel
+      // Check if all-call mode is active — everyone joins the all-call room
       let roomName = DEFAULT_ROOM_NAME;
       let channelNumber: number | null = null;
-      try {
-        const channel = await storage.getParticipantChannel(stableIdentity);
-        if (channel) {
-          roomName = `banter-channel-${channel.number}`;
-          channelNumber = channel.number;
-          log(`📺 User ${stableIdentity} assigned to channel ${channel.number} (${channel.name})`, "livekit");
+      if (allCallActive) {
+        roomName = 'banter-all-call';
+        log(`📢 All-call active — routing ${stableIdentity} to all-call room`, "livekit");
+      } else {
+        try {
+          const channel = await storage.getParticipantChannel(stableIdentity);
+          if (channel) {
+            roomName = `banter-channel-${channel.number}`;
+            channelNumber = channel.number;
+            log(`📺 User ${stableIdentity} assigned to channel ${channel.number} (${channel.name})`, "livekit");
+          }
+        } catch (error) {
+          // Continue with default room
         }
-      } catch (error) {
-        // Continue with default room
       }
       
       const token = await generateToken(stableIdentity, roomName, {

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
@@ -87,7 +87,8 @@ export default function Mobley() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [localIdentity, setLocalIdentity] = useState<string | null>(null);
   
-  // Track attached audio elements for cleanup
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   
   // Walkie-talkie mode state
@@ -233,9 +234,16 @@ export default function Mobley() {
 
   // Channel management state
   const [showChannelModal, setShowChannelModal] = useState(false);
+  const [showChannelPicker, setShowChannelPicker] = useState(false);
   const [currentChannel, setCurrentChannel] = useState<{ id: string; number: number; name: string } | null>(null);
   const [newChannelNumber, setNewChannelNumber] = useState(1);
   const [newChannelName, setNewChannelName] = useState('');
+  const [allCallActive, setAllCallActive] = useState(false);
+  const [allCallLoading, setAllCallLoading] = useState(false);
+
+  // Alert crew state
+  const [showAlertCrewConfirm, setShowAlertCrewConfirm] = useState(false);
+  const [alertCrewLoading, setAlertCrewLoading] = useState(false);
 
   // WebSocket connection for real-time updates
   useEffect(() => {
@@ -261,6 +269,10 @@ export default function Mobley() {
             setSpeakingState(msg.data);
           } else if (msg.type === 'participant-event') {
             queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+          } else if (msg.type === 'all-call') {
+            setAllCallActive(msg.active);
+          } else if (msg.type === 'channel-switch') {
+            queryClient.invalidateQueries({ queryKey: ["/api/channels"] });
           }
         } catch (e) {
           // Ignore parse errors
@@ -648,6 +660,15 @@ export default function Mobley() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+          wakeLockRef.current?.addEventListener('release', () => {
+            wakeLockRef.current = null;
+          });
+        } catch (e) {}
+      }
       
     } catch (error: any) {
       console.error('Failed to connect to room:', error);
@@ -655,6 +676,21 @@ export default function Mobley() {
       setConnectionState(ConnectionState.Disconnected);
     }
   }, [userName, verifiedPhone, expectedData, contactsData, channelsData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken]);
+
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && room && connectionState === ConnectionState.Connected && !wakeLockRef.current && 'wakeLock' in navigator) {
+        try {
+          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+          wakeLockRef.current?.addEventListener('release', () => {
+            wakeLockRef.current = null;
+          });
+        } catch (e) {}
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [room, connectionState]);
 
   // Auto-connect when authenticated and name is known
   useEffect(() => {
@@ -685,6 +721,10 @@ export default function Mobley() {
       setLocalIdentity(null);
       setConnectionState(ConnectionState.Disconnected);
       queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      if (wakeLockRef.current) {
+        try { await wakeLockRef.current.release(); } catch (e) {}
+        wakeLockRef.current = null;
+      }
     }
   }, [room, queryClient, setRemoteAudioMuted]);
 
@@ -953,6 +993,62 @@ export default function Mobley() {
     },
   });
 
+  const switchChannel = useCallback(async (channelId: string | null) => {
+    if (!authToken || !room) return;
+    const identity = room.localParticipant?.identity;
+    if (!identity) return;
+
+    try {
+      const res = await fetch('/api/channels/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, channelId, identity }),
+      });
+      if (!res.ok) throw new Error('Failed to switch channel');
+      const data = await res.json();
+      setCurrentChannel(data.channel ? { id: data.channel.id, number: data.channel.number, name: data.channel.name } : null);
+      setShowChannelPicker(false);
+      
+      room.disconnect();
+      setConnectionState(ConnectionState.Disconnected);
+      setTimeout(() => connectToRoom(), 500);
+      toast({ title: data.channel ? `Switched to ${data.channel.name}` : 'Switched to Main' });
+    } catch {
+      toast({ title: 'Failed to switch channel', variant: 'destructive' });
+    }
+  }, [authToken, room, connectToRoom, toast]);
+
+  const toggleAllCall = useCallback(async () => {
+    if (!authToken) return;
+    setAllCallLoading(true);
+    try {
+      const newState = !allCallActive;
+      const res = await fetch('/api/channels/all-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, active: newState }),
+      });
+      if (!res.ok) throw new Error('Failed to toggle all-call');
+      toast({ title: newState ? 'All-Call ACTIVATED' : 'All-Call ended' });
+    } catch {
+      toast({ title: 'Failed to toggle all-call', variant: 'destructive' });
+    } finally {
+      setAllCallLoading(false);
+    }
+  }, [authToken, allCallActive, toast]);
+
+  // When all-call changes from WS, reconnect to the correct room
+  const prevAllCallRef = useRef(allCallActive);
+  useEffect(() => {
+    if (prevAllCallRef.current !== allCallActive && connectionState === ConnectionState.Connected && room) {
+      prevAllCallRef.current = allCallActive;
+      room.disconnect();
+      setConnectionState(ConnectionState.Disconnected);
+      setTimeout(() => connectToRoom(), 500);
+    }
+    prevAllCallRef.current = allCallActive;
+  }, [allCallActive, connectionState, room, connectToRoom]);
+
   // Dropdown handling
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
@@ -1025,6 +1121,28 @@ export default function Mobley() {
       toast({ title: "Failed to add participant", variant: "destructive" });
     },
   });
+
+  const handleAlertCrew = async () => {
+    setAlertCrewLoading(true);
+    try {
+      const res = await fetch('/api/alert-crew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: data.error || 'Failed to send alert', variant: 'destructive' });
+      } else {
+        toast({ title: `Alert sent to ${data.sent} of ${data.total} crew members` });
+      }
+    } catch {
+      toast({ title: 'Failed to send crew alert', variant: 'destructive' });
+    } finally {
+      setAlertCrewLoading(false);
+      setShowAlertCrewConfirm(false);
+    }
+  };
 
   // Profile drawer
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
@@ -1373,12 +1491,25 @@ export default function Mobley() {
               )}
             </div>
             <p className="text-xs text-slate-400">
-              {isConnected ? `Connected${currentChannel ? ` to ${currentChannel.name}` : ''} • ${formatDuration(callDuration)}` : 
-               conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
+              {isConnected 
+                ? (allCallActive 
+                    ? `ALL CALL • ${formatDuration(callDuration)}`
+                    : `Connected${currentChannel ? ` • CH ${currentChannel.number}` : ''} • ${formatDuration(callDuration)}`)
+                : conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {isAdmin && isConnected && (
+            <button
+              onClick={() => setShowAlertCrewConfirm(true)}
+              className="p-3 rounded-full bg-amber-500/20 hover:bg-amber-500/30 transition-colors"
+              data-testid="button-alert-crew"
+              title="Alert Crew"
+            >
+              <Bell className="w-5 h-5 text-amber-400" />
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={() => setShowAddExpectedModal(true)}
@@ -1680,14 +1811,29 @@ export default function Mobley() {
               >
                 <Settings className="w-5 h-5" />
               </button>
-              {canShowControls && (
+              {channelsData && channelsData.length > 0 && (
                 <button
-                  onClick={() => setShowChannelModal(true)}
+                  onClick={() => canShowControls ? setShowChannelModal(true) : setShowChannelPicker(true)}
                   className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-full transition-all active:scale-95"
                   data-testid="button-channels"
-                  title="Manage Channels"
+                  title={canShowControls ? "Manage Channels" : "Switch Channel"}
                 >
                   <Radio className="w-5 h-5" />
+                </button>
+              )}
+              {isAdmin && isConnected && (
+                <button
+                  onClick={toggleAllCall}
+                  disabled={allCallLoading}
+                  className={`p-4 rounded-full transition-all active:scale-95 ${
+                    allCallActive
+                      ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-red-400'
+                  }`}
+                  data-testid="button-all-call"
+                  title={allCallActive ? "End All-Call" : "All-Call"}
+                >
+                  <PhoneCall className="w-5 h-5" />
                 </button>
               )}
               {talkMode === 'ptt' ? (
@@ -2044,6 +2190,70 @@ export default function Mobley() {
         </div>
       )}
 
+      {showChannelPicker && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-sm">
+            <h2 className="text-xl font-bold text-center mb-2" data-testid="text-channel-picker-title">Switch Channel</h2>
+            <p className="text-sm text-slate-400 text-center mb-6">
+              {currentChannel ? `Currently on CH ${currentChannel.number}` : 'Currently on Main'}
+            </p>
+            
+            <div className="space-y-2 mb-6">
+              <button
+                onClick={() => switchChannel(null)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
+                  !currentChannel ? 'bg-emerald-500/20 border-2 border-emerald-500' : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
+                }`}
+                data-testid="button-switch-main"
+              >
+                <div className="flex items-center gap-3">
+                  <Globe className="w-5 h-5 text-emerald-400" />
+                  <span className="font-medium">Main Room</span>
+                </div>
+                {!currentChannel && <span className="text-xs text-emerald-400">Current</span>}
+              </button>
+              
+              {channelsData?.map((channel) => (
+                <button
+                  key={channel.id}
+                  onClick={() => switchChannel(channel.id)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
+                    currentChannel?.id === channel.id ? 'bg-amber-500/20 border-2 border-amber-500' : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
+                  }`}
+                  data-testid={`button-switch-channel-${channel.id}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Radio className="w-5 h-5 text-amber-400" />
+                    <div className="text-left">
+                      <span className="font-medium">CH {channel.number} — {channel.name}</span>
+                      <span className="text-xs text-slate-400 ml-2">{channel.participants.length} in channel</span>
+                    </div>
+                  </div>
+                  {currentChannel?.id === channel.id && <span className="text-xs text-amber-400">Current</span>}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowChannelPicker(false)}
+              className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+              data-testid="button-close-channel-picker"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {allCallActive && isConnected && (
+        <div className="fixed top-16 left-0 right-0 z-40 flex justify-center px-4">
+          <div className="bg-red-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-pulse" data-testid="banner-all-call">
+            <PhoneCall className="w-4 h-4" />
+            <span className="font-semibold text-sm">ALL CALL ACTIVE</span>
+          </div>
+        </div>
+      )}
+
       {showLoginModal && (
         <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
@@ -2279,6 +2489,40 @@ export default function Mobley() {
                 className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAlertCrewConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <Bell className="w-6 h-6 text-amber-400" />
+              </div>
+            </div>
+            <h2 className="text-xl font-bold text-center mb-2" data-testid="text-alert-crew-title">Alert Crew</h2>
+            <p className="text-sm text-slate-400 text-center mb-6" data-testid="text-alert-crew-desc">
+              Send a "Join Now" SMS to {expectedData?.filter(p => p.phone).length || 0} crew member{(expectedData?.filter(p => p.phone).length || 0) !== 1 ? 's' : ''}?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAlertCrewConfirm(false)}
+                disabled={alertCrewLoading}
+                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-alert-crew-cancel"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAlertCrew}
+                disabled={alertCrewLoading}
+                className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-alert-crew-confirm"
+              >
+                {alertCrewLoading ? 'Sending...' : 'Send Alert'}
               </button>
             </div>
           </div>
