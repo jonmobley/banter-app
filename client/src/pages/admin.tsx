@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Mail, Calendar } from "lucide-react";
-import { Link } from "wouter";
-import { useEffect } from "react";
+import { ArrowLeft, Mail, Calendar, LogOut } from "lucide-react";
+import { Link, useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 interface BetaRequest {
   id: string;
@@ -22,8 +22,10 @@ function formatDate(dateStr: string): string {
 
 export default function Admin() {
   const authToken = localStorage.getItem('banter_auth_token');
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
 
-  const { data: betaRequests = [], isLoading, refetch } = useQuery<BetaRequest[]>({
+  const { data: betaRequests = [], isLoading } = useQuery<BetaRequest[]>({
     queryKey: ["/api/beta-requests", authToken],
     queryFn: async () => {
       if (!authToken) return [];
@@ -43,6 +45,14 @@ export default function Admin() {
     enabled: !!authToken,
     retry: false,
   });
+
+  const handleLogout = () => {
+    localStorage.removeItem('banter_verified_phone');
+    localStorage.removeItem('banter_verified_email');
+    localStorage.removeItem('banter_auth_token');
+    toast({ title: "Signed out" });
+    navigate("/mobley");
+  };
 
   if (!authToken) {
     return (
@@ -83,7 +93,14 @@ export default function Admin() {
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <h1 className="text-xl font-bold" data-testid="text-title">Admin</h1>
+        <h1 className="text-xl font-bold flex-1" data-testid="text-title">Admin</h1>
+        <button
+          onClick={handleLogout}
+          className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-red-400"
+          data-testid="button-logout"
+        >
+          <LogOut className="w-5 h-5" />
+        </button>
       </header>
 
       <div className="flex-1 overflow-auto px-4 py-6">

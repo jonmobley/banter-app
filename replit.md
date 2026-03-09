@@ -52,14 +52,12 @@ Each Scheduled Banter is a fully isolated session with its own:
 - Global: `banter-main`, `banter-channel-{n}`, `banter-all-call`, `banter-broadcast`
 - Scoped: `banter-{slug}-main`, `banter-{slug}-channel-{n}`, `banter-{slug}-all-call`, `banter-{slug}-broadcast`
 
-**Key endpoints accepting `banterId`**:
-- `POST /api/livekit/token` — accepts `banterId` or `slug` to route to scoped room
-- `GET /api/channels?banterId=...`, `GET /api/expected?banterId=...`
-- `POST /api/channels` — accepts `banterId` to create scoped channel
-- `POST /api/channels/:id/assign`, `POST /api/channels/unassign`, `POST /api/channels/switch` — scoped by `banterId`
-- `POST /api/channels/all-call`, `POST /api/broadcast`, `POST /api/broadcast/grant` — scoped by `banterId`
-- `POST /api/alert-crew` — generates banter-specific join link in SMS
-- `GET /api/banters/by-slug/:slug` — resolves a banter by its slug (no auth required)
+### WebSocket Scoping
+- `frontendClients` is a `Map<WebSocket, { banterId: string | null }>` — each WS client is associated with a banter
+- `speakingStates` is a `Map<string, Map<string, boolean>>` keyed by banterId — speaking indicators are scoped per banter
+- `broadcastToFrontend()` and `broadcastSpeakingState()` only send to clients in the same banter
+- Clients send `join-banter` WS message on connect and when switching banters
+- LiveKit webhook events extract banterId from room name for scoped broadcasts
 
 ### LiveKit Integration
 - **WebSocket URL**: `wss://banter-4d7r2g6h.livekit.cloud`
@@ -72,7 +70,7 @@ Each Scheduled Banter is a fully isolated session with its own:
 - **Broadcast Mode**: Admin-controlled one-to-many broadcast with speaker granting and raise-hand functionality (scoped per banter).
 
 ### Core Features
-- **Talk Modes**: Hold to Talk (PTT) and Auto (VAD) with LiveKit's speaking detection.
+- **Talk Modes**: Hold to Talk (PTT), Auto (VAD), and Always On with LiveKit's speaking detection. "Always On" correctly preserves unmuted state after channel switches.
 - **Product Taxonomy**:
     - **Banter**: Always-on single room.
     - **Banter Scheduled**: Planned calls with invites and reminders, each an isolated session.
@@ -80,10 +78,28 @@ Each Scheduled Banter is a fully isolated session with its own:
     - **Banter Broadcast**: One speaker, unlimited listeners.
 - **Supporting Concepts**: Banter Groups (saved contact lists), Admin, Host, Participant, Listener roles.
 - **Authentication**: Email or phone-based magic code login. Admin status determined by phone number verification.
-- **Scheduling**: SMS reminder system and background scheduler for auto-activating scheduled banters. SMS includes banter-specific join links.
-- **Security**: Strict E.164 phone number matching, API rate limiting, bearer token authentication for all API access, and database transactions for critical operations.
+- **Scheduling**: SMS reminder system and background scheduler for auto-activating scheduled banters. SMS includes banter-specific join links. Schedule page validates against past dates.
+- **Security**: Strict E.164 phone number matching, API rate limiting, bearer token authentication for all API access (including GET /api/participants, GET /api/speaking, GET /api/channels/all-call), and database transactions for critical operations (deleteGroup, deleteChannel).
 - **Live Event Crew Features**: Self-service channel switching, all-call broadcast, PWA support, Wake Lock, and "Notify Group" SMS functionality.
 - **Share Links**: Each scheduled banter has a unique `/join/{slug}` URL. "Copy Link" button on the schedule page.
+- **Navigation**: Logout available from account, admin, and mobley pages. Admin page discoverable from account page for admin users. 404 page has user-friendly messaging with "Go Home" link.
+
+### Shared Utilities
+- **Phone formatting**: `formatPhone()` in `client/src/lib/utils.ts` — shared by mobley and contacts pages
+- **Phone normalization**: `normalizePhone()` in `shared/schema.ts` — used by server for E.164 matching
+
+### Key Endpoints with `banterId` Scoping
+All endpoints below accept `banterId` to scope to a specific scheduled banter:
+- `GET /api/participants?banterId=...` — queries correct LiveKit room (auth required)
+- `POST /api/admin/mute` — accepts `banterId` to mute in correct room
+- `POST /api/admin/kick` — accepts `banterId` to kick from correct room
+- `POST /api/livekit/token` — accepts `banterId` or `slug` to route to scoped room
+- `GET /api/channels?banterId=...`, `GET /api/expected?banterId=...`
+- `POST /api/channels` — accepts `banterId` to create scoped channel
+- `POST /api/channels/:id/assign`, `POST /api/channels/unassign`, `POST /api/channels/switch` — scoped by `banterId`
+- `POST /api/channels/all-call`, `POST /api/broadcast`, `POST /api/broadcast/grant` — scoped by `banterId`
+- `POST /api/alert-crew` — generates banter-specific join link in SMS
+- `GET /api/banters/by-slug/:slug` — resolves a banter by its slug (no auth required)
 
 ## External Dependencies
 

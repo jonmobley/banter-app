@@ -43,6 +43,10 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     allowedHosts: true,
+    hmr: {
+      path: "/vite-hmr",
+      clientPort: 443,
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],

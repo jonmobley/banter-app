@@ -1,6 +1,8 @@
-import { ArrowLeft, Users, Phone, Share, Calendar } from "lucide-react";
-import { Link } from "wouter";
+import { ArrowLeft, Users, Phone, Share, Calendar, LogOut, Shield } from "lucide-react";
+import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Contact {
   id: string;
@@ -9,6 +11,10 @@ interface Contact {
 }
 
 export default function Account() {
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+  const [isAdmin, setIsAdmin] = useState(false);
+
   const { data: contacts = [] } = useQuery<Contact[]>({
     queryKey: ["/api/contacts"],
     queryFn: async () => {
@@ -21,25 +27,49 @@ export default function Account() {
     },
   });
 
+  useEffect(() => {
+    const authToken = localStorage.getItem('banter_auth_token');
+    if (!authToken) {
+      setIsAdmin(false);
+      return;
+    }
+    fetch("/api/admin/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ authToken }),
+    })
+      .then(res => res.json())
+      .then(data => setIsAdmin(data.isAdmin === true))
+      .catch(() => setIsAdmin(false));
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('banter_verified_phone');
+    localStorage.removeItem('banter_verified_email');
+    localStorage.removeItem('banter_auth_token');
+    toast({ title: "Signed out" });
+    navigate("/mobley");
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <div className="flex-1 flex flex-col items-center px-6 py-8">
         <div className="w-full max-w-xs">
-          <Link href="/mobley" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8">
+          <Link href="/mobley" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8" data-testid="link-back">
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">Back</span>
           </Link>
 
           <h1 className="text-2xl font-bold mb-8 text-center" data-testid="text-title">Account</h1>
 
-          <a
-            href="tel:+12202423245"
+          <Link
+            href="/mobley"
             className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors mb-3"
             data-testid="button-join"
           >
             <Phone className="w-5 h-5" />
             Banter
-          </a>
+          </Link>
 
           <button
             onClick={async () => {
@@ -52,7 +82,6 @@ export default function Account() {
                     url: shareUrl
                   });
                 } catch (e) {
-                  // User cancelled or share failed, fall back to clipboard
                   await navigator.clipboard.writeText(shareUrl);
                 }
               } else {
@@ -86,6 +115,27 @@ export default function Account() {
               <Calendar className="w-5 h-5 text-emerald-400" />
               <span className="ml-3">Scheduled Banters</span>
             </Link>
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="flex items-center w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-4 px-6 rounded-full transition-colors"
+                data-testid="button-admin"
+              >
+                <Shield className="w-5 h-5 text-emerald-400" />
+                <span className="ml-3">Admin</span>
+              </Link>
+            )}
+          </div>
+
+          <div className="mt-8">
+            <button
+              onClick={handleLogout}
+              className="flex items-center justify-center gap-2 w-full bg-slate-800 hover:bg-slate-700 text-red-400 font-medium py-4 px-6 rounded-full transition-colors"
+              data-testid="button-logout"
+            >
+              <LogOut className="w-5 h-5" />
+              Sign Out
+            </button>
           </div>
         </div>
       </div>

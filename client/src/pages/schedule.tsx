@@ -41,6 +41,16 @@ function formatDateTime(dateStr: string): string {
   });
 }
 
+function getTodayDateString(): string {
+  const now = new Date();
+  return now.toISOString().split('T')[0];
+}
+
+function getCurrentTimeString(): string {
+  const now = new Date();
+  return now.toTimeString().slice(0, 5);
+}
+
 export default function Schedule() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
@@ -346,6 +356,7 @@ export default function Schedule() {
                   resetModal();
                 }}
                 className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
+                data-testid="button-close-modal"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -376,6 +387,7 @@ export default function Schedule() {
                     type="date"
                     value={banterDate}
                     onChange={(e) => setBanterDate(e.target.value)}
+                    min={getTodayDateString()}
                     className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors appearance-none"
                     style={{ fontSize: '16px' }}
                     data-testid="input-banter-date"
@@ -387,6 +399,7 @@ export default function Schedule() {
                     type="time"
                     value={banterTime}
                     onChange={(e) => setBanterTime(e.target.value)}
+                    min={banterDate === getTodayDateString() ? getCurrentTimeString() : undefined}
                     className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none transition-colors appearance-none"
                     style={{ fontSize: '16px' }}
                     data-testid="input-banter-time"
@@ -395,7 +408,25 @@ export default function Schedule() {
               </div>
 
               <div>
-                <label className="text-sm text-slate-400 mb-3 block">Participants</label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-sm text-slate-400">Participants</label>
+                  {expectedParticipants.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedParticipants.length === expectedParticipants.length) {
+                          setSelectedParticipants([]);
+                        } else {
+                          setSelectedParticipants(expectedParticipants.map(p => p.id));
+                        }
+                      }}
+                      className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                      data-testid="button-select-all-participants"
+                    >
+                      {selectedParticipants.length === expectedParticipants.length ? 'Deselect All' : 'Select All'}
+                    </button>
+                  )}
+                </div>
                 
                 {groups.length > 0 && (
                   <div className="mb-3">
@@ -427,6 +458,7 @@ export default function Schedule() {
                           ? 'bg-emerald-500/20 border border-emerald-500/50' 
                           : 'bg-slate-800 border border-transparent'
                       }`}
+                      data-testid={`participant-select-${p.id}`}
                     >
                       <input
                         type="checkbox"
@@ -443,9 +475,19 @@ export default function Schedule() {
                     </label>
                   ))}
                   {expectedParticipants.length === 0 && (
-                    <p className="text-sm text-slate-500 text-center py-4">
-                      No expected participants. Add some from the main screen.
-                    </p>
+                    <div className="text-center py-4">
+                      <p className="text-sm text-slate-500 mb-2">
+                        No participants yet.
+                      </p>
+                      <Link
+                        href="/contacts"
+                        className="text-sm text-emerald-400 hover:text-emerald-300 transition-colors inline-flex items-center gap-1"
+                        data-testid="link-add-participants"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Add participants from Contacts
+                      </Link>
+                    </div>
                   )}
                 </div>
               </div>

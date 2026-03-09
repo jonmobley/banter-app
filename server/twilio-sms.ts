@@ -105,7 +105,8 @@ export async function sendReminderSMS(to: string, banterName: string, minutesUnt
     const fromNumber = await getTwilioFromPhoneNumber();
     
     const timeText = minutesUntilStart <= 1 ? 'starting now' : `starting in ${minutesUntilStart} minutes`;
-    const link = joinLink || `${process.env.REPLIT_DEPLOYMENT_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'your Banter link')}/mobley`;
+    const baseUrl = process.env.REPLIT_DEPLOYMENT_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '');
+    const link = joinLink || (baseUrl ? `${baseUrl}/mobley` : 'your Banter link');
     
     await client.messages.create({
       body: `Banter Reminder: "${banterName}" is ${timeText}. Join at ${link}`,

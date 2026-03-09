@@ -40,6 +40,10 @@ export interface IStorage {
   verifyCode(phone: string, code: string): Promise<boolean>;
   deleteVerificationCodes(phone: string): Promise<void>;
   
+  createEmailVerificationCode(email: string, code: string, expiresAt: Date): Promise<void>;
+  verifyEmailCode(email: string, code: string): Promise<boolean>;
+  deleteEmailVerificationCodes(email: string): Promise<void>;
+  
   getScheduledBanters(): Promise<ScheduledBanter[]>;
   getScheduledBanter(id: string): Promise<ScheduledBanter | undefined>;
   getScheduledBanterBySlug(slug: string): Promise<ScheduledBanter | undefined>;
@@ -248,8 +252,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteGroup(id: string): Promise<void> {
-    await db.delete(groupMembers).where(eq(groupMembers.groupId, id));
-    await db.delete(groups).where(eq(groups.id, id));
+    await db.transaction(async (tx) => {
+      await tx.delete(groupMembers).where(eq(groupMembers.groupId, id));
+      await tx.delete(groups).where(eq(groups.id, id));
+    });
   }
 
   async getGroupMembers(groupId: string): Promise<GroupMember[]> {
@@ -303,8 +309,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteChannel(id: string): Promise<void> {
-    await db.delete(channelAssignments).where(eq(channelAssignments.channelId, id));
-    await db.delete(channels).where(eq(channels.id, id));
+    await db.transaction(async (tx) => {
+      await tx.delete(channelAssignments).where(eq(channelAssignments.channelId, id));
+      await tx.delete(channels).where(eq(channels.id, id));
+    });
   }
 
   async getChannelAssignments(banterId?: string | null): Promise<ChannelAssignment[]> {

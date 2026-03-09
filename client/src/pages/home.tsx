@@ -53,7 +53,7 @@ export default function Home() {
             <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
               <span className="text-emerald-400 font-bold text-lg">B</span>
             </div>
-            <span className="text-xl font-bold">Banter</span>
+            <span className="text-xl font-bold" data-testid="text-logo">Banter</span>
           </div>
           <div className="flex items-center gap-3">
             <a

@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
 import { useToast } from "@/hooks/use-toast";
+import { formatPhone } from "@/lib/utils";
 
 type TalkMode = 'ptt' | 'auto' | 'always';
 
@@ -33,19 +34,6 @@ interface Channel {
   number: number;
   name: string;
   participants: string[];
-}
-
-function formatPhone(phone: string): string {
-  if (!phone || phone === 'Unknown') return 'Unknown';
-  const cleaned = phone.replace(/\D/g, '');
-  if (cleaned.length === 11 && cleaned.startsWith('1')) {
-    const number = cleaned.slice(1);
-    return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`;
-  }
-  if (cleaned.length === 10) {
-    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-  }
-  return phone;
 }
 
 function formatDuration(seconds: number): string {
@@ -94,8 +82,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const banterIdRef = useRef<string | null>(currentBanterId);
   useEffect(() => {
     banterIdRef.current = currentBanterId;
-    if (currentBanterId && wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'request-banter-state', banterId: currentBanterId }));
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'join-banter', banterId: currentBanterId || null }));
     }
   }, [currentBanterId]);
 
@@ -306,9 +294,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       
       ws.onopen = () => {
         setWsConnected(true);
-        if (banterIdRef.current) {
-          ws.send(JSON.stringify({ type: 'request-banter-state', banterId: banterIdRef.current }));
-        }
+        ws.send(JSON.stringify({ type: 'join-banter', banterId: banterIdRef.current || null }));
       };
 
       ws.onmessage = (event) => {
@@ -318,7 +304,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           if (msg.type === 'speaking') {
             setSpeakingState(msg.data);
           } else if (msg.type === 'participant-event') {
-            queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/participants", banterIdRef.current] });
           } else if (msg.type === 'all-call') {
             const msgBanterId = msg.banterId || null;
             if (msgBanterId === myBanterId) {
@@ -373,9 +359,13 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }, [queryClient]);
 
   const { data: participantsData, isLoading: participantsLoading } = useQuery<ParticipantsData>({
-    queryKey: ["/api/participants"],
+    queryKey: ["/api/participants", currentBanterId],
     queryFn: async () => {
-      const res = await fetch("/api/participants");
+      const token = localStorage.getItem('banter_auth_token') || '';
+      const params = currentBanterId ? `?banterId=${currentBanterId}` : '';
+      const res = await fetch(`/api/participants${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (!res.ok) throw new Error("Failed to fetch participants");
       return res.json();
     },
@@ -632,11 +622,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       });
 
       newRoom.on(RoomEvent.ParticipantConnected, () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/participants", currentBanterId] });
       });
 
       newRoom.on(RoomEvent.ParticipantDisconnected, () => {
-        queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/participants", currentBanterId] });
       });
 
       // Helper to attach audio track
@@ -720,17 +710,20 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       // Then immediately mute it (this ensures the track exists for later unmuting)
       try {
         await newRoom.localParticipant.setMicrophoneEnabled(true);
-        // Small delay to ensure track is created
         await new Promise(resolve => setTimeout(resolve, 100));
-        await newRoom.localParticipant.setMicrophoneEnabled(false);
-        setIsMuted(true);
+        const currentTalkMode = localStorage.getItem('banter_talk_mode') as TalkMode || 'ptt';
+        if (currentTalkMode === 'always') {
+          setIsMuted(false);
+        } else {
+          await newRoom.localParticipant.setMicrophoneEnabled(false);
+          setIsMuted(true);
+        }
       } catch (micError) {
         console.error('Failed to initialize microphone:', micError);
-        // Still allow connection even if mic fails
         setIsMuted(true);
       }
 
-      queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/participants", currentBanterId] });
 
       if ('wakeLock' in navigator) {
         try {
@@ -746,7 +739,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setConnectionError(error.message || 'Connection failed');
       setConnectionState(ConnectionState.Disconnected);
     }
-  }, [userName, verifiedPhone, expectedData, contactsData, channelsData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken]);
+  }, [userName, verifiedPhone, expectedData, contactsData, channelsData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken, currentBanterId, slug]);
 
   useEffect(() => {
     const handleVisibilityChange = async () => {
@@ -791,13 +784,13 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setRoom(null);
       setLocalIdentity(null);
       setConnectionState(ConnectionState.Disconnected);
-      queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/participants", currentBanterId] });
       if (wakeLockRef.current) {
         try { await wakeLockRef.current.release(); } catch (e) {}
         wakeLockRef.current = null;
       }
     }
-  }, [room, queryClient, setRemoteAudioMuted]);
+  }, [room, queryClient, setRemoteAudioMuted, currentBanterId]);
 
   // Toggle mute
   const toggleMute = useCallback(async () => {
@@ -915,13 +908,13 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       const res = await fetch("/api/admin/mute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authToken, identity, muted }),
+        body: JSON.stringify({ authToken, identity, muted, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error("Failed to mute");
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/participants", currentBanterId] });
     },
     onError: () => {
       toast({ title: "Failed to change mute status", description: "Please try again.", variant: "destructive" });
@@ -933,13 +926,13 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       const res = await fetch("/api/admin/kick", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authToken, identity }),
+        body: JSON.stringify({ authToken, identity, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error("Failed to kick");
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/participants", currentBanterId] });
       toast({ title: "Participant removed from call" });
     },
     onError: () => {
@@ -1087,7 +1080,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     } catch {
       toast({ title: 'Failed to switch channel', variant: 'destructive' });
     }
-  }, [authToken, room, connectToRoom, toast]);
+  }, [authToken, room, connectToRoom, toast, currentBanterId]);
 
   const toggleAllCall = useCallback(async () => {
     if (!authToken) return;
@@ -1106,7 +1099,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     } finally {
       setAllCallLoading(false);
     }
-  }, [authToken, allCallActive, toast]);
+  }, [authToken, allCallActive, toast, currentBanterId]);
 
   // When all-call changes from WS, reconnect to the correct room
   const prevAllCallRef = useRef(allCallActive);
@@ -1157,7 +1150,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     } finally {
       setBroadcastLoading(false);
     }
-  }, [authToken, broadcastActive, toast]);
+  }, [authToken, broadcastActive, toast, currentBanterId]);
 
   const toggleRaiseHand = useCallback(() => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -1169,7 +1162,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       identity: localIdentity,
       banterId: currentBanterId || undefined,
     }));
-  }, [localIdentity, handRaised]);
+  }, [localIdentity, handRaised, currentBanterId]);
 
   const grantSpeaker = useCallback(async (identity: string, grant: boolean) => {
     if (!authToken) return;
@@ -1184,7 +1177,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     } catch {
       toast({ title: 'Failed to update permission', variant: 'destructive' });
     }
-  }, [authToken, toast]);
+  }, [authToken, toast, currentBanterId]);
 
   const isBroadcaster = useMemo(() => {
     return broadcastActive && localIdentity === broadcastSpeakerId;
@@ -1652,7 +1645,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-semibold">{banterInfo ? banterInfo.name : 'Banter'}</h1>
+              <h1 className="font-semibold" data-testid="text-banter-title">{banterInfo ? banterInfo.name : 'Banter'}</h1>
               {isConnected && currentChannel && (
                 <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full">
                   CH {currentChannel.number}
@@ -2171,7 +2164,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             </div>
           )}
           {connectionError && (
-            <p className="text-red-400 text-sm text-center">{connectionError}</p>
+            <p className="text-red-400 text-sm text-center" data-testid="text-connection-error">{connectionError}</p>
           )}
         </div>
       </div>
@@ -2185,12 +2178,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               <button
                 onClick={() => setShowDisconnectConfirm(false)}
                 className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-cancel-disconnect"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { setShowDisconnectConfirm(false); disconnectFromRoom(); }}
                 className="flex-1 bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-confirm-disconnect"
               >
                 Disconnect
               </button>
@@ -2214,6 +2209,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       ? 'bg-emerald-500/20 border-2 border-emerald-500'
                       : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
                   }`}
+                  data-testid="button-talk-mode-ptt"
                 >
                   <Mic className={`w-5 h-5 ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-slate-400'}`} />
                   <span className={`text-xs font-medium ${talkMode === 'ptt' ? 'text-emerald-400' : 'text-white'}`}>Hold</span>
@@ -2225,6 +2221,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       ? 'bg-emerald-500/20 border-2 border-emerald-500'
                       : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
                   }`}
+                  data-testid="button-talk-mode-auto"
                 >
                   <Volume2 className={`w-5 h-5 ${talkMode === 'auto' ? 'text-emerald-400' : 'text-slate-400'}`} />
                   <span className={`text-xs font-medium ${talkMode === 'auto' ? 'text-emerald-400' : 'text-white'}`}>Tap</span>
@@ -2236,6 +2233,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       ? 'bg-emerald-500/20 border-2 border-emerald-500'
                       : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
                   }`}
+                  data-testid="button-talk-mode-always"
                 >
                   <Radio className={`w-5 h-5 ${talkMode === 'always' ? 'text-emerald-400' : 'text-slate-400'}`} />
                   <span className={`text-xs font-medium ${talkMode === 'always' ? 'text-emerald-400' : 'text-white'}`}>On</span>
@@ -2258,6 +2256,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                           ? 'bg-emerald-500/20 border-2 border-emerald-500'
                           : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
                       }`}
+                      data-testid={`button-select-mic-${device.deviceId}`}
                     >
                       <Mic className={`w-5 h-5 ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-slate-400'}`} />
                       <span className={`text-sm truncate ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-white'}`}>
@@ -2283,6 +2282,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
                       value ? 'bg-emerald-500/20 border-2 border-emerald-500' : 'bg-slate-800 border-2 border-transparent'
                     }`}
+                    data-testid={`toggle-${key}`}
                   >
                     <div className="flex flex-col items-start">
                       <span className={`text-sm font-medium ${value ? 'text-emerald-400' : 'text-white'}`}>{label}</span>
@@ -2299,6 +2299,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <button
               onClick={() => refreshAudioDevices()}
               className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors mb-3"
+              data-testid="button-refresh-devices"
             >
               Refresh Devices
             </button>
@@ -2306,6 +2307,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <button
               onClick={() => setShowAudioSettings(false)}
               className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
+              data-testid="button-close-audio-settings"
             >
               Done
             </button>
@@ -2328,6 +2330,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   onChange={(e) => setNewChannelNumber(parseInt(e.target.value) || 1)}
                   className="w-16 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-center"
                   min="1"
+                  data-testid="input-channel-number"
                 />
                 <input
                   type="text"
@@ -2335,6 +2338,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   value={newChannelName}
                   onChange={(e) => setNewChannelName(e.target.value)}
                   className="flex-1 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700"
+                  data-testid="input-channel-name"
                 />
               </div>
               <button
@@ -2345,6 +2349,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 }}
                 disabled={!newChannelName.trim() || createChannel.isPending}
                 className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-600 text-white font-medium py-2 rounded-lg transition-colors"
+                data-testid="button-create-channel"
               >
                 {createChannel.isPending ? 'Creating...' : 'Create Channel'}
               </button>
@@ -2363,6 +2368,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       onClick={() => deleteChannel.mutate(channel.id)}
                       disabled={deleteChannel.isPending}
                       className="p-1.5 rounded-md hover:bg-red-500/30 text-slate-400 hover:text-red-400"
+                      data-testid={`button-delete-channel-${channel.id}`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -2404,6 +2410,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     }}
                     className="w-full px-3 py-2 rounded-lg bg-slate-700 border border-slate-600 text-sm"
                     defaultValue=""
+                    data-testid={`select-assign-channel-${channel.id}`}
                   >
                     <option value="">Add participant...</option>
                     {participantsData?.participants
@@ -2423,6 +2430,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <button
               onClick={() => setShowChannelModal(false)}
               className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+              data-testid="button-close-channel-modal"
             >
               Done
             </button>
@@ -2512,12 +2520,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   <button
                     onClick={() => setLoginMethod('phone')}
                     className={`flex-1 py-2 text-sm font-medium transition-colors ${loginMethod === 'phone' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                    data-testid="button-login-method-phone"
                   >
                     Phone
                   </button>
                   <button
                     onClick={() => setLoginMethod('email')}
                     className={`flex-1 py-2 text-sm font-medium transition-colors ${loginMethod === 'email' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                    data-testid="button-login-method-email"
                   >
                     Email
                   </button>
@@ -2530,6 +2540,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     onChange={(e) => setLoginPhone(e.target.value)}
                     className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none mb-6 text-center"
                     style={{ fontSize: '16px' }}
+                    data-testid="input-modal-login-phone"
                   />
                 ) : (
                   <input
@@ -2539,6 +2550,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     onChange={(e) => setLoginEmail(e.target.value)}
                     className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none mb-6 text-center"
                     style={{ fontSize: '16px' }}
+                    data-testid="input-modal-login-email"
                   />
                 )}
               </>
@@ -2556,6 +2568,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 }}
                 maxLength={6}
                 className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none mb-6 text-center text-2xl tracking-widest"
+                data-testid="input-modal-login-code"
               />
             )}
             
@@ -2566,12 +2579,13 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 onClick={loginStep === 'input' ? sendVerificationCode : () => verifyLoginCode()}
                 disabled={loginLoading || (loginStep === 'input' ? (loginMethod === 'phone' ? !isPhoneValid : !isEmailValid) : loginCode.length !== 6)}
                 className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-modal-send-code"
               >
                 {loginLoading ? 'Loading...' : loginStep === 'input' ? 'Send Code' : 'Verify'}
               </button>
               
               {loginStep === 'code' && (
-                <button onClick={() => setLoginStep('input')} className="w-full text-slate-400 hover:text-white text-sm transition-colors">
+                <button onClick={() => setLoginStep('input')} className="w-full text-slate-400 hover:text-white text-sm transition-colors" data-testid="button-modal-back-to-input">
                   Use a different {loginMethod === 'phone' ? 'number' : 'email'}
                 </button>
               )}
@@ -2579,6 +2593,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               <button
                 onClick={() => { setShowLoginModal(false); resetLoginModal(); }}
                 className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-modal-cancel-login"
               >
                 Cancel
               </button>
@@ -2610,6 +2625,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   value={verifiedPhone || ''}
                   disabled
                   className="w-full px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700 text-slate-500"
+                  data-testid="input-profile-phone"
                 />
               </div>
               <div>
@@ -2628,6 +2644,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               <button
                 onClick={() => setShowMyProfile(false)}
                 className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-cancel-profile"
               >
                 Cancel
               </button>
@@ -2656,7 +2673,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       {showAddExpectedModal && (
         <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-            <h2 className="text-xl font-bold text-center mb-6">Add Participant</h2>
+            <h2 className="text-xl font-bold text-center mb-6" data-testid="text-add-participant-title">Add Participant</h2>
             <div className="space-y-4 mb-6">
               <input
                 type="text"
@@ -2664,6 +2681,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 value={newExpectedName}
                 onChange={(e) => setNewExpectedName(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+                data-testid="input-expected-name"
               />
               <input
                 type="tel"
@@ -2671,12 +2689,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 value={newExpectedPhone}
                 onChange={(e) => setNewExpectedPhone(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+                data-testid="input-expected-phone"
               />
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowAddExpectedModal(false); setNewExpectedName(""); setNewExpectedPhone(""); }}
                 className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-cancel-add-expected"
               >
                 Cancel
               </button>
@@ -2684,6 +2704,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 onClick={() => addExpected.mutate()}
                 disabled={!newExpectedName || !newExpectedPhone}
                 className="flex-1 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-save-expected"
               >
                 Add
               </button>
@@ -2695,7 +2716,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       {showProfileDrawer && editingParticipant && (
         <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-            <h2 className="text-xl font-bold text-center mb-6">Edit Profile</h2>
+            <h2 className="text-xl font-bold text-center mb-6" data-testid="text-edit-profile-title">Edit Profile</h2>
             <div className="space-y-4 mb-6">
               <input
                 type="text"
@@ -2703,6 +2724,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+                data-testid="input-edit-name"
               />
               <input
                 type="tel"
@@ -2710,6 +2732,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 value={editPhone}
                 onChange={(e) => setEditPhone(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+                data-testid="input-edit-phone"
               />
               <input
                 type="email"
@@ -2717,18 +2740,21 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 value={editEmail}
                 onChange={(e) => setEditEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
+                data-testid="input-edit-email"
               />
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowProfileDrawer(false); setEditingParticipant(null); }}
                 className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-cancel-edit-profile"
               >
                 Cancel
               </button>
               <button
                 onClick={() => updateExpected.mutate()}
                 className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-save-edit-profile"
               >
                 Save
               </button>
@@ -2774,17 +2800,19 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       {confirmDeleteId && (
         <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-            <h2 className="text-xl font-bold text-center mb-6">Remove Participant?</h2>
+            <h2 className="text-xl font-bold text-center mb-6" data-testid="text-remove-participant-title">Remove Participant?</h2>
             <div className="flex gap-3">
               <button
                 onClick={() => setConfirmDeleteId(null)}
                 className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-cancel-remove"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmDelete}
                 className="flex-1 bg-red-500 hover:bg-red-400 text-white font-medium py-3 rounded-full transition-colors"
+                data-testid="button-confirm-remove"
               >
                 Remove
               </button>

@@ -3,6 +3,7 @@ import { UserPlus, Plus, X, ArrowLeft, Users, Pencil, Trash2, Check, Search } fr
 import { useState } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { formatPhone } from "@/lib/utils";
 
 interface Contact {
   id: string;
@@ -23,19 +24,6 @@ interface Group {
   name: string;
   createdAt: string;
   memberIds: string[];
-}
-
-function formatPhone(phone: string): string {
-  if (!phone || phone === 'Unknown') return 'Unknown';
-  const cleaned = phone.replace(/\D/g, '');
-  if (cleaned.length === 11 && cleaned.startsWith('1')) {
-    const number = cleaned.slice(1);
-    return `(${number.slice(0, 3)}) ${number.slice(3, 6)}-${number.slice(6)}`;
-  }
-  if (cleaned.length === 10) {
-    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
-  }
-  return phone;
 }
 
 function validatePhone(phone: string): { valid: boolean; error?: string } {
@@ -314,7 +302,7 @@ export default function Contacts() {
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <div className="flex-1 flex flex-col items-center px-6 py-8">
         <div className="w-full max-w-xs">
-          <Link href="/account" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8">
+          <Link href="/account" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8" data-testid="link-back">
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">Back</span>
           </Link>
@@ -397,6 +385,7 @@ export default function Contacts() {
                       type="button"
                       onClick={() => setShowAddContact(false)}
                       className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                      data-testid="button-cancel-add-contact"
                     >
                       Cancel
                     </button>
@@ -509,6 +498,7 @@ export default function Contacts() {
                       type="button"
                       onClick={() => { setShowAddGroup(false); setNewGroupName(""); }}
                       className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-2.5 rounded-lg text-sm transition-colors"
+                      data-testid="button-cancel-add-group"
                     >
                       Cancel
                     </button>
@@ -634,6 +624,7 @@ export default function Contacts() {
               <button
                 onClick={() => setConfirmDeleteGroupId(null)}
                 className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3.5 rounded-full transition-colors"
+                data-testid="button-cancel-delete-group"
               >
                 Cancel
               </button>
@@ -661,6 +652,7 @@ export default function Contacts() {
                   type="button"
                   onClick={() => setEditingGroup(null)}
                   className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
+                  data-testid="button-cancel-edit-group"
                 >
                   Cancel
                 </button>
