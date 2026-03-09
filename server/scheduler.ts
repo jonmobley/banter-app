@@ -5,6 +5,12 @@ import { normalizePhone } from "@shared/schema";
 
 let schedulerInterval: NodeJS.Timeout | null = null;
 
+function getBanterJoinLink(slug: string): string {
+  const baseUrl = process.env.REPLIT_DEPLOYMENT_URL
+    || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '');
+  return baseUrl ? `${baseUrl}/join/${slug}` : '';
+}
+
 export async function startScheduler(getHost: () => string) {
   if (schedulerInterval) {
     return;
@@ -35,11 +41,12 @@ export async function startScheduler(getHost: () => string) {
         );
 
         let allSent = true;
+        const joinLink = banter.slug ? getBanterJoinLink(banter.slug) : '';
         for (const participant of participants) {
           if (!participant) continue;
           try {
             const normalizedPhone = normalizePhone(participant.phone);
-            const sent = await sendReminderSMS(normalizedPhone, banter.name, minutesUntilStart);
+            const sent = await sendReminderSMS(normalizedPhone, banter.name, minutesUntilStart, joinLink || undefined);
             if (sent) {
               log(`📱 Reminder sent to ${participant.name} (${participant.phone})`, "scheduler");
             } else {
@@ -72,11 +79,12 @@ export async function startScheduler(getHost: () => string) {
             banter.participantIds.map(id => storage.getExpectedParticipant(id))
           );
 
+          const startLink = banter.slug ? getBanterJoinLink(banter.slug) : '';
           for (const participant of participants) {
             if (!participant) continue;
             try {
               const normalizedPhone = normalizePhone(participant.phone);
-              const sent = await sendReminderSMS(normalizedPhone, banter.name, 0);
+              const sent = await sendReminderSMS(normalizedPhone, banter.name, 0, startLink || undefined);
               if (sent) {
                 log(`📱 Start notification sent to ${participant.name}`, "scheduler");
               }

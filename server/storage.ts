@@ -1,6 +1,6 @@
-import { type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments, normalizePhone } from "@shared/schema";
+import { type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments, normalizePhone, generateSlug } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, and, gt, lt, lte, sql } from "drizzle-orm";
+import { eq, and, gt, lt, lte, sql, isNull } from "drizzle-orm";
 import pg from "pg";
 
 const pool = new pg.Pool({
@@ -25,38 +25,33 @@ export async function testDatabaseConnection(): Promise<boolean> {
 }
 
 export interface IStorage {
-  // Contacts
   getContacts(): Promise<Contact[]>;
   getContactByPhone(phone: string): Promise<Contact | undefined>;
   createContact(contact: InsertContact): Promise<Contact>;
   deleteContact(id: string): Promise<void>;
   
-  // Expected Participants
-  getExpectedParticipants(): Promise<ExpectedParticipant[]>;
+  getExpectedParticipants(banterId?: string | null): Promise<ExpectedParticipant[]>;
   getExpectedParticipant(id: string): Promise<ExpectedParticipant | undefined>;
   addExpectedParticipant(participant: InsertExpectedParticipant): Promise<ExpectedParticipant>;
   updateExpectedParticipant(id: string, data: UpdateExpectedParticipant): Promise<ExpectedParticipant | undefined>;
   removeExpectedParticipant(id: string): Promise<void>;
   
-  // Verification codes
   createVerificationCode(phone: string, code: string, expiresAt: Date): Promise<void>;
   verifyCode(phone: string, code: string): Promise<boolean>;
   deleteVerificationCodes(phone: string): Promise<void>;
   
-  // Scheduled Banters
   getScheduledBanters(): Promise<ScheduledBanter[]>;
   getScheduledBanter(id: string): Promise<ScheduledBanter | undefined>;
+  getScheduledBanterBySlug(slug: string): Promise<ScheduledBanter | undefined>;
   createScheduledBanter(banter: InsertScheduledBanter): Promise<ScheduledBanter>;
   updateScheduledBanter(id: string, data: UpdateScheduledBanter): Promise<ScheduledBanter | undefined>;
   deleteScheduledBanter(id: string): Promise<void>;
   getPendingBantersForTime(time: Date): Promise<ScheduledBanter[]>;
   getBantersNeedingReminder(time: Date): Promise<ScheduledBanter[]>;
   
-  // Beta Requests
   createBetaRequest(email: string): Promise<void>;
   getBetaRequests(): Promise<{ id: string; email: string; createdAt: Date }[]>;
   
-  // Groups
   getGroups(): Promise<Group[]>;
   getGroup(id: string): Promise<Group | undefined>;
   createGroup(group: InsertGroup): Promise<Group>;
@@ -67,16 +62,15 @@ export interface IStorage {
   removeGroupMember(groupId: string, participantId: string): Promise<void>;
   getGroupsWithMembers(): Promise<(Group & { memberIds: string[] })[]>;
   
-  // Channels
-  getChannels(): Promise<Channel[]>;
+  getChannels(banterId?: string | null): Promise<Channel[]>;
   getChannel(id: string): Promise<Channel | undefined>;
   createChannel(channel: InsertChannel): Promise<Channel>;
   updateChannel(id: string, number: number, name: string): Promise<Channel | undefined>;
   deleteChannel(id: string): Promise<void>;
-  getChannelAssignments(): Promise<ChannelAssignment[]>;
-  assignToChannel(channelId: string, participantIdentity: string): Promise<ChannelAssignment>;
-  removeFromChannel(participantIdentity: string): Promise<void>;
-  getParticipantChannel(participantIdentity: string): Promise<Channel | undefined>;
+  getChannelAssignments(banterId?: string | null): Promise<ChannelAssignment[]>;
+  assignToChannel(channelId: string, participantIdentity: string, banterId?: string | null): Promise<ChannelAssignment>;
+  removeFromChannel(participantIdentity: string, banterId?: string | null): Promise<void>;
+  getParticipantChannel(participantIdentity: string, banterId?: string | null): Promise<Channel | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -100,8 +94,11 @@ export class DatabaseStorage implements IStorage {
     await db.delete(contacts).where(eq(contacts.id, id));
   }
 
-  async getExpectedParticipants(): Promise<ExpectedParticipant[]> {
-    return await db.select().from(expectedParticipants);
+  async getExpectedParticipants(banterId?: string | null): Promise<ExpectedParticipant[]> {
+    if (banterId) {
+      return await db.select().from(expectedParticipants).where(eq(expectedParticipants.banterId, banterId));
+    }
+    return await db.select().from(expectedParticipants).where(isNull(expectedParticipants.banterId));
   }
 
   async getExpectedParticipant(id: string): Promise<ExpectedParticipant | undefined> {
@@ -181,8 +178,14 @@ export class DatabaseStorage implements IStorage {
     return banter;
   }
 
+  async getScheduledBanterBySlug(slug: string): Promise<ScheduledBanter | undefined> {
+    const [banter] = await db.select().from(scheduledBanters).where(eq(scheduledBanters.slug, slug));
+    return banter;
+  }
+
   async createScheduledBanter(banter: InsertScheduledBanter): Promise<ScheduledBanter> {
-    const [newBanter] = await db.insert(scheduledBanters).values(banter).returning();
+    const slug = generateSlug();
+    const [newBanter] = await db.insert(scheduledBanters).values({ ...banter, slug }).returning();
     return newBanter;
   }
 
@@ -196,7 +199,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPendingBantersForTime(time: Date): Promise<ScheduledBanter[]> {
-    // Get banters that are pending and scheduled at or before the given time
     return await db.select().from(scheduledBanters).where(
       and(
         eq(scheduledBanters.status, 'pending'),
@@ -206,7 +208,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getBantersNeedingReminder(time: Date): Promise<ScheduledBanter[]> {
-    // Get banters that need a reminder (15 min before start, reminder enabled, still pending, not already sent)
     const fifteenMinutesFromNow = new Date(time.getTime() + 15 * 60 * 1000);
     const results = await db.select().from(scheduledBanters).where(
       and(
@@ -216,7 +217,6 @@ export class DatabaseStorage implements IStorage {
         gt(scheduledBanters.scheduledAt, time)
       )
     );
-    // Filter out banters where reminder was already sent
     return results.filter(b => b.reminderSentAt === null);
   }
 
@@ -280,9 +280,11 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  // Channel methods
-  async getChannels(): Promise<Channel[]> {
-    return await db.select().from(channels).orderBy(channels.number);
+  async getChannels(banterId?: string | null): Promise<Channel[]> {
+    if (banterId) {
+      return await db.select().from(channels).where(eq(channels.banterId, banterId)).orderBy(channels.number);
+    }
+    return await db.select().from(channels).where(isNull(channels.banterId)).orderBy(channels.number);
   }
 
   async getChannel(id: string): Promise<Channel | undefined> {
@@ -301,29 +303,56 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteChannel(id: string): Promise<void> {
-    // Remove all assignments for this channel first
     await db.delete(channelAssignments).where(eq(channelAssignments.channelId, id));
     await db.delete(channels).where(eq(channels.id, id));
   }
 
-  async getChannelAssignments(): Promise<ChannelAssignment[]> {
-    return await db.select().from(channelAssignments);
+  async getChannelAssignments(banterId?: string | null): Promise<ChannelAssignment[]> {
+    if (banterId) {
+      return await db.select().from(channelAssignments).where(eq(channelAssignments.banterId, banterId));
+    }
+    return await db.select().from(channelAssignments).where(isNull(channelAssignments.banterId));
   }
 
-  async assignToChannel(channelId: string, participantIdentity: string): Promise<ChannelAssignment> {
+  async assignToChannel(channelId: string, participantIdentity: string, banterId?: string | null): Promise<ChannelAssignment> {
     const [assignment] = await db.transaction(async (tx) => {
-      await tx.delete(channelAssignments).where(eq(channelAssignments.participantIdentity, participantIdentity));
-      return tx.insert(channelAssignments).values({ channelId, participantIdentity }).returning();
+      if (banterId) {
+        await tx.delete(channelAssignments).where(
+          and(eq(channelAssignments.participantIdentity, participantIdentity), eq(channelAssignments.banterId, banterId))
+        );
+      } else {
+        await tx.delete(channelAssignments).where(
+          and(eq(channelAssignments.participantIdentity, participantIdentity), isNull(channelAssignments.banterId))
+        );
+      }
+      return tx.insert(channelAssignments).values({ channelId, participantIdentity, banterId: banterId || null }).returning();
     });
     return assignment;
   }
 
-  async removeFromChannel(participantIdentity: string): Promise<void> {
-    await db.delete(channelAssignments).where(eq(channelAssignments.participantIdentity, participantIdentity));
+  async removeFromChannel(participantIdentity: string, banterId?: string | null): Promise<void> {
+    if (banterId) {
+      await db.delete(channelAssignments).where(
+        and(eq(channelAssignments.participantIdentity, participantIdentity), eq(channelAssignments.banterId, banterId))
+      );
+    } else {
+      await db.delete(channelAssignments).where(
+        and(eq(channelAssignments.participantIdentity, participantIdentity), isNull(channelAssignments.banterId))
+      );
+    }
   }
 
-  async getParticipantChannel(participantIdentity: string): Promise<Channel | undefined> {
-    const [assignment] = await db.select().from(channelAssignments).where(eq(channelAssignments.participantIdentity, participantIdentity));
+  async getParticipantChannel(participantIdentity: string, banterId?: string | null): Promise<Channel | undefined> {
+    let assignment;
+    if (banterId) {
+      [assignment] = await db.select().from(channelAssignments).where(
+        and(eq(channelAssignments.participantIdentity, participantIdentity), eq(channelAssignments.banterId, banterId))
+      );
+    } else {
+      [assignment] = await db.select().from(channelAssignments).where(
+        and(eq(channelAssignments.participantIdentity, participantIdentity), isNull(channelAssignments.banterId))
+      );
+    }
     if (!assignment) return undefined;
     return this.getChannel(assignment.channelId);
   }

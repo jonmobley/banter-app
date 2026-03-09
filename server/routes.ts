@@ -180,22 +180,40 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  // All-call state (shared across routes and WebSocket)
-  let allCallActive = false;
+  // Per-banter state (keyed by banterId, "global" for the always-on banter)
+  interface BanterSessionState {
+    allCallActive: boolean;
+    broadcastActive: boolean;
+    broadcastSpeakerId: string | null;
+    broadcastGrantedSpeakers: Set<string>;
+    raisedHands: Set<string>;
+  }
 
-  // Broadcast state (shared across routes and WebSocket)
-  let broadcastActive = false;
-  let broadcastSpeakerId: string | null = null;
-  const broadcastGrantedSpeakers = new Set<string>();
-  const raisedHands = new Set<string>();
+  const banterStates = new Map<string, BanterSessionState>();
 
-  function getBroadcastState() {
+  function getBanterState(banterId: string | null): BanterSessionState {
+    const key = banterId || 'global';
+    if (!banterStates.has(key)) {
+      banterStates.set(key, {
+        allCallActive: false,
+        broadcastActive: false,
+        broadcastSpeakerId: null,
+        broadcastGrantedSpeakers: new Set(),
+        raisedHands: new Set(),
+      });
+    }
+    return banterStates.get(key)!;
+  }
+
+  function getBroadcastState(banterId: string | null) {
+    const state = getBanterState(banterId);
     return {
       type: 'broadcast' as const,
-      active: broadcastActive,
-      speakerId: broadcastSpeakerId,
-      grantedSpeakers: Array.from(broadcastGrantedSpeakers),
-      raisedHands: Array.from(raisedHands),
+      active: state.broadcastActive,
+      speakerId: state.broadcastSpeakerId,
+      grantedSpeakers: Array.from(state.broadcastGrantedSpeakers),
+      raisedHands: Array.from(state.raisedHands),
+      banterId: banterId || null,
     };
   }
 
@@ -213,11 +231,10 @@ export async function registerRoutes(
     });
     ws.send(JSON.stringify({ type: 'speaking', data: stateObj }));
     
-    // Send current all-call state on connect
-    ws.send(JSON.stringify({ type: 'all-call', active: allCallActive }));
-    
-    // Send current broadcast state on connect
-    ws.send(JSON.stringify(getBroadcastState()));
+    // Send current state for global banter on connect
+    const globalState = getBanterState(null);
+    ws.send(JSON.stringify({ type: 'all-call', active: globalState.allCallActive, banterId: null }));
+    ws.send(JSON.stringify(getBroadcastState(null)));
     
     // Handle messages from frontend (speaking state updates and raise hand)
     ws.on('message', (data) => {
@@ -227,13 +244,21 @@ export async function registerRoutes(
           speakingState.set(msg.identity, msg.speaking);
           broadcastSpeakingState();
         } else if (msg.type === 'raise-hand' && msg.identity) {
-          raisedHands.add(msg.identity);
-          log(`✋ ${msg.identity} raised hand`, "broadcast");
-          broadcastToFrontend(getBroadcastState());
+          const bId = msg.banterId || null;
+          const state = getBanterState(bId);
+          state.raisedHands.add(msg.identity);
+          log(`✋ ${msg.identity} raised hand (banter: ${bId || 'global'})`, "broadcast");
+          broadcastToFrontend(getBroadcastState(bId));
         } else if (msg.type === 'lower-hand' && msg.identity) {
-          raisedHands.delete(msg.identity);
-          log(`👇 ${msg.identity} lowered hand`, "broadcast");
-          broadcastToFrontend(getBroadcastState());
+          const bId = msg.banterId || null;
+          const state = getBanterState(bId);
+          state.raisedHands.delete(msg.identity);
+          log(`👇 ${msg.identity} lowered hand (banter: ${bId || 'global'})`, "broadcast");
+          broadcastToFrontend(getBroadcastState(bId));
+        } else if (msg.type === 'request-banter-state' && msg.banterId) {
+          const bState = getBanterState(msg.banterId);
+          ws.send(JSON.stringify({ type: 'all-call', active: bState.allCallActive, banterId: msg.banterId }));
+          ws.send(JSON.stringify(getBroadcastState(msg.banterId)));
         }
       } catch (e) {
         // Ignore parse errors
@@ -664,7 +689,8 @@ export async function registerRoutes(
       if (!authToken || !verifyAuthToken(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
-      const expected = await storage.getExpectedParticipants();
+      const banterId = (req.query.banterId as string) || null;
+      const expected = await storage.getExpectedParticipants(banterId);
       res.json(expected);
     } catch (error: any) {
       log(`Error fetching expected participants: ${error.message}`, "api");
@@ -678,7 +704,7 @@ export async function registerRoutes(
    */
   app.post("/api/expected", async (req, res) => {
     try {
-      const { authToken, name, phone } = req.body;
+      const { authToken, name, phone, banterId } = req.body;
       if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -686,7 +712,7 @@ export async function registerRoutes(
       if (!name || !phone) {
         return res.status(400).json({ error: "Name and phone are required" });
       }
-      const participant = await storage.addExpectedParticipant({ name, phone });
+      const participant = await storage.addExpectedParticipant({ name, phone, banterId: banterId || null });
       res.json(participant);
     } catch (error: any) {
       log(`Error adding expected participant: ${error.message}`, "api");
@@ -897,8 +923,9 @@ export async function registerRoutes(
       if (!authToken || !verifyAuthToken(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
-      const allChannels = await storage.getChannels();
-      const allAssignments = await storage.getChannelAssignments();
+      const banterId = (req.query.banterId as string) || null;
+      const allChannels = await storage.getChannels(banterId);
+      const allAssignments = await storage.getChannelAssignments(banterId);
       
       const channelsWithAssignments = allChannels.map(channel => ({
         ...channel,
@@ -920,7 +947,7 @@ export async function registerRoutes(
    */
   app.post("/api/channels", async (req, res) => {
     try {
-      const { authToken, number, name } = req.body;
+      const { authToken, number, name, banterId } = req.body;
       if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -929,7 +956,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Channel number and name are required" });
       }
       
-      const channel = await storage.createChannel({ number, name: name.trim() });
+      const channel = await storage.createChannel({ number, name: name.trim(), banterId: banterId || null });
       res.json({ ...channel, participants: [] });
     } catch (error: any) {
       log(`Error creating channel: ${error.message}`, "api");
@@ -958,7 +985,7 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Channel not found" });
       }
       
-      const assignments = await storage.getChannelAssignments();
+      const assignments = await storage.getChannelAssignments(updated.banterId);
       const participants = assignments.filter(a => a.channelId === req.params.id).map(a => a.participantIdentity);
       res.json({ ...updated, participants });
     } catch (error: any) {
@@ -992,7 +1019,7 @@ export async function registerRoutes(
    */
   app.post("/api/channels/:id/assign", async (req, res) => {
     try {
-      const { authToken, participantIdentity } = req.body;
+      const { authToken, participantIdentity, banterId } = req.body;
       if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -1001,10 +1028,10 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Participant identity is required" });
       }
       
-      await storage.assignToChannel(req.params.id, participantIdentity);
+      await storage.assignToChannel(req.params.id, participantIdentity, banterId || null);
       
       const channel = await storage.getChannel(req.params.id);
-      const assignments = await storage.getChannelAssignments();
+      const assignments = await storage.getChannelAssignments(banterId || null);
       const participants = assignments.filter(a => a.channelId === req.params.id).map(a => a.participantIdentity);
       
       res.json({ ...channel, participants });
@@ -1020,7 +1047,7 @@ export async function registerRoutes(
    */
   app.post("/api/channels/unassign", async (req, res) => {
     try {
-      const { authToken, participantIdentity } = req.body;
+      const { authToken, participantIdentity, banterId } = req.body;
       if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -1029,7 +1056,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Participant identity is required" });
       }
       
-      await storage.removeFromChannel(participantIdentity);
+      await storage.removeFromChannel(participantIdentity, banterId || null);
       res.json({ success: true });
     } catch (error: any) {
       log(`Error unassigning from channel: ${error.message}`, "api");
@@ -1044,12 +1071,13 @@ export async function registerRoutes(
   app.get("/api/channels/my-channel", async (req, res) => {
     try {
       const identity = req.query.identity as string;
+      const banterId = (req.query.banterId as string) || null;
       
       if (!identity) {
         return res.status(400).json({ error: "Identity is required" });
       }
       
-      const channel = await storage.getParticipantChannel(identity);
+      const channel = await storage.getParticipantChannel(identity, banterId);
       res.json({ channel: channel || null });
     } catch (error: any) {
       log(`Error getting participant channel: ${error.message}`, "api");
@@ -1063,7 +1091,7 @@ export async function registerRoutes(
    */
   app.post("/api/channels/switch", async (req, res) => {
     try {
-      const { authToken, channelId, identity } = req.body;
+      const { authToken, channelId, identity, banterId } = req.body;
       const verifiedId = authToken ? verifyAuthToken(authToken) : null;
       if (!verifiedId) {
         return res.status(401).json({ error: "Unauthorized" });
@@ -1075,8 +1103,9 @@ export async function registerRoutes(
         return res.status(403).json({ error: "Cannot switch another user's channel" });
       }
 
+      const bId = banterId || null;
       if (!isAdminPhone(verifiedId)) {
-        const assignments = await storage.getChannelAssignments();
+        const assignments = await storage.getChannelAssignments(bId);
         const hasAssignment = assignments.some(a => a.participantIdentity === identity);
         if (!hasAssignment) {
           return res.status(403).json({ error: "You must be assigned to a channel by an admin first" });
@@ -1088,14 +1117,14 @@ export async function registerRoutes(
         if (!channel) {
           return res.status(404).json({ error: "Channel not found" });
         }
-        await storage.assignToChannel(channelId, identity);
+        await storage.assignToChannel(channelId, identity, bId);
         log(`📺 ${identity} switched to channel ${channel.number} (${channel.name})`, "channels");
-        broadcastToFrontend({ type: 'channel-switch', identity, channelId, channelNumber: channel.number, channelName: channel.name });
+        broadcastToFrontend({ type: 'channel-switch', identity, channelId, channelNumber: channel.number, channelName: channel.name, banterId: bId });
         res.json({ success: true, channel });
       } else {
-        await storage.removeFromChannel(identity);
+        await storage.removeFromChannel(identity, bId);
         log(`📺 ${identity} switched to main room`, "channels");
-        broadcastToFrontend({ type: 'channel-switch', identity, channelId: null, channelNumber: null, channelName: null });
+        broadcastToFrontend({ type: 'channel-switch', identity, channelId: null, channelNumber: null, channelName: null, banterId: bId });
         res.json({ success: true, channel: null });
       }
     } catch (error: any) {
@@ -1110,18 +1139,20 @@ export async function registerRoutes(
    */
   app.post("/api/channels/all-call", async (req, res) => {
     try {
-      const { authToken, active } = req.body;
+      const { authToken, active, banterId } = req.body;
       if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      if (active && broadcastActive) {
+      const bId = banterId || null;
+      const state = getBanterState(bId);
+      if (active && state.broadcastActive) {
         return res.status(400).json({ error: "Cannot activate all-call while broadcast is active" });
       }
-      allCallActive = !!active;
-      log(`📢 All-call ${allCallActive ? 'ACTIVATED' : 'DEACTIVATED'} by admin`, "channels");
-      broadcastToFrontend({ type: 'all-call', active: allCallActive });
-      res.json({ success: true, active: allCallActive });
+      state.allCallActive = !!active;
+      log(`📢 All-call ${state.allCallActive ? 'ACTIVATED' : 'DEACTIVATED'} by admin (banter: ${bId || 'global'})`, "channels");
+      broadcastToFrontend({ type: 'all-call', active: state.allCallActive, banterId: bId });
+      res.json({ success: true, active: state.allCallActive });
     } catch (error: any) {
       log(`Error toggling all-call: ${error.message}`, "api");
       res.status(500).json({ error: "Failed to toggle all-call" });
@@ -1132,8 +1163,10 @@ export async function registerRoutes(
    * GET /api/channels/all-call
    * Returns current all-call state.
    */
-  app.get("/api/channels/all-call", async (_req, res) => {
-    res.json({ active: allCallActive });
+  app.get("/api/channels/all-call", async (req, res) => {
+    const banterId = (req.query.banterId as string) || null;
+    const state = getBanterState(banterId);
+    res.json({ active: state.allCallActive });
   });
 
   /**
@@ -1142,32 +1175,35 @@ export async function registerRoutes(
    */
   app.post("/api/broadcast", async (req, res) => {
     try {
-      const { authToken: clientAuthToken, active } = req.body;
+      const { authToken: clientAuthToken, active, banterId } = req.body;
       if (!verifyAdminAuth(clientAuthToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
+      const bId = banterId || null;
+      const state = getBanterState(bId);
+
       if (active) {
         const verifiedId = verifyAuthToken(clientAuthToken);
-        broadcastActive = true;
-        broadcastSpeakerId = verifiedId || null;
-        broadcastGrantedSpeakers.clear();
-        raisedHands.clear();
-        if (allCallActive) {
-          allCallActive = false;
-          broadcastToFrontend({ type: 'all-call', active: false });
+        state.broadcastActive = true;
+        state.broadcastSpeakerId = verifiedId || null;
+        state.broadcastGrantedSpeakers.clear();
+        state.raisedHands.clear();
+        if (state.allCallActive) {
+          state.allCallActive = false;
+          broadcastToFrontend({ type: 'all-call', active: false, banterId: bId });
         }
-        log(`📣 Broadcast ACTIVATED by ${broadcastSpeakerId}`, "broadcast");
+        log(`📣 Broadcast ACTIVATED by ${state.broadcastSpeakerId} (banter: ${bId || 'global'})`, "broadcast");
       } else {
-        broadcastActive = false;
-        broadcastSpeakerId = null;
-        broadcastGrantedSpeakers.clear();
-        raisedHands.clear();
-        log(`📣 Broadcast DEACTIVATED`, "broadcast");
+        state.broadcastActive = false;
+        state.broadcastSpeakerId = null;
+        state.broadcastGrantedSpeakers.clear();
+        state.raisedHands.clear();
+        log(`📣 Broadcast DEACTIVATED (banter: ${bId || 'global'})`, "broadcast");
       }
 
-      broadcastToFrontend(getBroadcastState());
-      res.json({ success: true, ...getBroadcastState() });
+      broadcastToFrontend(getBroadcastState(bId));
+      res.json({ success: true, ...getBroadcastState(bId) });
     } catch (error: any) {
       log(`Error toggling broadcast: ${error.message}`, "api");
       res.status(500).json({ error: "Failed to toggle broadcast" });
@@ -1180,11 +1216,13 @@ export async function registerRoutes(
    */
   app.post("/api/broadcast/grant", async (req, res) => {
     try {
-      const { authToken: clientAuthToken, identity, grant } = req.body;
+      const { authToken: clientAuthToken, identity, grant, banterId } = req.body;
       if (!verifyAdminAuth(clientAuthToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
-      if (!broadcastActive) {
+      const bId = banterId || null;
+      const state = getBanterState(bId);
+      if (!state.broadcastActive) {
         return res.status(400).json({ error: "Broadcast is not active" });
       }
       if (!identity) {
@@ -1192,16 +1230,16 @@ export async function registerRoutes(
       }
 
       if (grant) {
-        broadcastGrantedSpeakers.add(identity);
-        raisedHands.delete(identity);
+        state.broadcastGrantedSpeakers.add(identity);
+        state.raisedHands.delete(identity);
         log(`🎤 Granted speaking permission to ${identity}`, "broadcast");
       } else {
-        broadcastGrantedSpeakers.delete(identity);
+        state.broadcastGrantedSpeakers.delete(identity);
         log(`🔇 Revoked speaking permission from ${identity}`, "broadcast");
       }
 
-      broadcastToFrontend(getBroadcastState());
-      res.json({ success: true, ...getBroadcastState() });
+      broadcastToFrontend(getBroadcastState(bId));
+      res.json({ success: true, ...getBroadcastState(bId) });
     } catch (error: any) {
       log(`Error granting broadcast permission: ${error.message}`, "api");
       res.status(500).json({ error: "Failed to update broadcast permission" });
@@ -1309,13 +1347,30 @@ export async function registerRoutes(
   });
 
   /**
+   * GET /api/banters/by-slug/:slug
+   * Resolves a banter by its slug for join link resolution.
+   */
+  app.get("/api/banters/by-slug/:slug", async (req, res) => {
+    try {
+      const banter = await storage.getScheduledBanterBySlug(req.params.slug);
+      if (!banter) {
+        return res.status(404).json({ error: "Banter not found" });
+      }
+      res.json(banter);
+    } catch (error: any) {
+      log(`Error resolving banter slug: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to resolve banter" });
+    }
+  });
+
+  /**
    * POST /api/alert-crew
    * Sends an instant "Join Now" SMS to crew members. Requires admin auth.
    * Rate limited to 1 alert per 5 minutes.
    */
   app.post("/api/alert-crew", async (req, res) => {
     try {
-      const { authToken: clientAuthToken, participantIds } = req.body;
+      const { authToken: clientAuthToken, participantIds, banterId } = req.body;
       if (!verifyAdminAuth(clientAuthToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -1324,21 +1379,27 @@ export async function registerRoutes(
         return res.status(429).json({ error: "Alert already sent recently. Please wait 5 minutes." });
       }
 
-      const joinLink = process.env.REPLIT_DEPLOYMENT_URL
-        ? `${process.env.REPLIT_DEPLOYMENT_URL}/mobley`
-        : process.env.REPLIT_DEV_DOMAIN
-          ? `https://${process.env.REPLIT_DEV_DOMAIN}/mobley`
-          : 'your Banter link';
+      let joinPath = '/mobley';
+      if (banterId) {
+        const banter = await storage.getScheduledBanter(banterId);
+        if (banter?.slug) {
+          joinPath = `/join/${banter.slug}`;
+        }
+      }
+      const baseUrl = process.env.REPLIT_DEPLOYMENT_URL
+        || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '');
+      const joinLink = baseUrl ? `${baseUrl}${joinPath}` : 'your Banter link';
 
+      const bId = banterId || null;
       let targets: { name: string; phone: string }[] = [];
 
       if (participantIds && Array.isArray(participantIds) && participantIds.length > 0) {
-        const allExpected = await storage.getExpectedParticipants();
+        const allExpected = await storage.getExpectedParticipants(bId);
         targets = allExpected
           .filter(p => participantIds.includes(p.id) && p.phone)
           .map(p => ({ name: p.name, phone: p.phone }));
       } else {
-        const allExpected = await storage.getExpectedParticipants();
+        const allExpected = await storage.getExpectedParticipants(bId);
         targets = allExpected
           .filter(p => p.phone)
           .map(p => ({ name: p.name, phone: p.phone }));
@@ -1378,7 +1439,7 @@ export async function registerRoutes(
    */
   app.post("/api/livekit/token", async (req, res) => {
     try {
-      const { identity, name, authToken: clientAuthToken, pin } = req.body;
+      const { identity, name, authToken: clientAuthToken, pin, banterId, slug } = req.body;
       
       if (!identity) {
         return res.status(400).json({ error: "Identity is required" });
@@ -1399,11 +1460,26 @@ export async function registerRoutes(
       const stableIdentity = verifiedPhone 
         ? verifiedPhone.replace(/\D/g, '').slice(-10) 
         : identity;
+
+      // Resolve banter context
+      let resolvedBanterId: string | null = banterId || null;
+      let banterSlug: string | null = slug || null;
+      if (slug && !resolvedBanterId) {
+        const banter = await storage.getScheduledBanterBySlug(slug);
+        if (banter) {
+          resolvedBanterId = banter.id;
+          banterSlug = banter.slug;
+        }
+      }
+      if (resolvedBanterId && !banterSlug) {
+        const banter = await storage.getScheduledBanter(resolvedBanterId);
+        if (banter) banterSlug = banter.slug;
+      }
       
       // Check if this user should be a listener (muted by default)
       let canPublish = true;
       try {
-        const participants = await storage.getExpectedParticipants();
+        const participants = await storage.getExpectedParticipants(resolvedBanterId);
         const matchingParticipant = participants.find(p => {
           if (verifiedPhone) {
             return normalizePhone(p.phone) === normalizePhone(verifiedPhone);
@@ -1417,24 +1493,28 @@ export async function registerRoutes(
       } catch (error) {
         // Continue without role check
       }
+
+      // Determine room prefix based on banter context
+      const roomPrefix = banterSlug ? `banter-${banterSlug}` : 'banter';
+      const state = getBanterState(resolvedBanterId);
       
       // Check broadcast mode — overrides all other routing
-      let roomName = DEFAULT_ROOM_NAME;
+      let roomName = banterSlug ? `${roomPrefix}-main` : DEFAULT_ROOM_NAME;
       let channelNumber: number | null = null;
-      if (broadcastActive) {
-        roomName = 'banter-broadcast';
-        if (stableIdentity !== broadcastSpeakerId && !broadcastGrantedSpeakers.has(stableIdentity)) {
+      if (state.broadcastActive) {
+        roomName = `${roomPrefix}-broadcast`;
+        if (stableIdentity !== state.broadcastSpeakerId && !state.broadcastGrantedSpeakers.has(stableIdentity)) {
           canPublish = false;
         }
-        log(`📣 Broadcast active — routing ${stableIdentity} to broadcast room (canPublish: ${canPublish})`, "livekit");
-      } else if (allCallActive) {
-        roomName = 'banter-all-call';
-        log(`📢 All-call active — routing ${stableIdentity} to all-call room`, "livekit");
+        log(`📣 Broadcast active — routing ${stableIdentity} to ${roomName} (canPublish: ${canPublish})`, "livekit");
+      } else if (state.allCallActive) {
+        roomName = `${roomPrefix}-all-call`;
+        log(`📢 All-call active — routing ${stableIdentity} to ${roomName}`, "livekit");
       } else {
         try {
-          const channel = await storage.getParticipantChannel(stableIdentity);
+          const channel = await storage.getParticipantChannel(stableIdentity, resolvedBanterId);
           if (channel) {
-            roomName = `banter-channel-${channel.number}`;
+            roomName = `${roomPrefix}-channel-${channel.number}`;
             channelNumber = channel.number;
             log(`📺 User ${stableIdentity} assigned to channel ${channel.number} (${channel.name})`, "livekit");
           }
@@ -1456,6 +1536,8 @@ export async function registerRoutes(
         identity: stableIdentity,
         roomName,
         channelNumber,
+        banterId: resolvedBanterId,
+        banterSlug,
         url: getLiveKitUrl()
       });
     } catch (error: any) {

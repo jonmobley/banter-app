@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Calendar, Clock, Bell, X, Trash2, Users, Radio } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Clock, Bell, X, Trash2, Users, Radio, Copy, Check } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +14,7 @@ interface ExpectedParticipant {
 interface ScheduledBanter {
   id: string;
   name: string;
+  slug: string;
   scheduledAt: string;
   autoCallEnabled: string;
   reminderEnabled: string;
@@ -272,14 +273,31 @@ export default function Schedule() {
                           {banter.participantIds.length} participants
                         </span>
                       </div>
-                      <Link
-                        href="/mobley"
-                        className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-2.5 rounded-full transition-colors"
-                        data-testid={`button-join-${banter.id}`}
-                      >
-                        <Radio className="w-4 h-4" />
-                        Join Banter
-                      </Link>
+                      <div className="flex gap-2">
+                        <Link
+                          href={`/join/${banter.slug}`}
+                          className="flex items-center justify-center gap-2 flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-2.5 rounded-full transition-colors"
+                          data-testid={`button-join-${banter.id}`}
+                        >
+                          <Radio className="w-4 h-4" />
+                          Join Banter
+                        </Link>
+                        <button
+                          onClick={() => {
+                            const url = `${window.location.origin}/join/${banter.slug}`;
+                            navigator.clipboard.writeText(url).then(() => {
+                              toast({ title: 'Link copied!' });
+                            }).catch(() => {
+                              toast({ title: 'Failed to copy link', variant: 'destructive' });
+                            });
+                          }}
+                          className="flex items-center justify-center px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-full transition-colors"
+                          data-testid={`button-copy-link-${banter.id}`}
+                          title="Copy join link"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

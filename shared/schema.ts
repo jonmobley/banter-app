@@ -26,6 +26,7 @@ export const expectedParticipants = pgTable("expected_participants", {
   phone: text("phone").notNull(),
   email: text("email"),
   role: text("role").notNull().default('participant'),
+  banterId: varchar("banter_id"),
 });
 
 export const insertExpectedParticipantSchema = createInsertSchema(expectedParticipants).pick({
@@ -33,6 +34,7 @@ export const insertExpectedParticipantSchema = createInsertSchema(expectedPartic
   phone: true,
   email: true,
   role: true,
+  banterId: true,
 });
 
 export const updateExpectedParticipantSchema = createInsertSchema(expectedParticipants).pick({
@@ -64,7 +66,6 @@ export const insertVerificationCodeSchema = createInsertSchema(verificationCodes
 export type InsertVerificationCode = z.infer<typeof insertVerificationCodeSchema>;
 export type VerificationCode = typeof verificationCodes.$inferSelect;
 
-// Utility function for normalizing phone numbers to E.164 format
 export function normalizePhone(phone: string): string {
   let digits = phone.replace(/\D/g, '');
   if (digits.length === 10) {
@@ -73,15 +74,15 @@ export function normalizePhone(phone: string): string {
   return '+' + digits;
 }
 
-// Scheduled Banters
 export const scheduledBanters = pgTable("scheduled_banters", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
   scheduledAt: timestamp("scheduled_at").notNull(),
   autoCallEnabled: text("auto_call_enabled").notNull().default('false'),
   reminderEnabled: text("reminder_enabled").notNull().default('false'),
   reminderSentAt: timestamp("reminder_sent_at"),
-  status: text("status").notNull().default('pending'), // pending, active, completed, cancelled
+  status: text("status").notNull().default('pending'),
   participantIds: text("participant_ids").array().notNull().default(sql`ARRAY[]::text[]`),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
@@ -108,7 +109,6 @@ export type InsertScheduledBanter = z.infer<typeof insertScheduledBanterSchema>;
 export type UpdateScheduledBanter = z.infer<typeof updateScheduledBanterSchema>;
 export type ScheduledBanter = typeof scheduledBanters.$inferSelect;
 
-// Beta Access Requests
 export const betaRequests = pgTable("beta_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
@@ -122,7 +122,6 @@ export const insertBetaRequestSchema = createInsertSchema(betaRequests).pick({
 export type InsertBetaRequest = z.infer<typeof insertBetaRequestSchema>;
 export type BetaRequest = typeof betaRequests.$inferSelect;
 
-// Contact Groups
 export const groups = pgTable("groups", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
@@ -136,7 +135,6 @@ export const insertGroupSchema = createInsertSchema(groups).pick({
 export type InsertGroup = z.infer<typeof insertGroupSchema>;
 export type Group = typeof groups.$inferSelect;
 
-// Group Members (junction table)
 export const groupMembers = pgTable("group_members", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   groupId: varchar("group_id").notNull(),
@@ -151,33 +149,44 @@ export const insertGroupMemberSchema = createInsertSchema(groupMembers).pick({
 export type InsertGroupMember = z.infer<typeof insertGroupMemberSchema>;
 export type GroupMember = typeof groupMembers.$inferSelect;
 
-// Channels (for splitting participants into separate audio rooms)
 export const channels = pgTable("channels", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  number: integer("number").notNull().unique(),
+  number: integer("number").notNull(),
   name: text("name").notNull(),
+  banterId: varchar("banter_id"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
 export const insertChannelSchema = createInsertSchema(channels).pick({
   number: true,
   name: true,
+  banterId: true,
 });
 
 export type InsertChannel = z.infer<typeof insertChannelSchema>;
 export type Channel = typeof channels.$inferSelect;
 
-// Channel Assignments (which participant is in which channel)
 export const channelAssignments = pgTable("channel_assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   channelId: varchar("channel_id").notNull(),
-  participantIdentity: text("participant_identity").notNull().unique(), // LiveKit identity - unique ensures one channel per participant
+  participantIdentity: text("participant_identity").notNull(),
+  banterId: varchar("banter_id"),
 });
 
 export const insertChannelAssignmentSchema = createInsertSchema(channelAssignments).pick({
   channelId: true,
   participantIdentity: true,
+  banterId: true,
 });
 
 export type InsertChannelAssignment = z.infer<typeof insertChannelAssignmentSchema>;
 export type ChannelAssignment = typeof channelAssignments.$inferSelect;
+
+export function generateSlug(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}

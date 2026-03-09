@@ -99,15 +99,16 @@ export async function sendAlertSMS(to: string, joinLink: string): Promise<boolea
 /**
  * Send a reminder SMS for an upcoming scheduled banter
  */
-export async function sendReminderSMS(to: string, banterName: string, minutesUntilStart: number): Promise<boolean> {
+export async function sendReminderSMS(to: string, banterName: string, minutesUntilStart: number, joinLink?: string): Promise<boolean> {
   try {
     const client = await getTwilioClient();
     const fromNumber = await getTwilioFromPhoneNumber();
     
     const timeText = minutesUntilStart <= 1 ? 'starting now' : `starting in ${minutesUntilStart} minutes`;
+    const link = joinLink || `${process.env.REPLIT_DEPLOYMENT_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'your Banter link')}/mobley`;
     
     await client.messages.create({
-      body: `Banter Reminder: "${banterName}" is ${timeText}. Join at ${process.env.REPLIT_DEPLOYMENT_URL || (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'your Banter link')}/mobley`,
+      body: `Banter Reminder: "${banterName}" is ${timeText}. Join at ${link}`,
       from: fromNumber,
       to: to
     });

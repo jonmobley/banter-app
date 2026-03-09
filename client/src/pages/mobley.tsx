@@ -68,7 +68,14 @@ function normalizePhone(phone: string): string {
   return phone;
 }
 
-export default function Mobley() {
+interface ScheduledBanterInfo {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+}
+
+export default function Mobley({ slug }: { slug?: string } = {}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [isAdmin, setIsAdmin] = useState(false);
@@ -79,6 +86,37 @@ export default function Mobley() {
   const [wsConnected, setWsConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const [banterInfo, setBanterInfo] = useState<ScheduledBanterInfo | null>(null);
+  const [banterLoading, setBanterLoading] = useState(!!slug);
+  const [banterError, setBanterError] = useState<string | null>(null);
+  const currentBanterId = banterInfo?.id || null;
+  const banterIdRef = useRef<string | null>(currentBanterId);
+  useEffect(() => {
+    banterIdRef.current = currentBanterId;
+    if (currentBanterId && wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'request-banter-state', banterId: currentBanterId }));
+    }
+  }, [currentBanterId]);
+
+  useEffect(() => {
+    if (!slug) return;
+    setBanterLoading(true);
+    setBanterError(null);
+    fetch(`/api/banters/by-slug/${encodeURIComponent(slug)}`)
+      .then(r => {
+        if (!r.ok) throw new Error('Banter not found');
+        return r.json();
+      })
+      .then(data => {
+        setBanterInfo({ id: data.id, name: data.name, slug: data.slug, status: data.status });
+        setBanterLoading(false);
+      })
+      .catch(err => {
+        setBanterError(err.message);
+        setBanterLoading(false);
+      });
+  }, [slug]);
 
   // LiveKit room and connection state
   const [room, setRoom] = useState<Room | null>(null);
@@ -268,26 +306,39 @@ export default function Mobley() {
       
       ws.onopen = () => {
         setWsConnected(true);
+        if (banterIdRef.current) {
+          ws.send(JSON.stringify({ type: 'request-banter-state', banterId: banterIdRef.current }));
+        }
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          const myBanterId = banterIdRef.current;
           if (msg.type === 'speaking') {
             setSpeakingState(msg.data);
           } else if (msg.type === 'participant-event') {
             queryClient.invalidateQueries({ queryKey: ["/api/participants"] });
           } else if (msg.type === 'all-call') {
-            setAllCallActive(msg.active);
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              setAllCallActive(msg.active);
+            }
           } else if (msg.type === 'channel-switch') {
-            queryClient.invalidateQueries({ queryKey: ["/api/channels"] });
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              queryClient.invalidateQueries({ queryKey: ["/api/channels", myBanterId] });
+            }
           } else if (msg.type === 'broadcast') {
-            setBroadcastActive(msg.active);
-            setBroadcastSpeakerId(msg.speakerId || null);
-            setBroadcastGrantedSpeakers(msg.grantedSpeakers || []);
-            setRaisedHands(msg.raisedHands || []);
-            if (!msg.active) {
-              setHandRaised(false);
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              setBroadcastActive(msg.active);
+              setBroadcastSpeakerId(msg.speakerId || null);
+              setBroadcastGrantedSpeakers(msg.grantedSpeakers || []);
+              setRaisedHands(msg.raisedHands || []);
+              if (!msg.active) {
+                setHandRaised(false);
+              }
             }
           }
         } catch (e) {
@@ -332,10 +383,11 @@ export default function Mobley() {
   });
 
   const { data: expectedData, isLoading: expectedLoading } = useQuery<ExpectedParticipant[]>({
-    queryKey: ["/api/expected"],
+    queryKey: ["/api/expected", currentBanterId],
     queryFn: async () => {
       const token = localStorage.getItem('banter_auth_token') || '';
-      const res = await fetch("/api/expected", {
+      const params = currentBanterId ? `?banterId=${currentBanterId}` : '';
+      const res = await fetch(`/api/expected${params}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch expected");
@@ -354,10 +406,11 @@ export default function Mobley() {
   });
 
   const { data: channelsData } = useQuery<Channel[]>({
-    queryKey: ["/api/channels"],
+    queryKey: ["/api/channels", currentBanterId],
     queryFn: async () => {
       const token = localStorage.getItem('banter_auth_token') || '';
-      const res = await fetch("/api/channels", {
+      const params = currentBanterId ? `?banterId=${currentBanterId}` : '';
+      const res = await fetch(`/api/channels${params}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch channels");
@@ -514,7 +567,9 @@ export default function Mobley() {
         body: JSON.stringify({ 
           identity, 
           name: displayName || identity,
-          authToken: authToken || undefined
+          authToken: authToken || undefined,
+          banterId: currentBanterId || undefined,
+          slug: slug || undefined
         })
       });
 
@@ -936,7 +991,7 @@ export default function Mobley() {
       const res = await fetch("/api/channels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authToken, number, name }),
+        body: JSON.stringify({ authToken, number, name, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error("Failed to create channel");
       return res.json();
@@ -976,7 +1031,7 @@ export default function Mobley() {
       const res = await fetch(`/api/channels/${channelId}/assign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authToken, participantIdentity }),
+        body: JSON.stringify({ authToken, participantIdentity, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error("Failed to assign to channel");
       return res.json();
@@ -995,7 +1050,7 @@ export default function Mobley() {
       const res = await fetch("/api/channels/unassign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authToken, participantIdentity }),
+        body: JSON.stringify({ authToken, participantIdentity, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error("Failed to unassign from channel");
       return res.json();
@@ -1018,7 +1073,7 @@ export default function Mobley() {
       const res = await fetch('/api/channels/switch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authToken, channelId, identity }),
+        body: JSON.stringify({ authToken, channelId, identity, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error('Failed to switch channel');
       const data = await res.json();
@@ -1042,7 +1097,7 @@ export default function Mobley() {
       const res = await fetch('/api/channels/all-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authToken, active: newState }),
+        body: JSON.stringify({ authToken, active: newState, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error('Failed to toggle all-call');
       toast({ title: newState ? 'All-Call ACTIVATED' : 'All-Call ended' });
@@ -1093,7 +1148,7 @@ export default function Mobley() {
       const res = await fetch('/api/broadcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authToken, active: newState }),
+        body: JSON.stringify({ authToken, active: newState, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error('Failed to toggle broadcast');
       toast({ title: newState ? 'Broadcast STARTED' : 'Broadcast ended' });
@@ -1112,6 +1167,7 @@ export default function Mobley() {
     wsRef.current.send(JSON.stringify({
       type: newState ? 'raise-hand' : 'lower-hand',
       identity: localIdentity,
+      banterId: currentBanterId || undefined,
     }));
   }, [localIdentity, handRaised]);
 
@@ -1121,7 +1177,7 @@ export default function Mobley() {
       const res = await fetch('/api/broadcast/grant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authToken, identity, grant }),
+        body: JSON.stringify({ authToken, identity, grant, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error('Failed');
       toast({ title: grant ? `Granted mic to ${identity}` : `Revoked mic from ${identity}` });
@@ -1194,7 +1250,7 @@ export default function Mobley() {
       const res = await fetch("/api/expected", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authToken, name: newExpectedName, phone: newExpectedPhone }),
+        body: JSON.stringify({ authToken, name: newExpectedName, phone: newExpectedPhone, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error("Failed to add");
       return res.json();
@@ -1217,7 +1273,7 @@ export default function Mobley() {
       const res = await fetch('/api/alert-crew', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ authToken }),
+        body: JSON.stringify({ authToken, banterId: currentBanterId || undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1465,6 +1521,30 @@ export default function Mobley() {
   const isConnected = connectionState === ConnectionState.Connected;
   const isConnecting = connectionState === ConnectionState.Connecting;
 
+  if (banterLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
+        <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4 animate-pulse">
+          <Radio className="w-8 h-8 text-emerald-400" />
+        </div>
+        <p className="text-slate-400" data-testid="text-loading">Loading banter...</p>
+      </div>
+    );
+  }
+
+  if (banterError) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
+        <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
+          <Radio className="w-8 h-8 text-red-400" />
+        </div>
+        <h1 className="text-xl font-bold mb-2" data-testid="text-banter-error">Banter not found</h1>
+        <p className="text-slate-400 mb-4">This link may be expired or invalid.</p>
+        <Link href="/" className="text-emerald-400 underline" data-testid="link-home">Go to Home</Link>
+      </div>
+    );
+  }
+
   // Require authentication to access /mobley
   if ((!verifiedPhone && !verifiedEmail) || !authToken) {
     return (
@@ -1474,8 +1554,8 @@ export default function Mobley() {
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
               <Radio className="w-8 h-8 text-emerald-400" />
             </div>
-            <h1 className="text-2xl font-bold mb-2">Banter</h1>
-            <p className="text-slate-400">Sign in to join</p>
+            <h1 className="text-2xl font-bold mb-2">{banterInfo ? banterInfo.name : 'Banter'}</h1>
+            <p className="text-slate-400">{banterInfo ? 'Sign in to join this session' : 'Sign in to join'}</p>
           </div>
 
           {loginStep === 'input' ? (
@@ -1572,7 +1652,7 @@ export default function Mobley() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="font-semibold">Banter</h1>
+              <h1 className="font-semibold">{banterInfo ? banterInfo.name : 'Banter'}</h1>
               {isConnected && currentChannel && (
                 <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full">
                   CH {currentChannel.number}
