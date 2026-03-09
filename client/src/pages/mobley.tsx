@@ -1596,7 +1596,7 @@ export default function Mobley() {
               onClick={() => setShowAlertCrewConfirm(true)}
               className="p-3 rounded-full bg-amber-500/20 hover:bg-amber-500/30 transition-colors"
               data-testid="button-alert-crew"
-              title="Alert Crew"
+              title="Notify Group"
             >
               <Bell className="w-5 h-5 text-amber-400" />
             </button>
@@ -2665,9 +2665,9 @@ export default function Mobley() {
                 <Bell className="w-6 h-6 text-amber-400" />
               </div>
             </div>
-            <h2 className="text-xl font-bold text-center mb-2" data-testid="text-alert-crew-title">Alert Crew</h2>
+            <h2 className="text-xl font-bold text-center mb-2" data-testid="text-alert-crew-title">Notify Group</h2>
             <p className="text-sm text-slate-400 text-center mb-6" data-testid="text-alert-crew-desc">
-              Send a "Join Now" SMS to {expectedData?.filter(p => p.phone).length || 0} crew member{(expectedData?.filter(p => p.phone).length || 0) !== 1 ? 's' : ''}?
+              Send a "Join Now" SMS to {expectedData?.filter(p => p.phone).length || 0} participant{(expectedData?.filter(p => p.phone).length || 0) !== 1 ? 's' : ''}?
             </p>
             <div className="flex gap-3">
               <button
@@ -2684,7 +2684,7 @@ export default function Mobley() {
                 className="flex-1 bg-amber-500 hover:bg-amber-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors"
                 data-testid="button-alert-crew-confirm"
               >
-                {alertCrewLoading ? 'Sending...' : 'Send Alert'}
+                {alertCrewLoading ? 'Sending...' : 'Notify'}
               </button>
             </div>
           </div>

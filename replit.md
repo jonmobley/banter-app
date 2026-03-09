@@ -58,7 +58,7 @@ Banter is a web-based walkie-talkie/audio conference application that enables re
 - **Authentication**: Email or phone-based magic code login. Admin status determined by phone number verification.
 - **Scheduling**: SMS reminder system and background scheduler for auto-activating scheduled banters.
 - **Security**: Strict E.164 phone number matching, API rate limiting, bearer token authentication for all API access, and database transactions for critical operations.
-- **Live Event Crew Features**: Self-service channel switching, all-call broadcast, PWA support, Wake Lock, and "Alert Crew" SMS functionality.
+- **Live Event Crew Features**: Self-service channel switching, all-call broadcast, PWA support, Wake Lock, and "Notify Group" SMS functionality.
 
 ## External Dependencies
 
