@@ -226,7 +226,7 @@ The application uses LiveKit for real-time voice conferencing:
 - **Half-duplex safety** - Disconnect now explicitly unmutes remote audio to prevent stuck-muted state
 
 ### March 2026 - Live Event Crew Features
-- **Self-service channel switching** - Any authenticated user can switch channels via channel picker modal (not just admin). Server validates identity matches auth token to prevent IDOR. Channels button visible to all users when channels exist.
+- **Self-service channel switching** - Users assigned to a channel by an admin can switch between channels via channel picker modal. Server validates identity matches auth token (IDOR protection) and requires an existing channel assignment (admin must grant access first). Channels button only visible to users who have been assigned to a channel.
 - **All-call broadcast** - Admin can activate/deactivate all-call mode via `POST /api/channels/all-call`. All connected clients receive WS broadcast and auto-reconnect to `banter-all-call` room. State bootstrapped on WS connect. Red pulsing "ALL CALL ACTIVE" banner shown to all users.
 - **PWA support** - Added `manifest.json`, service worker (`sw.js`), and PWA meta tags for "Add to Home Screen" on iOS/Android. Display mode: standalone.
 - **Wake Lock** - Screen stays awake during active calls via Web Wake Lock API. Reacquires on visibility change. Released on disconnect.

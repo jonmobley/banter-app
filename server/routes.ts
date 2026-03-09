@@ -1048,6 +1048,14 @@ export async function registerRoutes(
         return res.status(403).json({ error: "Cannot switch another user's channel" });
       }
 
+      if (!isAdminPhone(verifiedId)) {
+        const assignments = await storage.getChannelAssignments();
+        const hasAssignment = assignments.some(a => a.participantIdentity === identity);
+        if (!hasAssignment) {
+          return res.status(403).json({ error: "You must be assigned to a channel by an admin first" });
+        }
+      }
+
       if (channelId) {
         const channel = await storage.getChannel(channelId);
         if (!channel) {

@@ -1811,7 +1811,7 @@ export default function Mobley() {
               >
                 <Settings className="w-5 h-5" />
               </button>
-              {channelsData && channelsData.length > 0 && (
+              {channelsData && channelsData.length > 0 && (canShowControls || currentChannel) && (
                 <button
                   onClick={() => canShowControls ? setShowChannelModal(true) : setShowChannelPicker(true)}
                   className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-full transition-all active:scale-95"
@@ -2199,20 +2199,6 @@ export default function Mobley() {
             </p>
             
             <div className="space-y-2 mb-6">
-              <button
-                onClick={() => switchChannel(null)}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
-                  !currentChannel ? 'bg-emerald-500/20 border-2 border-emerald-500' : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
-                }`}
-                data-testid="button-switch-main"
-              >
-                <div className="flex items-center gap-3">
-                  <Globe className="w-5 h-5 text-emerald-400" />
-                  <span className="font-medium">Main Room</span>
-                </div>
-                {!currentChannel && <span className="text-xs text-emerald-400">Current</span>}
-              </button>
-              
               {channelsData?.map((channel) => (
                 <button
                   key={channel.id}
