@@ -55,13 +55,22 @@ export default function Home() {
             </div>
             <span className="text-xl font-bold">Banter</span>
           </div>
-          <button
-            onClick={openModal}
-            className="bg-emerald-500 hover:bg-emerald-400 text-white font-medium px-4 py-2 rounded-full text-sm transition-colors"
-            data-testid="link-request-access"
-          >
-            Request Access
-          </button>
+          <div className="flex items-center gap-3">
+            <a
+              href="/mobley"
+              className="text-slate-300 hover:text-white font-medium px-4 py-2 rounded-full text-sm transition-colors"
+              data-testid="link-sign-in"
+            >
+              Sign In
+            </a>
+            <button
+              onClick={openModal}
+              className="bg-emerald-500 hover:bg-emerald-400 text-white font-medium px-4 py-2 rounded-full text-sm transition-colors"
+              data-testid="link-request-access"
+            >
+              Request Access
+            </button>
+          </div>
         </div>
       </header>
 
