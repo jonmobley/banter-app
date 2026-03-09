@@ -1222,6 +1222,35 @@ export default function Mobley() {
     };
   }, [room]);
 
+  // Spacebar activates PTT (hold to talk)
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.repeat) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      if (talkMode === 'ptt') {
+        startTalking();
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      e.preventDefault();
+      if (talkMode === 'ptt') {
+        stopTalking();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [connectionState, talkMode, startTalking, stopTalking]);
+
   const isConnected = connectionState === ConnectionState.Connected;
   const isConnecting = connectionState === ConnectionState.Connecting;
 
