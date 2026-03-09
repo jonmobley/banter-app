@@ -1091,15 +1091,18 @@ export default function Mobley() {
     }
   };
 
-  const verifyLoginCode = async () => {
+  const verifyLoginCode = async (codeOverride?: string) => {
+    const codeToVerify = codeOverride || loginCode;
+    if (!codeToVerify || codeToVerify.length !== 6) return;
     setLoginLoading(true);
     setLoginError(null);
     try {
       if (loginMethod === 'phone') {
+        if (!loginPhone) throw new Error('Phone number missing');
         const res = await fetch('/api/auth/verify-code', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: loginPhone, code: loginCode })
+          body: JSON.stringify({ phone: loginPhone, code: codeToVerify })
         });
         if (!res.ok) throw new Error('Invalid code');
         const data = await res.json();
@@ -1108,10 +1111,11 @@ export default function Mobley() {
         localStorage.setItem('banter_verified_phone', data.phone);
         localStorage.setItem('banter_auth_token', data.authToken);
       } else {
+        if (!loginEmail) throw new Error('Email missing');
         const res = await fetch('/api/auth/verify-email-code', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: loginEmail, code: loginCode })
+          body: JSON.stringify({ email: loginEmail, code: codeToVerify })
         });
         if (!res.ok) throw new Error('Invalid code');
         const data = await res.json();
@@ -1222,7 +1226,7 @@ export default function Mobley() {
   const isConnecting = connectionState === ConnectionState.Connecting;
 
   // Require authentication to access /mobley
-  if (!verifiedPhone || !authToken) {
+  if ((!verifiedPhone && !verifiedEmail) || !authToken) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-sm space-y-6">
@@ -1291,7 +1295,7 @@ export default function Mobley() {
                   const code = e.target.value.replace(/\D/g, '').slice(0, 6);
                   setLoginCode(code);
                   if (code.length === 6) {
-                    setTimeout(() => verifyLoginCode(), 100);
+                    setTimeout(() => verifyLoginCode(code), 100);
                   }
                 }}
                 placeholder="000000"
@@ -2056,7 +2060,13 @@ export default function Mobley() {
                 type="tel"
                 placeholder="000000"
                 value={loginCode}
-                onChange={(e) => setLoginCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onChange={(e) => {
+                  const code = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setLoginCode(code);
+                  if (code.length === 6) {
+                    setTimeout(() => verifyLoginCode(code), 100);
+                  }
+                }}
                 maxLength={6}
                 className="w-full px-4 py-3.5 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none mb-6 text-center text-2xl tracking-widest"
               />
@@ -2066,7 +2076,7 @@ export default function Mobley() {
             
             <div className="space-y-3">
               <button
-                onClick={loginStep === 'input' ? sendVerificationCode : verifyLoginCode}
+                onClick={loginStep === 'input' ? sendVerificationCode : () => verifyLoginCode()}
                 disabled={loginLoading || (loginStep === 'input' ? (loginMethod === 'phone' ? !isPhoneValid : !isEmailValid) : loginCode.length !== 6)}
                 className="w-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors"
               >
