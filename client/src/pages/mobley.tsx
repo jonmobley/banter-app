@@ -1499,33 +1499,35 @@ export default function Mobley() {
                   )}
                 </div>
                 
-                {/* Status */}
-                <div className="mt-2">
-                  {speakingState[p.identity] ? (
-                    <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/20 rounded-full animate-pulse">
-                      <Radio className="w-3 h-3 text-emerald-400" />
-                      <span className="text-xs text-emerald-400">Speaking</span>
-                    </div>
-                  ) : (
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${
-                      p.muted 
-                        ? 'bg-slate-600/50' 
-                        : 'bg-emerald-500/20'
-                    }`}>
-                      {p.muted ? (
-                        <>
-                          <MicOff className="w-3 h-3 text-slate-400" />
-                          <span className="text-xs text-slate-400">Muted</span>
-                        </>
-                      ) : (
-                        <>
-                          <Mic className="w-3 h-3 text-emerald-400" />
-                          <span className="text-xs text-emerald-400">Live</span>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+                {/* Status - only show for other participants */}
+                {!isMyParticipant(p.identity) && (
+                  <div className="mt-2">
+                    {speakingState[p.identity] ? (
+                      <div className="flex items-center gap-1 px-2 py-1 bg-emerald-500/20 rounded-full animate-pulse">
+                        <Radio className="w-3 h-3 text-emerald-400" />
+                        <span className="text-xs text-emerald-400">Speaking</span>
+                      </div>
+                    ) : (
+                      <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${
+                        p.muted 
+                          ? 'bg-slate-600/50' 
+                          : 'bg-emerald-500/20'
+                      }`}>
+                        {p.muted ? (
+                          <>
+                            <MicOff className="w-3 h-3 text-slate-400" />
+                            <span className="text-xs text-slate-400">Muted</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mic className="w-3 h-3 text-emerald-400" />
+                            <span className="text-xs text-emerald-400">Live</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
