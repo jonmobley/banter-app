@@ -599,11 +599,15 @@ export default function Mobley() {
       });
 
       newRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-        const newSpeakingState: Record<string, boolean> = {};
-        speakers.forEach(speaker => {
-          newSpeakingState[speaker.identity] = true;
+        const activeSpeakers = new Set(speakers.map(s => s.identity));
+        setSpeakingState(prev => {
+          const next: Record<string, boolean> = {};
+          for (const key of Object.keys(prev)) {
+            next[key] = activeSpeakers.has(key);
+          }
+          activeSpeakers.forEach(id => { next[id] = true; });
+          return next;
         });
-        setSpeakingState(prev => ({ ...prev, ...newSpeakingState }));
         
         // Broadcast to server for other clients using actual LiveKit identity
         if (wsRef.current?.readyState === WebSocket.OPEN) {
