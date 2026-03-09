@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand } from "lucide-react";
 import { Link } from "wouter";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -241,6 +241,14 @@ export default function Mobley() {
   const [allCallActive, setAllCallActive] = useState(false);
   const [allCallLoading, setAllCallLoading] = useState(false);
 
+  // Broadcast state
+  const [broadcastActive, setBroadcastActive] = useState(false);
+  const [broadcastSpeakerId, setBroadcastSpeakerId] = useState<string | null>(null);
+  const [broadcastGrantedSpeakers, setBroadcastGrantedSpeakers] = useState<string[]>([]);
+  const [raisedHands, setRaisedHands] = useState<string[]>([]);
+  const [broadcastLoading, setBroadcastLoading] = useState(false);
+  const [handRaised, setHandRaised] = useState(false);
+
   // Alert crew state
   const [showAlertCrewConfirm, setShowAlertCrewConfirm] = useState(false);
   const [alertCrewLoading, setAlertCrewLoading] = useState(false);
@@ -273,6 +281,14 @@ export default function Mobley() {
             setAllCallActive(msg.active);
           } else if (msg.type === 'channel-switch') {
             queryClient.invalidateQueries({ queryKey: ["/api/channels"] });
+          } else if (msg.type === 'broadcast') {
+            setBroadcastActive(msg.active);
+            setBroadcastSpeakerId(msg.speakerId || null);
+            setBroadcastGrantedSpeakers(msg.grantedSpeakers || []);
+            setRaisedHands(msg.raisedHands || []);
+            if (!msg.active) {
+              setHandRaised(false);
+            }
           }
         } catch (e) {
           // Ignore parse errors
@@ -1049,6 +1065,79 @@ export default function Mobley() {
     prevAllCallRef.current = allCallActive;
   }, [allCallActive, connectionState, room, connectToRoom]);
 
+  // When broadcast changes from WS, reconnect to the correct room
+  const prevBroadcastRef = useRef(broadcastActive);
+  const prevGrantedRef = useRef<string[]>([]);
+  useEffect(() => {
+    const wasGranted = localIdentity ? prevGrantedRef.current.includes(localIdentity) : false;
+    const nowGranted = localIdentity ? broadcastGrantedSpeakers.includes(localIdentity) : false;
+    const broadcastChanged = prevBroadcastRef.current !== broadcastActive;
+    const grantChanged = wasGranted !== nowGranted;
+
+    if ((broadcastChanged || grantChanged) && connectionState === ConnectionState.Connected && room) {
+      prevBroadcastRef.current = broadcastActive;
+      prevGrantedRef.current = broadcastGrantedSpeakers;
+      room.disconnect();
+      setConnectionState(ConnectionState.Disconnected);
+      setTimeout(() => connectToRoom(), 500);
+    }
+    prevBroadcastRef.current = broadcastActive;
+    prevGrantedRef.current = broadcastGrantedSpeakers;
+  }, [broadcastActive, broadcastGrantedSpeakers, connectionState, room, connectToRoom, localIdentity]);
+
+  const toggleBroadcast = useCallback(async () => {
+    if (!authToken) return;
+    setBroadcastLoading(true);
+    try {
+      const newState = !broadcastActive;
+      const res = await fetch('/api/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, active: newState }),
+      });
+      if (!res.ok) throw new Error('Failed to toggle broadcast');
+      toast({ title: newState ? 'Broadcast STARTED' : 'Broadcast ended' });
+    } catch {
+      toast({ title: 'Failed to toggle broadcast', variant: 'destructive' });
+    } finally {
+      setBroadcastLoading(false);
+    }
+  }, [authToken, broadcastActive, toast]);
+
+  const toggleRaiseHand = useCallback(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!localIdentity) return;
+    const newState = !handRaised;
+    setHandRaised(newState);
+    wsRef.current.send(JSON.stringify({
+      type: newState ? 'raise-hand' : 'lower-hand',
+      identity: localIdentity,
+    }));
+  }, [localIdentity, handRaised]);
+
+  const grantSpeaker = useCallback(async (identity: string, grant: boolean) => {
+    if (!authToken) return;
+    try {
+      const res = await fetch('/api/broadcast/grant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, identity, grant }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      toast({ title: grant ? `Granted mic to ${identity}` : `Revoked mic from ${identity}` });
+    } catch {
+      toast({ title: 'Failed to update permission', variant: 'destructive' });
+    }
+  }, [authToken, toast]);
+
+  const isBroadcaster = useMemo(() => {
+    return broadcastActive && localIdentity === broadcastSpeakerId;
+  }, [broadcastActive, broadcastSpeakerId, localIdentity]);
+
+  const canSpeakInBroadcast = useMemo(() => {
+    return broadcastActive && localIdentity !== null && (localIdentity === broadcastSpeakerId || broadcastGrantedSpeakers.includes(localIdentity));
+  }, [broadcastActive, broadcastSpeakerId, broadcastGrantedSpeakers, localIdentity]);
+
   // Dropdown handling
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
@@ -1492,7 +1581,9 @@ export default function Mobley() {
             </div>
             <p className="text-xs text-slate-400">
               {isConnected 
-                ? (allCallActive 
+                ? (broadcastActive
+                    ? `BROADCAST • ${formatDuration(callDuration)}`
+                    : allCallActive 
                     ? `ALL CALL • ${formatDuration(callDuration)}`
                     : `Connected${currentChannel ? ` • CH ${currentChannel.number}` : ''} • ${formatDuration(callDuration)}`)
                 : conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
@@ -1625,14 +1716,55 @@ export default function Mobley() {
                 <p className="font-medium text-sm mt-2 text-center truncate w-full">{p.name || p.identity}</p>
                 
                 {/* Badges */}
-                <div className="flex items-center gap-1 mt-1">
+                <div className="flex items-center gap-1 mt-1 flex-wrap justify-center">
                   {isMyParticipant(p.identity) && (
                     <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">You</span>
                   )}
                   {role === 'host' && (
                     <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">Host</span>
                   )}
+                  {broadcastActive && p.identity === broadcastSpeakerId && (
+                    <span className="text-[10px] bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded-full">Broadcaster</span>
+                  )}
+                  {broadcastActive && broadcastGrantedSpeakers.includes(p.identity) && p.identity !== broadcastSpeakerId && (
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">Mic Granted</span>
+                  )}
+                  {broadcastActive && raisedHands.includes(p.identity) && (
+                    <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                      <Hand className="w-2.5 h-2.5" /> Hand
+                    </span>
+                  )}
                 </div>
+                {/* Broadcast grant/revoke buttons for admin */}
+                {broadcastActive && isAdmin && !isMyParticipant(p.identity) && p.identity !== broadcastSpeakerId && (
+                  <div className="mt-1">
+                    {broadcastGrantedSpeakers.includes(p.identity) ? (
+                      <button
+                        onClick={() => grantSpeaker(p.identity, false)}
+                        className="text-[10px] bg-red-500/20 text-red-400 hover:bg-red-500/30 px-2 py-0.5 rounded-full transition-colors"
+                        data-testid={`button-revoke-mic-${i}`}
+                      >
+                        Revoke Mic
+                      </button>
+                    ) : raisedHands.includes(p.identity) ? (
+                      <button
+                        onClick={() => grantSpeaker(p.identity, true)}
+                        className="text-[10px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-2 py-0.5 rounded-full transition-colors animate-pulse"
+                        data-testid={`button-grant-mic-${i}`}
+                      >
+                        Grant Mic
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => grantSpeaker(p.identity, true)}
+                        className="text-[10px] bg-slate-600/50 text-slate-400 hover:bg-slate-600 px-2 py-0.5 rounded-full transition-colors sm:opacity-0 sm:group-hover:opacity-100"
+                        data-testid={`button-grant-mic-${i}`}
+                      >
+                        Grant Mic
+                      </button>
+                    )}
+                  </div>
+                )}
                 
                 {/* Status - only show for other participants */}
                 {!isMyParticipant(p.identity) && (
@@ -1824,7 +1956,7 @@ export default function Mobley() {
               {isAdmin && isConnected && (
                 <button
                   onClick={toggleAllCall}
-                  disabled={allCallLoading}
+                  disabled={allCallLoading || broadcastActive}
                   className={`p-4 rounded-full transition-all active:scale-95 ${
                     allCallActive
                       ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
@@ -1836,11 +1968,39 @@ export default function Mobley() {
                   <PhoneCall className="w-5 h-5" />
                 </button>
               )}
-              {talkMode === 'ptt' ? (
+              {isAdmin && isConnected && (
+                <button
+                  onClick={toggleBroadcast}
+                  disabled={broadcastLoading || allCallActive}
+                  className={`p-4 rounded-full transition-all active:scale-95 ${
+                    broadcastActive
+                      ? 'bg-purple-500 hover:bg-purple-600 text-white animate-pulse'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-purple-400'
+                  }`}
+                  data-testid="button-broadcast"
+                  title={broadcastActive ? "End Broadcast" : "Start Broadcast"}
+                >
+                  <Megaphone className="w-5 h-5" />
+                </button>
+              )}
+              {broadcastActive && !canSpeakInBroadcast ? (
+                <button
+                  onClick={toggleRaiseHand}
+                  className={`w-28 h-28 flex flex-col items-center justify-center rounded-full font-semibold transition-all ${
+                    handRaised
+                      ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/40 border-4 border-amber-400'
+                      : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600'
+                  }`}
+                  data-testid="button-raise-hand"
+                >
+                  <Hand className="w-8 h-8" />
+                  <span className="text-sm mt-1">{handRaised ? 'Hand Up' : 'Raise Hand'}</span>
+                </button>
+              ) : talkMode === 'ptt' ? (
                 <button
                   onPointerDown={(e) => {
-                    e.preventDefault(); // Prevent text selection
-                    unlockAudio(); // iOS Safari audio unlock
+                    e.preventDefault();
+                    unlockAudio();
                     startTalking();
                   }}
                   onPointerUp={stopTalking}
@@ -2236,6 +2396,22 @@ export default function Mobley() {
           <div className="bg-red-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-pulse" data-testid="banner-all-call">
             <PhoneCall className="w-4 h-4" />
             <span className="font-semibold text-sm">ALL CALL ACTIVE</span>
+          </div>
+        </div>
+      )}
+
+      {broadcastActive && isConnected && (
+        <div className="fixed top-16 left-0 right-0 z-40 flex justify-center px-4">
+          <div className="bg-purple-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-pulse" data-testid="banner-broadcast">
+            <Megaphone className="w-4 h-4" />
+            <span className="font-semibold text-sm">
+              {isBroadcaster ? 'BROADCASTING' : canSpeakInBroadcast ? 'BROADCAST — MIC GRANTED' : 'BROADCAST — LISTEN ONLY'}
+            </span>
+            {raisedHands.length > 0 && isAdmin && (
+              <span className="bg-amber-400 text-black text-xs font-bold px-2 py-0.5 rounded-full ml-1">
+                {raisedHands.length} ✋
+              </span>
+            )}
           </div>
         </div>
       )}

@@ -183,6 +183,22 @@ export async function registerRoutes(
   // All-call state (shared across routes and WebSocket)
   let allCallActive = false;
 
+  // Broadcast state (shared across routes and WebSocket)
+  let broadcastActive = false;
+  let broadcastSpeakerId: string | null = null;
+  const broadcastGrantedSpeakers = new Set<string>();
+  const raisedHands = new Set<string>();
+
+  function getBroadcastState() {
+    return {
+      type: 'broadcast' as const,
+      active: broadcastActive,
+      speakerId: broadcastSpeakerId,
+      grantedSpeakers: Array.from(broadcastGrantedSpeakers),
+      raisedHands: Array.from(raisedHands),
+    };
+  }
+
   // Set up WebSocket server for frontend clients
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
   
@@ -200,13 +216,24 @@ export async function registerRoutes(
     // Send current all-call state on connect
     ws.send(JSON.stringify({ type: 'all-call', active: allCallActive }));
     
-    // Handle messages from frontend (speaking state updates)
+    // Send current broadcast state on connect
+    ws.send(JSON.stringify(getBroadcastState()));
+    
+    // Handle messages from frontend (speaking state updates and raise hand)
     ws.on('message', (data) => {
       try {
         const msg = JSON.parse(data.toString());
         if (msg.type === 'speaking-update' && msg.identity) {
           speakingState.set(msg.identity, msg.speaking);
           broadcastSpeakingState();
+        } else if (msg.type === 'raise-hand' && msg.identity) {
+          raisedHands.add(msg.identity);
+          log(`✋ ${msg.identity} raised hand`, "broadcast");
+          broadcastToFrontend(getBroadcastState());
+        } else if (msg.type === 'lower-hand' && msg.identity) {
+          raisedHands.delete(msg.identity);
+          log(`👇 ${msg.identity} lowered hand`, "broadcast");
+          broadcastToFrontend(getBroadcastState());
         }
       } catch (e) {
         // Ignore parse errors
@@ -1088,6 +1115,9 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Unauthorized" });
       }
 
+      if (active && broadcastActive) {
+        return res.status(400).json({ error: "Cannot activate all-call while broadcast is active" });
+      }
       allCallActive = !!active;
       log(`📢 All-call ${allCallActive ? 'ACTIVATED' : 'DEACTIVATED'} by admin`, "channels");
       broadcastToFrontend({ type: 'all-call', active: allCallActive });
@@ -1104,6 +1134,78 @@ export async function registerRoutes(
    */
   app.get("/api/channels/all-call", async (_req, res) => {
     res.json({ active: allCallActive });
+  });
+
+  /**
+   * POST /api/broadcast
+   * Admin starts/stops broadcast mode. One speaker, everyone else listens.
+   */
+  app.post("/api/broadcast", async (req, res) => {
+    try {
+      const { authToken: clientAuthToken, active } = req.body;
+      if (!verifyAdminAuth(clientAuthToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      if (active) {
+        const verifiedId = verifyAuthToken(clientAuthToken);
+        broadcastActive = true;
+        broadcastSpeakerId = verifiedId || null;
+        broadcastGrantedSpeakers.clear();
+        raisedHands.clear();
+        if (allCallActive) {
+          allCallActive = false;
+          broadcastToFrontend({ type: 'all-call', active: false });
+        }
+        log(`📣 Broadcast ACTIVATED by ${broadcastSpeakerId}`, "broadcast");
+      } else {
+        broadcastActive = false;
+        broadcastSpeakerId = null;
+        broadcastGrantedSpeakers.clear();
+        raisedHands.clear();
+        log(`📣 Broadcast DEACTIVATED`, "broadcast");
+      }
+
+      broadcastToFrontend(getBroadcastState());
+      res.json({ success: true, ...getBroadcastState() });
+    } catch (error: any) {
+      log(`Error toggling broadcast: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to toggle broadcast" });
+    }
+  });
+
+  /**
+   * POST /api/broadcast/grant
+   * Admin grants or revokes speaking permission to a listener during broadcast.
+   */
+  app.post("/api/broadcast/grant", async (req, res) => {
+    try {
+      const { authToken: clientAuthToken, identity, grant } = req.body;
+      if (!verifyAdminAuth(clientAuthToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (!broadcastActive) {
+        return res.status(400).json({ error: "Broadcast is not active" });
+      }
+      if (!identity) {
+        return res.status(400).json({ error: "Identity is required" });
+      }
+
+      if (grant) {
+        broadcastGrantedSpeakers.add(identity);
+        raisedHands.delete(identity);
+        log(`🎤 Granted speaking permission to ${identity}`, "broadcast");
+      } else {
+        broadcastGrantedSpeakers.delete(identity);
+        log(`🔇 Revoked speaking permission from ${identity}`, "broadcast");
+      }
+
+      broadcastToFrontend(getBroadcastState());
+      res.json({ success: true, ...getBroadcastState() });
+    } catch (error: any) {
+      log(`Error granting broadcast permission: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to update broadcast permission" });
+    }
   });
 
   /**
@@ -1316,10 +1418,16 @@ export async function registerRoutes(
         // Continue without role check
       }
       
-      // Check if all-call mode is active — everyone joins the all-call room
+      // Check broadcast mode — overrides all other routing
       let roomName = DEFAULT_ROOM_NAME;
       let channelNumber: number | null = null;
-      if (allCallActive) {
+      if (broadcastActive) {
+        roomName = 'banter-broadcast';
+        if (stableIdentity !== broadcastSpeakerId && !broadcastGrantedSpeakers.has(stableIdentity)) {
+          canPublish = false;
+        }
+        log(`📣 Broadcast active — routing ${stableIdentity} to broadcast room (canPublish: ${canPublish})`, "livekit");
+      } else if (allCallActive) {
         roomName = 'banter-all-call';
         log(`📢 All-call active — routing ${stableIdentity} to all-call room`, "livekit");
       } else {

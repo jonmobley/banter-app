@@ -33,27 +33,9 @@ Multi-room walkie-talkie functionality where participants can be organized into 
 
 ---
 
-## Priority 2: Banter Broadcast
+## ~~Priority 2: Banter Broadcast~~ ✅ IMPLEMENTED
 
-One-to-many streaming where one speaker addresses unlimited listeners.
-
-### Use Cases
-- Company-wide announcements
-- Training sessions
-- Emergency broadcasts
-- Podcast-style content
-
-### Core Features
-- Single speaker (host) at a time
-- Unlimited listeners
-- Optional "raise hand" to request speaking
-- Host can grant speaking permission temporarily
-- Listeners can react (emoji, thumbs up)
-
-### Technical Approach
-- Conference with all listeners muted by default
-- Host controls who can unmute
-- Separate audio stream for reactions/feedback
+One-to-many streaming where one speaker addresses unlimited listeners. Admin starts broadcast mode, all participants join a dedicated broadcast room. Listeners are muted by default and can raise hand to request speaking. Admin can grant/revoke mic permission.
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Banter is a web-based walkie-talkie/audio conference application that allows users to join voice conferences from a web browser using LiveKit. The system automatically connects users to a shared conference room without requiring complex setup. It includes a contact management system, scheduled events, role-based access, and real-time speaking indicators.
+Banter is a web-based walkie-talkie/audio conference application that enables real-time audio communication for groups. It offers various conference types, including always-on rooms, scheduled calls, multi-room channels with host controls, and one-to-many broadcast sessions. The system aims to provide a streamlined, browser-based audio experience, automatically connecting users to shared conference rooms while supporting contact management, scheduled events, and role-based access. The project envisions future SaaS capabilities with tiered features and usage analytics.
 
 ## User Preferences
 
@@ -11,223 +11,68 @@ Banter is a web-based walkie-talkie/audio conference application that allows use
 - Default to muted when joining calls (prevents accidental noise)
 - Browser connection is primary, phone fallback is secondary
 
-## Talk Modes
-
-Browser users can choose between two talk modes (accessible via Audio Settings):
-
-| Mode | Description | Use Case |
-|------|-------------|----------|
-| **Hold to Talk (PTT)** | Manual control - press and hold button to unmute | Active use, prevents accidental transmission |
-| **Auto (VAD)** | Voice Activity Detection - automatically unmutes when speaking | Hands-free, phone in pocket |
-
-### VAD Implementation Details
-- LiveKit provides built-in speaking detection via `ActiveSpeakersChanged` event
-- Local mute/unmute handled directly via `room.localParticipant.setMicrophoneEnabled()`
-- Mode preference persisted to localStorage
-
-## Product Taxonomy
-
-### Banter Types
-
-| Type | Description | Status |
-|------|-------------|--------|
-| **Banter** | Always-on single room, 24/7 drop-in | ✅ Implemented |
-| **Banter Scheduled** | Planned call with time, invites, reminders, auto-call | ✅ Implemented |
-| **Banter Channels** | Multi-room walkie-talkie with host controls, monitoring | ✅ Implemented |
-| **Banter Broadcast** | One speaker, unlimited listeners | 🔮 Future |
-
-### Supporting Concepts
-
-| Concept | Description | Status |
-|---------|-------------|--------|
-| **Banter Groups** | Saved lists of contacts for quick invites | ✅ Implemented |
-| **Admin** | Can create any Banter type, manage settings | ✅ Implemented |
-| **Host** | Runs a specific session (controls participants) | ✅ Implemented |
-| **Participant** | Can speak and listen | ✅ Implemented |
-| **Listener** | Can only hear (read-only) | ✅ Implemented |
-
-### SaaS Considerations (Future)
-
-When implementing pricing tiers, the database and features should support:
-- Participant limits per tier
-- Admin seat limits
-- Feature gating (Channels/Broadcast for paid tiers)
-- Usage analytics and quotas
-
-See `next-steps.md` for the full feature roadmap.
-
 ## System Architecture
 
 ### Frontend Architecture
 - **Framework**: React 18 with TypeScript
-- **Routing**: Wouter (lightweight React router)
-- **State Management**: TanStack React Query for server state
-- **Styling**: Tailwind CSS v4 with shadcn/ui component library (New York style)
-- **Build Tool**: Vite with custom plugins for Replit integration
-
-The frontend is a single-page application located in `client/src/` with path aliases configured for clean imports (`@/` for client source, `@shared/` for shared code).
+- **Routing**: Wouter
+- **State Management**: TanStack React Query
+- **Styling**: Tailwind CSS v4 with shadcn/ui (New York style)
+- **Build Tool**: Vite
+- **PWA Support**: `manifest.json`, service worker, and meta tags for "Add to Home Screen".
+- **Wake Lock**: Screen stays awake during active calls.
 
 ### Backend Architecture
 - **Runtime**: Node.js with Express 5
 - **Language**: TypeScript with ESM modules
-- **API Style**: REST endpoints under `/api/` prefix
+- **API Style**: REST endpoints under `/api/`
 - **Real-time Voice**: LiveKit for WebRTC audio conferencing
-
-Key server files:
-- `server/index.ts` - Express app setup and middleware
-- `server/routes.ts` - API route definitions including LiveKit token generation
-- `server/livekit.ts` - LiveKit room service for token generation and room management
-- `server/storage.ts` - Database access layer
 
 ### Data Storage
 - **Database**: PostgreSQL via Drizzle ORM
 - **Schema Location**: `shared/schema.ts`
-- **Tables**:
-  - `users` - User authentication (id, username, password)
-  - `contacts` - Phone contact directory (id, name, phone)
-  - `groups` - Saved contact groups for quick invites (id, name, createdAt)
-  - `group_members` - Junction table linking groups to expected participants (id, groupId, participantId)
+- **Key Tables**: `contacts`, `groups`, `group_members`, `channels`, `channel_assignments`.
 
 ### Development vs Production
-- Development: Vite dev server with HMR proxied through Express
-- Production: Static files served from `dist/public/`, built with Vite and esbuild
+- Development: Vite dev server proxied through Express.
+- Production: Static files served from `dist/public/`.
 
 ### LiveKit Integration
-The application uses LiveKit for real-time voice conferencing:
+- **WebSocket URL**: `wss://banter-4d7r2g6h.livekit.cloud`
+- **Authentication**: API credentials via `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` environment variables.
+- **Endpoints**: Token generation (`POST /api/livekit/token`), webhook handling (`POST /api/livekit/webhook`), participant status (`GET /api/participants`).
+- **Audio Quality**: Optimized settings (Mono, 48kHz, 32kbps Opus), DTX, RED.
+- **Walkie-Talkie Enhancements**: Half-duplex mode (incoming audio muted when PTT pressed), chirp sounds on PTT start/end.
+- **Channel Switching**: Users can switch between assigned channels.
+- **All-Call Broadcast**: Admin-activated mode forcing all clients to `banter-all-call` room.
+- **Broadcast Mode**: Admin-controlled one-to-many broadcast with speaker granting and raise-hand functionality.
 
-**WebSocket URL**: `wss://banter-4d7r2g6h.livekit.cloud`
-
-**Authentication**: API credentials stored as environment secrets:
-- `LIVEKIT_API_KEY` - LiveKit API key
-- `LIVEKIT_API_SECRET` - LiveKit API secret
-
-**Endpoints**:
-- `POST /api/livekit/token` - Generates access tokens for browser clients (requires auth token or admin PIN in production)
-- `POST /api/livekit/webhook` - Receives LiveKit room/participant events
-- `GET /api/participants` - Returns current room participants with mute status
-
-**Security**:
-- Token generation requires authentication (admin PIN or valid auth token) in production
-- Tokens use stable identity based on verified phone number to prevent collisions
-- 6-hour token TTL with room-scoped permissions
+### Core Features
+- **Talk Modes**: Hold to Talk (PTT) and Auto (VAD) with LiveKit's speaking detection.
+- **Product Taxonomy**:
+    - **Banter**: Always-on single room.
+    - **Banter Scheduled**: Planned calls with invites and reminders.
+    - **Banter Channels**: Multi-room walkie-talkie with host controls.
+    - **Banter Broadcast**: One speaker, unlimited listeners.
+- **Supporting Concepts**: Banter Groups (saved contact lists), Admin, Host, Participant, Listener roles.
+- **Authentication**: Email or phone-based magic code login. Admin status determined by phone number verification.
+- **Scheduling**: SMS reminder system and background scheduler for auto-activating scheduled banters.
+- **Security**: Strict E.164 phone number matching, API rate limiting, bearer token authentication for all API access, and database transactions for critical operations.
+- **Live Event Crew Features**: Self-service channel switching, all-call broadcast, PWA support, Wake Lock, and "Alert Crew" SMS functionality.
 
 ## External Dependencies
 
 ### Third-Party Services
-- **LiveKit**: Real-time WebRTC voice conferencing
-  - Cloud-hosted at `livekit.cloud`
-  - Credentials managed via Replit secrets
-- **Twilio**: SMS for authentication codes
-  - Configured via Replit connector (manages API keys automatically)
-  - Used only for phone verification, not voice
+- **LiveKit**: Real-time WebRTC voice conferencing (cloud-hosted).
+- **Twilio**: SMS for authentication codes and scheduled event notifications.
+- **Resend**: Email service for sending verification emails.
 
 ### Database
-- **PostgreSQL**: Primary data store
-  - Connection via `DATABASE_URL` environment variable
-  - Managed through Drizzle ORM with `drizzle-kit` for migrations
+- **PostgreSQL**: Primary data store, managed via Drizzle ORM.
 
 ### Key NPM Packages
-- `livekit-server-sdk` - LiveKit server SDK for token generation and room management
-- `livekit-client` - LiveKit client SDK for browser WebRTC audio
-- `drizzle-orm` / `drizzle-zod` - Database ORM and validation
-- `@tanstack/react-query` - Data fetching and caching
-- `express` - Web server framework
-- Full shadcn/ui component suite via Radix UI primitives
-
-## Recent Changes
-
-### January 2026 - Banter Channels Feature
-- Added `channels` and `channel_assignments` tables to database schema with unique constraints
-- Implemented channel CRUD operations in storage layer with participant assignment management
-- Created API endpoints for channel management (all mutations require admin PIN)
-- Updated LiveKit token endpoint to route participants to channel-specific rooms (e.g., `banter-channel-1`)
-- Added channel management modal for admins to create, edit, delete channels and assign participants
-- Channel indicator in header shows current channel when connected
-- Channels button in bottom bar for admins when connected
-- Each channel is a separate LiveKit room, ensuring audio isolation between channels
-
-### January 2026 - Banter Groups Feature
-- Added `groups` and `group_members` tables to database schema
-- Implemented group CRUD operations in storage layer with member management
-- Created API endpoints for group management (all mutations require admin PIN)
-- Added Groups tab to Contacts page for creating, editing, and deleting groups
-- Built member management modal to add/remove participants from groups
-- Added "Quick add from group" feature on Schedule page for one-click participant selection
-- Group deletion cascades to remove all associated group members
-
-### January 2026 - Admin & Scheduling Features
-- Added `/admin` page with PIN authentication to view beta access email signups
-- Implemented SMS reminder system that sends notifications 15 minutes before scheduled banters
-- Created background scheduler (`server/scheduler.ts`) that auto-activates scheduled banters when their time arrives
-- Added "Join Banter" button to scheduled banter cards that navigates to /mobley
-- Updated Share functionality to share web link instead of obsolete phone number
-- Security improvements: Admin endpoints use POST with body instead of query strings
-- My Profile now persists email alongside name in localStorage
-
-### January 2026 - LiveKit Migration
-- Migrated from Twilio Voice SDK to LiveKit for real-time voice conferencing
-- Removed all Twilio dependencies (`twilio`, `@twilio/voice-sdk`, `@ricky0123/vad-web`)
-- Added LiveKit packages (`livekit-server-sdk`, `livekit-client`)
-- Created `server/livekit.ts` for LiveKit room service
-- Rewrote `server/routes.ts` with LiveKit token generation and participant management
-- Rewrote `client/src/pages/mobley.tsx` with LiveKit client SDK integration
-- Added security: token generation requires authentication in production
-- Fixed participant tracking to use actual track mute state instead of permissions
-- Note: Phone calling features removed - LiveKit is web-only
-- Twilio SMS restored for authentication magic codes (phone verification)
-
-### January 2026 - Audio Quality & Walkie-Talkie Enhancements
-- Optimized audio settings: Mono channel, 48kHz sample rate, 32kbps bitrate (Opus codec)
-- Added DTX (Discontinuous Transmission) for bandwidth savings during silence
-- Added RED (Redundant Encoding) for better packet loss recovery
-- Token permissions now restrict to microphone-only (no video)
-- Implemented half-duplex mode: incoming audio muted when PTT pressed (prevents echo)
-- Added chirp sounds on PTT start/end using Web Audio API (fixes "first word cutoff" issue)
-- iOS Safari audio unlock on first user interaction
-- Updated PTT button to use pointer events for better mobile support
-
-### January 2026 - Capacitor Native App Support
-- Added Capacitor for building native iOS/Android apps
-- Created custom `capacitor-pushtotalk` plugin scaffold for Apple's PushToTalk framework (iOS 16+)
-- Native iOS structure in `ios/` directory
-- Native Android structure in `android/` directory
-- See `NATIVE_BUILD.md` for build instructions
-- Hardware button support (EarPods center button) requires native build + Apple approval
-
-### January 2026 - Email Authentication & Admin Phone-Based Auth
-- Added email magic code login option alongside existing phone SMS login
-- Created `server/resend-email.ts` with Resend integration for sending verification emails
-- Added `POST /api/auth/send-email-code` and `POST /api/auth/verify-email-code` endpoints
-- Updated `verification_codes` table to support both phone and email fields
-- Updated storage layer with `createEmailVerificationCode`, `verifyEmailCode`, `deleteEmailVerificationCodes`
-- Frontend login UI now has Phone/Email toggle tabs for choosing login method
-- Removed PIN-based admin authentication in favor of phone number verification
-- Admin status now determined by matching auth token phone to `ADMIN_PHONE` environment variable
-- `POST /api/admin/verify` endpoint checks if authenticated user is admin
-
-### March 2026 - Comprehensive Security & Quality Audit
-- **Security: Fixed admin phone matching** - Changed from loose `.endsWith()` to strict E.164 equality
-- **Security: Added rate limiting** - Max 3 send-code and 5 verify-code attempts per 15 minutes per phone/email
-- **Security: Added API authentication** - All GET endpoints (`/api/contacts`, `/api/expected`, `/api/groups`, `/api/channels`, `/api/banters`) now require auth token via Bearer header
-- **Security: Contact/expected mutations** now require admin auth token
-- **Bug fix: SMS/email send failure** - `send-code` endpoints now return error (not success) when delivery fails, and clean up the verification code from DB
-- **Auth migration: Removed all PIN-based auth** - `admin.tsx`, `contacts.tsx`, `schedule.tsx` now use auth token from `banter_auth_token` localStorage instead of `banter_admin_pin`
-- **Data integrity: Transactions** - `createVerificationCode`, `createEmailVerificationCode`, `assignToChannel`, `removeExpectedParticipant` now use database transactions
-- **Data integrity: Orphan cleanup** - Deleting an expected participant now also removes their group member entries
-- **Data integrity: Duplicate contacts** - API returns 409 with helpful message instead of 500 on duplicate phone
-- **Scheduler fix: Banter lifecycle** - Active banters now auto-complete 2 hours after scheduled time
-- **Label fix: Auto-notify** - Renamed "Auto-call" to "Auto-notify" (SMS-only, not voice call)
-- **Label fix: Reminder time** - Frontend now correctly shows "15 min before" matching backend behavior
-- **UX: Contact search** - Added search/filter bar to contacts list
-- **UX: Auth guard** - Contacts, Schedule, and Admin pages now show "Please sign in" with link to /mobley when not authenticated
-- **Cleanup: Removed unused `users` table** and related dead code from schema and storage
-- **Cleanup: Fixed phone normalization** - `getContactByPhone` and LiveKit participant matching now use strict E.164 comparison
-- **SMS links: Production URL** - Reminder SMS now uses `REPLIT_DEPLOYMENT_URL` when available for correct production links
-- **Half-duplex safety** - Disconnect now explicitly unmutes remote audio to prevent stuck-muted state
-
-### March 2026 - Live Event Crew Features
-- **Self-service channel switching** - Users assigned to a channel by an admin can switch between channels via channel picker modal. Server validates identity matches auth token (IDOR protection) and requires an existing channel assignment (admin must grant access first). Channels button only visible to users who have been assigned to a channel.
-- **All-call broadcast** - Admin can activate/deactivate all-call mode via `POST /api/channels/all-call`. All connected clients receive WS broadcast and auto-reconnect to `banter-all-call` room. State bootstrapped on WS connect. Red pulsing "ALL CALL ACTIVE" banner shown to all users.
-- **PWA support** - Added `manifest.json`, service worker (`sw.js`), and PWA meta tags for "Add to Home Screen" on iOS/Android. Display mode: standalone.
-- **Wake Lock** - Screen stays awake during active calls via Web Wake Lock API. Reacquires on visibility change. Released on disconnect.
-- **Alert Crew SMS** - Admin can send instant "Join Now" SMS to all expected participants with phone numbers via `POST /api/alert-crew`. Rate limited to 1 per 5 minutes. Confirmation dialog before sending.
+- `livekit-server-sdk` / `livekit-client`
+- `drizzle-orm` / `drizzle-zod`
+- `@tanstack/react-query`
+- `express`
+- shadcn/ui components (Radix UI primitives)
