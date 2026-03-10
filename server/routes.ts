@@ -201,6 +201,7 @@ export async function registerRoutes(
     broadcastGrantedSpeakers: Set<string>;
     raisedHands: Set<string>;
     chirpEnabled: boolean;
+    muteAllActive: boolean;
   }
 
   const banterStates = new Map<string, BanterSessionState>();
@@ -215,6 +216,7 @@ export async function registerRoutes(
         broadcastGrantedSpeakers: new Set(),
         raisedHands: new Set(),
         chirpEnabled: true,
+        muteAllActive: false,
       });
     }
     return banterStates.get(key)!;
@@ -251,6 +253,7 @@ export async function registerRoutes(
     ws.send(JSON.stringify({ type: 'all-call', active: globalState.allCallActive, banterId: null }));
     ws.send(JSON.stringify(getBroadcastState(null)));
     ws.send(JSON.stringify({ type: 'chirp-setting', enabled: globalState.chirpEnabled, banterId: null }));
+    ws.send(JSON.stringify({ type: 'mute-all', active: globalState.muteAllActive, banterId: null }));
     
     ws.on('message', (data) => {
       try {
@@ -269,6 +272,7 @@ export async function registerRoutes(
           ws.send(JSON.stringify({ type: 'all-call', active: bState.allCallActive, banterId: bId }));
           ws.send(JSON.stringify(getBroadcastState(bId)));
           ws.send(JSON.stringify({ type: 'chirp-setting', enabled: bState.chirpEnabled, banterId: bId }));
+          ws.send(JSON.stringify({ type: 'mute-all', active: bState.muteAllActive, banterId: bId }));
         } else if (msg.type === 'speaking-update' && msg.identity) {
           const clientInfo = frontendClients.get(ws);
           const bId = clientInfo?.banterId || null;
@@ -302,6 +306,7 @@ export async function registerRoutes(
           ws.send(JSON.stringify({ type: 'all-call', active: bState.allCallActive, banterId: bId }));
           ws.send(JSON.stringify(getBroadcastState(bId)));
           ws.send(JSON.stringify({ type: 'chirp-setting', enabled: bState.chirpEnabled, banterId: bId }));
+          ws.send(JSON.stringify({ type: 'mute-all', active: bState.muteAllActive, banterId: bId }));
         }
       } catch (e) {
         // Ignore parse errors
@@ -885,6 +890,50 @@ export async function registerRoutes(
     } catch (error: any) {
       log(`Error muting participant: ${error.message}`, "livekit");
       res.status(500).json({ error: "Failed to update mute status" });
+    }
+  });
+
+  app.post("/api/admin/mute-all", async (req, res) => {
+    try {
+      const { authToken, muted, banterId } = req.body;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const adminIdentifier = verifyAuthToken(authToken);
+      const adminIdentity = adminIdentifier
+        ? (adminIdentifier.includes('@') ? adminIdentifier : adminIdentifier.replace(/\D/g, '').slice(-10))
+        : null;
+
+      const bId = banterId || null;
+      let roomName = DEFAULT_ROOM_NAME;
+      if (bId) {
+        const banter = await storage.getScheduledBanter(bId);
+        if (!banter?.slug) {
+          return res.status(404).json({ error: "Banter not found" });
+        }
+        roomName = `banter-${banter.slug}-main`;
+      }
+
+      const state = getBanterState(bId);
+
+      const participants = await getRoomParticipants(roomName);
+      let mutedCount = 0;
+      for (const p of participants) {
+        if (p.identity === adminIdentity) continue;
+        try {
+          await muteParticipant(p.identity, !!muted, roomName);
+          mutedCount++;
+        } catch (e) {}
+      }
+
+      state.muteAllActive = !!muted;
+      log(`🔇 Mute-all ${muted ? 'ACTIVATED' : 'DEACTIVATED'} by admin — ${mutedCount} participants affected (banter: ${bId || 'global'})`, "admin");
+      broadcastToFrontend({ type: 'mute-all', active: !!muted, banterId: bId }, bId);
+      res.json({ success: true, active: !!muted, mutedCount });
+    } catch (error: any) {
+      log(`Error in mute-all: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to mute all" });
     }
   });
 
@@ -1901,12 +1950,23 @@ export async function registerRoutes(
       }
       
       switch (event.event) {
-        case 'participant_joined':
+        case 'participant_joined': {
           broadcastParticipantEvent('join', {
             identity: event.participant?.identity,
             name: event.participant?.name
           }, webhookBanterId);
+          const joinState = getBanterState(webhookBanterId);
+          if (joinState.muteAllActive && event.participant?.identity && roomName) {
+            const joinIdentity = event.participant.identity;
+            const adminPhone = process.env.ADMIN_PHONE;
+            const normalizedAdmin = adminPhone ? normalizePhone(adminPhone).replace(/\D/g, '').slice(-10) : '';
+            if (joinIdentity !== normalizedAdmin) {
+              muteParticipant(joinIdentity, true, roomName).catch(() => {});
+              log(`🔇 Auto-muted late joiner ${joinIdentity} (mute-all active)`, "admin");
+            }
+          }
           break;
+        }
         case 'participant_left': {
           const speaking = getSpeakingState(webhookBanterId);
           speaking.delete(event.participant?.identity);

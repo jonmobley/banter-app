@@ -371,6 +371,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [allCallActive, setAllCallActive] = useState(false);
   const [chirpEnabled, setChirpEnabled] = useState(true);
   const chirpEnabledRef = useRef(true);
+  const [muteAllActive, setMuteAllActive] = useState(false);
+  const [muteAllLoading, setMuteAllLoading] = useState(false);
   const [allCallLoading, setAllCallLoading] = useState(false);
 
   // Broadcast state
@@ -420,6 +422,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             const msgBanterId = msg.banterId || null;
             if (msgBanterId === myBanterId) {
               queryClient.invalidateQueries({ queryKey: ["/api/channels", myBanterId] });
+            }
+          } else if (msg.type === 'mute-all') {
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              setMuteAllActive(msg.active);
             }
           } else if (msg.type === 'chirp-setting') {
             const msgBanterId = msg.banterId || null;
@@ -1313,6 +1320,24 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setAllCallLoading(false);
     }
   }, [authToken, allCallActive, toast, currentBanterId]);
+
+  const toggleMuteAll = useCallback(async () => {
+    if (muteAllLoading) return;
+    setMuteAllLoading(true);
+    try {
+      const newState = !muteAllActive;
+      const res = await fetch('/api/admin/mute-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, muted: newState, banterId: currentBanterId || undefined }),
+      });
+      if (!res.ok) throw new Error('Failed');
+    } catch {
+      toast({ title: 'Failed to mute all', variant: 'destructive' });
+    } finally {
+      setMuteAllLoading(false);
+    }
+  }, [authToken, muteAllActive, muteAllLoading, toast, currentBanterId]);
 
   // When all-call changes from WS, reconnect to the correct room
   const prevAllCallRef = useRef(allCallActive);
@@ -2565,6 +2590,21 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   </button>
                 )}
               </div>
+              {isAdmin && isConnected && (
+                <button
+                  onClick={toggleMuteAll}
+                  disabled={muteAllLoading}
+                  className={`w-full flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all ${
+                    muteAllActive
+                      ? 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/30 animate-pulse'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                  }`}
+                  data-testid="button-mute-all"
+                >
+                  <VolumeX className={`w-4 h-4 ${muteAllActive ? 'text-white' : 'text-slate-400'}`} />
+                  {muteAllActive ? 'Unmute All' : 'Mute All'}
+                </button>
+              )}
               {isAdmin && channelsData && channelsData.length > 0 && (
                 <button
                   onClick={toggleAllCall}
@@ -3022,6 +3062,15 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {muteAllActive && isConnected && !isAdmin && (
+        <div className="fixed top-16 left-0 right-0 z-40 flex justify-center px-4">
+          <div className="bg-red-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg" data-testid="banner-mute-all">
+            <VolumeX className="w-4 h-4" />
+            <span className="font-semibold text-sm">ALL MUTED BY ADMIN</span>
           </div>
         </div>
       )}
