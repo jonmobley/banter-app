@@ -1936,7 +1936,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               onClick={() => setShowFlicModal(true)}
               className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
                 flicButtons.some(b => b.connectionState === 'connected')
-                  ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                  ? 'bg-emerald-500 text-white hover:bg-emerald-400'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white'
               }`}
               data-testid="button-flic"
@@ -2615,16 +2615,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   <button
                     key={key}
                     onClick={() => updateAudioProcessing({ [key]: !value })}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors ${
-                      value ? 'bg-blue-500/20 border-2 border-blue-500' : 'bg-slate-800 border-2 border-transparent'
-                    }`}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-colors bg-slate-800 border-2 border-transparent`}
                     data-testid={`toggle-${key}`}
                   >
                     <div className="flex flex-col items-start">
-                      <span className={`text-sm font-medium ${value ? 'text-blue-400' : 'text-white'}`}>{label}</span>
+                      <span className="text-sm font-medium text-white">{label}</span>
                       <span className="text-xs text-slate-500">{desc}</span>
                     </div>
-                    <div className={`w-10 h-6 rounded-full transition-colors ${value ? 'bg-blue-500' : 'bg-slate-600'} relative`}>
+                    <div className={`w-10 h-6 rounded-full transition-colors ${value ? 'bg-slate-400' : 'bg-slate-600'} relative`}>
                       <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${value ? 'right-1' : 'left-1'}`} />
                     </div>
                   </button>
