@@ -1832,7 +1832,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   if (banterLoading) {
     return (
-      <div className="h-[100dvh] bg-slate-950 text-white flex flex-col items-center justify-center p-6 safe-top safe-bottom overflow-hidden">
+      <div className="h-full bg-slate-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden">
         <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4 animate-pulse">
           <Radio className="w-8 h-8 text-emerald-400" />
         </div>
@@ -1843,7 +1843,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   if (banterError) {
     return (
-      <div className="h-[100dvh] bg-slate-950 text-white flex flex-col items-center justify-center p-6 safe-top safe-bottom overflow-hidden">
+      <div className="h-full bg-slate-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden">
         <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
           <Radio className="w-8 h-8 text-red-400" />
         </div>
@@ -1857,7 +1857,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   // Require authentication to access /login
   if ((!verifiedPhone && !verifiedEmail) || !authToken) {
     return (
-      <div className="h-[100dvh] bg-slate-950 text-white flex flex-col items-center justify-center p-6 safe-top safe-bottom overflow-hidden">
+      <div className="h-full bg-slate-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden">
         <div className="w-full max-w-sm space-y-5">
           <div className="text-center">
             <div className="w-14 h-14 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
@@ -1953,8 +1953,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }
 
   return (
-    <div className="h-[100dvh] bg-slate-950 text-white flex flex-col overflow-hidden">
-      <header className="relative flex items-center justify-between p-4 pt-safe border-b border-slate-800 flex-shrink-0">
+    <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden safe-top">
+      <header className="relative flex items-center justify-between p-4 border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2 z-10">
           {isAdmin && (
             <button
@@ -2404,8 +2404,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       {/* Bottom controls */}
       <div className={`fixed left-0 right-0 px-6 ${
         isConnected || isConnecting 
-          ? 'bottom-0 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8 pb-safe' 
-          : 'bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 pb-safe sm:pb-0'
+          ? 'bottom-0 bg-slate-950 pt-8 pb-safe' 
+          : 'bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 pb-safe sm:pb-0 bg-slate-950'
       }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
