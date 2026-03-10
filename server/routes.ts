@@ -495,8 +495,9 @@ export async function registerRoutes(
       await storage.deleteVerificationCodes(normalizedPhone);
       const authToken = createAuthToken(normalizedPhone);
 
+      const user = await storage.getUserByPhone(normalizedPhone);
       log(`✅ Verified phone ${normalizedPhone}`, "auth");
-      res.json({ success: true, phone: normalizedPhone, authToken });
+      res.json({ success: true, phone: normalizedPhone, authToken, userName: user?.name || null });
     } catch (error: any) {
       log(`Error verifying code: ${error.message}`, "auth");
       res.status(500).json({ error: "Failed to verify code" });
@@ -529,11 +530,175 @@ export async function registerRoutes(
       await storage.deleteEmailVerificationCodes(normalizedEmail);
       const authToken = createAuthToken(normalizedEmail);
 
+      const user = await storage.getUserByEmail(normalizedEmail);
       log(`✅ Verified email ${normalizedEmail}`, "auth");
-      res.json({ success: true, email: normalizedEmail, authToken });
+      res.json({ success: true, email: normalizedEmail, authToken, userName: user?.name || null });
     } catch (error: any) {
       log(`Error verifying email code: ${error.message}`, "auth");
       res.status(500).json({ error: "Failed to verify code" });
+    }
+  });
+
+  /**
+   * POST /api/user/profile
+   * Save or update the current user's name. Creates user record if none exists.
+   */
+  app.post("/api/user/profile", async (req, res) => {
+    try {
+      const { authToken, name } = req.body;
+      const identifier = verifyAuthToken(authToken);
+      if (!identifier) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+
+      let user;
+      if (identifier.includes('@')) {
+        user = await storage.upsertUserByEmail(identifier, name.trim());
+      } else {
+        user = await storage.upsertUserByPhone(identifier, name.trim());
+      }
+      res.json(user);
+    } catch (error: any) {
+      log(`Error saving user profile: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to save profile" });
+    }
+  });
+
+  /**
+   * GET /api/user/profile
+   * Get the current user's profile by auth token.
+   */
+  app.get("/api/user/profile", async (req, res) => {
+    try {
+      const authToken = req.headers.authorization?.replace('Bearer ', '') || null;
+      const identifier = verifyAuthToken(authToken);
+      if (!identifier) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      let user;
+      if (identifier.includes('@')) {
+        user = await storage.getUserByEmail(identifier);
+      } else {
+        user = await storage.getUserByPhone(identifier);
+      }
+      res.json(user || null);
+    } catch (error: any) {
+      log(`Error getting user profile: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to get profile" });
+    }
+  });
+
+  /**
+   * GET /api/users
+   * Admin: List all users.
+   */
+  app.get("/api/users", async (req, res) => {
+    try {
+      const authToken = req.headers.authorization?.replace('Bearer ', '') || null;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const allUsers = await storage.getUsers();
+      res.json(allUsers);
+    } catch (error: any) {
+      log(`Error fetching users: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  /**
+   * POST /api/users
+   * Admin: Create a new user.
+   */
+  app.post("/api/users", async (req, res) => {
+    try {
+      const { authToken, name, phone, email } = req.body;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+      if (!phone && !email) {
+        return res.status(400).json({ error: "Phone or email is required" });
+      }
+
+      const userData: any = { name: name.trim() };
+      if (phone) {
+        userData.phone = normalizePhone(phone);
+        const existing = await storage.getUserByPhone(userData.phone);
+        if (existing) {
+          return res.status(409).json({ error: "A user with this phone number already exists" });
+        }
+      }
+      if (email) {
+        userData.email = email.toLowerCase().trim();
+        const existing = await storage.getUserByEmail(userData.email);
+        if (existing) {
+          return res.status(409).json({ error: "A user with this email already exists" });
+        }
+      }
+
+      const user = await storage.createUser(userData);
+      res.json(user);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: "A user with this phone or email already exists" });
+      }
+      log(`Error creating user: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to create user" });
+    }
+  });
+
+  /**
+   * PUT /api/users/:id
+   * Admin: Update a user.
+   */
+  app.put("/api/users/:id", async (req, res) => {
+    try {
+      const { authToken, name, phone, email } = req.body;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const data: any = {};
+      if (name !== undefined) data.name = name.trim();
+      if (phone !== undefined) data.phone = phone ? normalizePhone(phone) : null;
+      if (email !== undefined) data.email = email ? email.toLowerCase().trim() : null;
+
+      const user = await storage.updateUser(req.params.id, data);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: "A user with this phone or email already exists" });
+      }
+      log(`Error updating user: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  /**
+   * DELETE /api/users/:id
+   * Admin: Delete a user.
+   */
+  app.delete("/api/users/:id", async (req, res) => {
+    try {
+      const authToken = req.headers.authorization?.replace('Bearer ', '') || null;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      await storage.deleteUser(req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      log(`Error deleting user: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to delete user" });
     }
   });
 

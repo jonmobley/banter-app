@@ -31,7 +31,7 @@ Banter is a web-based walkie-talkie/audio conference application that enables re
 ### Data Storage
 - **Database**: PostgreSQL via Drizzle ORM
 - **Schema Location**: `shared/schema.ts`
-- **Key Tables**: `contacts`, `groups`, `group_members`, `channels`, `channel_assignments`, `scheduled_banters`, `expected_participants`.
+- **Key Tables**: `users`, `contacts`, `groups`, `group_members`, `channels`, `channel_assignments`, `scheduled_banters`, `expected_participants`.
 
 ### Development vs Production
 - Development: Vite dev server proxied through Express.
@@ -78,6 +78,7 @@ Each Scheduled Banter is a fully isolated session with its own:
     - **Banter Broadcast**: One speaker, unlimited listeners.
 - **Supporting Concepts**: Banter Groups (saved contact lists), Admin, Host, Participant, Listener roles.
 - **Authentication**: Email or phone-based magic code login. Admin status determined by phone number verification.
+- **User Profiles**: Server-side `users` table stores name, phone, email. Names persist across devices/browsers. Profile auto-created on first login or when admin adds a user. Name returned in verify-code response and saved to server when user connects or edits profile.
 - **Scheduling**: SMS reminder system and background scheduler for auto-activating scheduled banters. SMS includes banter-specific join links. Schedule page validates against past dates.
 - **Security**: Strict E.164 phone number matching, API rate limiting, bearer token authentication for all API access (including GET /api/participants, GET /api/speaking, GET /api/channels/all-call), and database transactions for critical operations (deleteGroup, deleteChannel).
 - **Live Event Crew Features**: Self-service channel switching, all-call broadcast, PWA support, Wake Lock, and "Notify Group" SMS functionality.
@@ -100,6 +101,12 @@ All endpoints below accept `banterId` to scope to a specific scheduled banter:
 - `POST /api/channels/all-call`, `POST /api/broadcast`, `POST /api/broadcast/grant` — scoped by `banterId`
 - `POST /api/alert-crew` — generates banter-specific join link in SMS
 - `GET /api/banters/by-slug/:slug` — resolves a banter by its slug (no auth required)
+- `GET /api/user/profile` — get current user's profile (auth required)
+- `POST /api/user/profile` — save/update current user's name (auth required, creates user if needed)
+- `GET /api/users` — admin: list all users
+- `POST /api/users` — admin: create a new user with name + phone/email
+- `PUT /api/users/:id` — admin: update a user
+- `DELETE /api/users/:id` — admin: delete a user
 
 ## External Dependencies
 

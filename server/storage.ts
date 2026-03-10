@@ -1,4 +1,4 @@
-import { type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments, normalizePhone, generateSlug } from "@shared/schema";
+import { type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments, type User, type InsertUser, type UpdateUser, users, normalizePhone, generateSlug } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, gt, lt, lte, sql, isNull } from "drizzle-orm";
 import pg from "pg";
@@ -75,6 +75,15 @@ export interface IStorage {
   assignToChannel(channelId: string, participantIdentity: string, banterId?: string | null): Promise<ChannelAssignment>;
   removeFromChannel(participantIdentity: string, banterId?: string | null): Promise<void>;
   getParticipantChannel(participantIdentity: string, banterId?: string | null): Promise<Channel | undefined>;
+  
+  getUsers(): Promise<User[]>;
+  getUserByPhone(phone: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, data: UpdateUser): Promise<User | undefined>;
+  deleteUser(id: string): Promise<void>;
+  upsertUserByPhone(phone: string, name: string): Promise<User>;
+  upsertUserByEmail(email: string, name: string): Promise<User>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -363,6 +372,58 @@ export class DatabaseStorage implements IStorage {
     }
     if (!assignment) return undefined;
     return this.getChannel(assignment.channelId);
+  }
+
+  async getUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    const normalized = normalizePhone(phone);
+    const allUsers = await db.select().from(users);
+    return allUsers.find(u => u.phone && normalizePhone(u.phone) === normalized);
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const [user] = await db.select().from(users).where(eq(users.email, normalizedEmail));
+    return user;
+  }
+
+  async createUser(user: InsertUser): Promise<User> {
+    const [newUser] = await db.insert(users).values(user).returning();
+    return newUser;
+  }
+
+  async updateUser(id: string, data: UpdateUser): Promise<User | undefined> {
+    const [updated] = await db.update(users).set(data).where(eq(users.id, id)).returning();
+    return updated;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  async upsertUserByPhone(phone: string, name: string): Promise<User> {
+    const normalized = normalizePhone(phone);
+    const existing = await this.getUserByPhone(normalized);
+    if (existing) {
+      const [updated] = await db.update(users).set({ name }).where(eq(users.id, existing.id)).returning();
+      return updated;
+    }
+    const [newUser] = await db.insert(users).values({ name, phone: normalized }).returning();
+    return newUser;
+  }
+
+  async upsertUserByEmail(email: string, name: string): Promise<User> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const existing = await this.getUserByEmail(normalizedEmail);
+    if (existing) {
+      const [updated] = await db.update(users).set({ name }).where(eq(users.id, existing.id)).returning();
+      return updated;
+    }
+    const [newUser] = await db.insert(users).values({ name, email: normalizedEmail }).returning();
+    return newUser;
   }
 }
 

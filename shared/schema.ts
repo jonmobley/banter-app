@@ -182,6 +182,30 @@ export const insertChannelAssignmentSchema = createInsertSchema(channelAssignmen
 export type InsertChannelAssignment = z.infer<typeof insertChannelAssignmentSchema>;
 export type ChannelAssignment = typeof channelAssignments.$inferSelect;
 
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  phone: text("phone").unique(),
+  email: text("email").unique(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+export const insertUserSchema = createInsertSchema(users).pick({
+  name: true,
+  phone: true,
+  email: true,
+});
+
+export const updateUserSchema = createInsertSchema(users).pick({
+  name: true,
+  phone: true,
+  email: true,
+}).partial();
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
+export type User = typeof users.$inferSelect;
+
 export function generateSlug(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';

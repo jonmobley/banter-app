@@ -580,8 +580,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       // If user entered a name, use it
       if (displayName) {
         identity = displayName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
-        // Save to localStorage for next time
         localStorage.setItem('banter_user_name', displayName);
+        if (authToken) {
+          fetch('/api/user/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ authToken, name: displayName })
+          }).catch(() => {});
+        }
       } else if (verifiedPhone) {
         const normalizedVerified = verifiedPhone.replace(/\D/g, '');
         let found = false;
@@ -838,7 +844,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   // Auto-connect when authenticated and name is known
   useEffect(() => {
     if (
-      verifiedPhone && 
+      (verifiedPhone || verifiedEmail) && 
       authToken && 
       userName && 
       connectionState === ConnectionState.Disconnected && 
@@ -846,13 +852,12 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       !connectionError
     ) {
       hasAutoConnected.current = true;
-      // Small delay to ensure everything is ready
       const timer = setTimeout(() => {
         connectToRoom();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [verifiedPhone, authToken, userName, connectionState, connectionError, connectToRoom]);
+  }, [verifiedPhone, verifiedEmail, authToken, userName, connectionState, connectionError, connectToRoom]);
 
   // Disconnect from room
   const disconnectFromRoom = useCallback(async () => {
@@ -1449,6 +1454,12 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         setAuthToken(data.authToken);
         localStorage.setItem('banter_verified_phone', data.phone);
         localStorage.setItem('banter_auth_token', data.authToken);
+        setUserName(data.userName || '');
+        if (data.userName) {
+          localStorage.setItem('banter_user_name', data.userName);
+        } else {
+          localStorage.removeItem('banter_user_name');
+        }
       } else {
         if (!loginEmail) throw new Error('Email missing');
         const res = await fetch('/api/auth/verify-email-code', {
@@ -1462,6 +1473,12 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         setAuthToken(data.authToken);
         localStorage.setItem('banter_verified_email', data.email);
         localStorage.setItem('banter_auth_token', data.authToken);
+        setUserName(data.userName || '');
+        if (data.userName) {
+          localStorage.setItem('banter_user_name', data.userName);
+        } else {
+          localStorage.removeItem('banter_user_name');
+        }
       }
       setShowLoginModal(false);
       resetLoginModal();
@@ -2890,6 +2907,15 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     localStorage.setItem('banter_user_email', profileEmail);
                   } else {
                     localStorage.removeItem('banter_user_email');
+                  }
+                  if (authToken && profileName.trim()) {
+                    fetch('/api/user/profile', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ authToken, name: profileName.trim() })
+                    }).catch(() => {
+                      toast({ title: "Could not save to server", variant: "destructive" });
+                    });
                   }
                   setShowMyProfile(false);
                   toast({ title: "Profile updated" });
