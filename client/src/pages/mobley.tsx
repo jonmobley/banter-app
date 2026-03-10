@@ -386,10 +386,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [awayUsers, setAwayUsers] = useState<Set<string>>(new Set());
 
   const [talkLocked, setTalkLocked] = useState(false);
-  const [lockDragX, setLockDragX] = useState(0);
-  const [isDraggingLock, setIsDraggingLock] = useState(false);
-  const lockStartXRef = useRef(0);
-  const lockThreshold = 120;
 
   const [activeTab, setActiveTab] = useState<'radio' | 'chat'>('radio');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -1399,36 +1395,17 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
   }, [authToken, allCallActive, toast, currentBanterId]);
 
-  const handleLockPointerDown = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    setIsDraggingLock(true);
-    lockStartXRef.current = e.clientX;
-    setLockDragX(0);
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, []);
-
-  const handleLockPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDraggingLock) return;
-    const dx = e.clientX - lockStartXRef.current;
-    setLockDragX(Math.max(0, Math.min(dx, lockThreshold)));
-  }, [isDraggingLock, lockThreshold]);
-
-  const handleLockPointerUp = useCallback(() => {
-    if (!isDraggingLock) return;
-    setIsDraggingLock(false);
-    if (lockDragX >= lockThreshold * 0.9) {
+  const toggleTalkLock = useCallback(() => {
+    if (talkLocked) {
+      setTalkLocked(false);
+      changeTalkMode('ptt');
+      stopTalking();
+    } else {
       setTalkLocked(true);
       startTalking();
       changeTalkMode('always');
     }
-    setLockDragX(0);
-  }, [isDraggingLock, lockDragX, lockThreshold, startTalking, changeTalkMode]);
-
-  const handleUnlock = useCallback(() => {
-    setTalkLocked(false);
-    changeTalkMode('ptt');
-    stopTalking();
-  }, [changeTalkMode, stopTalking]);
+  }, [talkLocked, changeTalkMode, startTalking, stopTalking]);
 
   const loadChatMessages = useCallback(async () => {
     if (!authToken) return;
@@ -2829,87 +2806,62 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     {handRaised ? 'Hand Up' : 'Raise Hand'}
                   </button>
                 ) : talkLocked ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleUnlock}
-                      className="w-12 h-12 flex items-center justify-center rounded-full bg-emerald-600 text-white flex-shrink-0 transition-all active:scale-95"
-                      data-testid="button-unlock-talk"
-                      aria-label="Unlock mic"
-                    >
-                      <Lock className="w-5 h-5" />
-                    </button>
-                    <div
-                      className="flex-1 flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
-                      data-testid="status-always-on"
-                    >
-                      <Mic className="w-5 h-5" />
-                      Live – Locked
-                    </div>
-                  </div>
-                ) : talkMode === 'ptt' ? (
-                  <div className="flex items-center gap-2">
-                    <div
-                      onPointerDown={handleLockPointerDown}
-                      onPointerMove={handleLockPointerMove}
-                      onPointerUp={handleLockPointerUp}
-                      onPointerCancel={() => { setIsDraggingLock(false); setLockDragX(0); }}
-                      className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 flex-shrink-0 cursor-grab active:cursor-grabbing select-none touch-none transition-all"
-                      style={{ transform: `translateX(${lockDragX}px)`, opacity: isDraggingLock ? 1 : 0.7 }}
-                      data-testid="button-lock-talk"
-                      aria-label="Slide to lock mic on"
-                    >
-                      <Unlock className="w-5 h-5" />
-                    </div>
-                    <button
-                      onPointerDown={(e) => {
+                  <button
+                    onClick={toggleTalkLock}
+                    className="w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 relative"
+                    data-testid="button-ptt-locked"
+                  >
+                    <Mic className="w-5 h-5" />
+                    Live
+                    <Lock className="w-3.5 h-3.5 absolute right-5 opacity-70" />
+                  </button>
+                ) : talkMode === 'ptt' || talkMode === 'auto' ? (
+                  <button
+                    {...(talkMode === 'ptt' ? {
+                      onPointerDown: (e: React.PointerEvent) => {
                         e.preventDefault();
                         unlockAudio();
                         startTalking();
-                      }}
-                      onPointerUp={stopTalking}
-                      onPointerLeave={stopTalking}
-                      onPointerCancel={stopTalking}
-                      className={`flex-1 flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all select-none touch-none ${
-                        isMuted 
-                          ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
-                          : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                      }`}
-                      data-testid="button-ptt"
-                    >
-                      {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                      {isMuted ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk') : 'Live'}
-                    </button>
-                  </div>
-                ) : talkMode === 'always' ? (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleUnlock}
-                      className="w-12 h-12 flex items-center justify-center rounded-full bg-emerald-600 text-white flex-shrink-0 transition-all active:scale-95"
-                      data-testid="button-unlock-talk"
-                      aria-label="Unlock mic"
-                    >
-                      <Lock className="w-5 h-5" />
-                    </button>
-                    <div
-                      className="flex-1 flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
-                      data-testid="status-always-on"
-                    >
-                      <Radio className="w-5 h-5" />
-                      Always On
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={toggleMute}
-                    className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all ${
+                      },
+                      onPointerUp: stopTalking,
+                      onPointerLeave: stopTalking,
+                      onPointerCancel: stopTalking,
+                    } : {
+                      onClick: toggleMute,
+                    })}
+                    className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all select-none touch-none relative ${
                       isMuted 
                         ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
                         : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
                     }`}
-                    data-testid="button-toggle-mute"
+                    data-testid={talkMode === 'ptt' ? 'button-ptt' : 'button-toggle-mute'}
                   >
                     {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    {isMuted ? ('ontouchstart' in window ? 'Tap to Talk' : 'Spacebar to Talk') : 'Live'}
+                    {isMuted 
+                      ? (talkMode === 'ptt' 
+                        ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk')
+                        : ('ontouchstart' in window ? 'Tap to Talk' : 'Spacebar to Talk'))
+                      : 'Live'}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleTalkLock(); }}
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onPointerUp={(e) => e.stopPropagation()}
+                      className="absolute right-3 w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                      data-testid="button-lock-talk"
+                      aria-label="Lock mic on"
+                    >
+                      <Unlock className="w-3.5 h-3.5" />
+                    </button>
+                  </button>
+                ) : (
+                  <button
+                    onClick={toggleTalkLock}
+                    className="w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 relative"
+                    data-testid="status-always-on"
+                  >
+                    <Radio className="w-5 h-5" />
+                    Always On
+                    <Lock className="w-3.5 h-3.5 absolute right-5 opacity-70" />
                   </button>
                 )}
               </div>
