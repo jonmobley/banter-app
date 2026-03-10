@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
+import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets, DataPacket_Kind } from "livekit-client";
 import { useToast } from "@/hooks/use-toast";
 import { formatPhone } from "@/lib/utils";
 
@@ -805,6 +805,20 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         audioElementsRef.current.clear();
       });
 
+      newRoom.on(RoomEvent.DataReceived, (payload, participant) => {
+        if (!participant) return;
+        try {
+          const decoder = new TextDecoder();
+          const data = JSON.parse(decoder.decode(payload));
+          if (data.type === 'chirp' && chirpAudioRef.current) {
+            const audio = chirpAudioRef.current.cloneNode() as HTMLAudioElement;
+            audio.volume = 0.5;
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+          }
+        } catch {}
+      });
+
       newRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
         const activeSpeakers = new Set(speakers.map(s => s.identity));
         setSpeakingState(prev => {
@@ -935,38 +949,43 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }, [room, isMuted]);
 
   // PTT handlers with half-duplex logic
+  const broadcastChirp = useCallback((action: 'start' | 'end') => {
+    if (!room?.localParticipant) return;
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(JSON.stringify({ type: 'chirp', action }));
+      room.localParticipant.publishData(data, { reliable: false });
+    } catch {}
+  }, [room]);
+
   const startTalking = useCallback(async () => {
     if (isTalking || !room?.localParticipant) return;
     
-    // Instant visual feedback
     setIsTalking(true);
     setIsMuted(false);
     
-    // Mute incoming audio (half-duplex - prevents echo)
     setRemoteAudioMuted(true);
     
-    // Play chirp and enable mic in parallel
     playChirp('start');
+    broadcastChirp('start');
     await room.localParticipant.setMicrophoneEnabled(true);
-  }, [room, isTalking, setRemoteAudioMuted, playChirp]);
+  }, [room, isTalking, setRemoteAudioMuted, playChirp, broadcastChirp]);
 
   const stopTalking = useCallback(async () => {
     if (!isTalking || !room?.localParticipant || talkMode !== 'ptt') return;
     
     setIsTalking(false);
     
-    // Step 1: Disable microphone immediately
     await room.localParticipant.setMicrophoneEnabled(false);
     setIsMuted(true);
     
-    // Step 2: Play "talk end" chirp
     playChirp('end');
+    broadcastChirp('end');
     
-    // Step 3: Unmute incoming audio after a brief delay (prevents hearing own echo tail)
     setTimeout(() => {
       setRemoteAudioMuted(false);
     }, 150);
-  }, [room, isTalking, talkMode, setRemoteAudioMuted, playChirp]);
+  }, [room, isTalking, talkMode, setRemoteAudioMuted, playChirp, broadcastChirp]);
 
   // Change talk mode
   const changeTalkMode = useCallback(async (mode: TalkMode) => {
