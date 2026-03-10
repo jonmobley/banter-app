@@ -1953,8 +1953,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }
 
   return (
-    <div className="h-[100dvh] bg-slate-950 text-white flex flex-col safe-bottom overflow-hidden">
-      <header className="relative flex items-center justify-between p-4 pt-safe border-b border-slate-800">
+    <div className="h-[100dvh] bg-slate-950 text-white flex flex-col overflow-hidden">
+      <header className="relative flex items-center justify-between p-4 pt-safe border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2 z-10">
           {isAdmin && (
             <button
@@ -2121,7 +2121,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto px-4 pb-48">
+      <div className="flex-1 overflow-auto px-4 pb-96">
         <div className={`grid gap-3 mt-4 ${participants.length === 1 ? 'grid-cols-1 max-w-[50%] mx-auto' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
           {participants.map((p, i) => {
             const isSpeaking = speakingState[p.identity] || false;
@@ -2404,8 +2404,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       {/* Bottom controls */}
       <div className={`fixed left-0 right-0 px-6 ${
         isConnected || isConnecting 
-          ? 'bottom-0 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8 pb-8' 
-          : 'bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 pb-8 sm:pb-0'
+          ? 'bottom-0 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8 pb-safe' 
+          : 'bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 pb-safe sm:pb-0'
       }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
