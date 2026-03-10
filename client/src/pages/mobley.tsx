@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2 } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
@@ -320,6 +320,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
+  const settingsDropdownRef = useRef<HTMLDivElement>(null);
   const [showMyProfile, setShowMyProfile] = useState(false);
   const [profileName, setProfileName] = useState('');
   const [profileEmail, setProfileEmail] = useState(() => {
@@ -522,6 +524,18 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showProfileMenu]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (settingsDropdownRef.current && !settingsDropdownRef.current.contains(e.target as Node)) {
+        setShowSettingsDropdown(false);
+      }
+    };
+    if (showSettingsDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showSettingsDropdown]);
   
   useEffect(() => {
     if (showAudioSettings) {
@@ -1837,87 +1851,160 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <header className="flex items-center justify-between p-4 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-            <Users className="w-5 h-5 text-emerald-400" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-semibold" data-testid="text-banter-title">{banterInfo ? banterInfo.name : 'Banter'}</h1>
-              {isConnected && currentChannel && (
-                <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full">
-                  CH {currentChannel.number}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-400">
-              {isConnected 
-                ? (broadcastActive
-                    ? `BROADCAST • ${formatDuration(callDuration)}`
-                    : allCallActive 
-                    ? `ALL CALL • ${formatDuration(callDuration)}`
-                    : `Connected${currentChannel ? ` • CH ${currentChannel.number}` : ''} • ${formatDuration(callDuration)}`)
-                : conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
-            </p>
-          </div>
-        </div>
         <div className="flex items-center gap-2">
-          {isAdmin && isConnected && (
+          {isConnected && (
             <button
-              onClick={() => setShowAlertCrewConfirm(true)}
-              className="p-3 rounded-full bg-amber-500/20 hover:bg-amber-500/30 transition-colors"
-              data-testid="button-alert-crew"
-              title="Notify Group"
+              onClick={() => setShowDisconnectConfirm(true)}
+              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-red-400"
+              data-testid="button-hangup-header"
             >
-              <Bell className="w-5 h-5 text-amber-400" />
+              <X className="w-5 h-5" />
             </button>
           )}
-          {isAdmin && (
+          {!isConnected && (
             <button
-              onClick={() => setShowAddExpectedModal(true)}
-              className="p-3 rounded-full bg-emerald-500/20 hover:bg-emerald-500/30 transition-colors"
-              data-testid="button-add-expected"
-            >
-              <Plus className="w-5 h-5 text-emerald-400" />
-            </button>
-          )}
-          <div className="relative" ref={profileMenuRef}>
-            <button
-              onClick={() => isSignedIn ? setShowProfileMenu(!showProfileMenu) : setShowLoginModal(true)}
-              className={`p-3 rounded-full transition-colors ${
-                isSignedIn 
-                  ? 'bg-blue-500/20 hover:bg-blue-500/30' 
-                  : 'bg-slate-800/50 hover:bg-slate-700'
-              }`}
+              onClick={() => isSignedIn ? setShowSettingsDropdown(!showSettingsDropdown) : setShowLoginModal(true)}
+              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400"
               data-testid="button-profile"
             >
               <User className={`w-5 h-5 ${isSignedIn ? 'text-blue-400' : 'text-slate-400'}`} />
             </button>
-            {showProfileMenu && isSignedIn && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-lg overflow-hidden z-50">
-                <div className="px-4 py-3 border-b border-slate-700">
-                  <p className="text-xs text-slate-400">Signed in as</p>
-                  <p className="text-sm text-white truncate">{userName || verifiedPhone || verifiedEmail}</p>
-                </div>
+          )}
+        </div>
+        <div className="text-center flex-1 min-w-0">
+          <div className="flex items-center justify-center gap-2">
+            <h1 className="font-semibold truncate" data-testid="text-banter-title">{banterInfo ? banterInfo.name : (isConnected ? (userName || 'Connected') : 'Banter')}</h1>
+            {isConnected && currentChannel && (
+              <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full flex-shrink-0">
+                CH {currentChannel.number}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-slate-400">
+            {isConnected 
+              ? (broadcastActive
+                  ? `BROADCAST • ${formatDuration(callDuration)}`
+                  : allCallActive 
+                  ? `ALL CALL • ${formatDuration(callDuration)}`
+                  : `Connected${currentChannel ? ` • CH ${currentChannel.number}` : ''} • ${formatDuration(callDuration)}`)
+              : conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddExpectedModal(true)}
+              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-emerald-400"
+              data-testid="button-add-expected"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          )}
+          <div className="relative" ref={settingsDropdownRef}>
+            <button
+              onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
+              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-white"
+              data-testid="button-settings-menu"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+            {showSettingsDropdown && (
+              <div className="absolute right-0 top-full mt-2 w-52 bg-slate-800 border border-slate-700 rounded-lg shadow-lg overflow-hidden z-50">
+                {isSignedIn && (
+                  <div className="px-4 py-3 border-b border-slate-700">
+                    <p className="text-xs text-slate-400">Signed in as</p>
+                    <p className="text-sm text-white truncate">{userName || verifiedPhone || verifiedEmail}</p>
+                  </div>
+                )}
                 <button
-                  onClick={() => { 
-                    setProfileName(userName);
-                    setProfileEmail(localStorage.getItem('banter_user_email') || '');
-                    setShowMyProfile(true); 
-                    setShowProfileMenu(false); 
-                  }}
-                  className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors"
-                  data-testid="button-my-profile"
+                  onClick={() => { setShowAudioSettings(true); setShowSettingsDropdown(false); }}
+                  className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3"
+                  data-testid="menu-audio-settings"
                 >
-                  My Profile
+                  <Mic className="w-4 h-4 text-slate-400" />
+                  Audio Settings
                 </button>
-                <button
-                  onClick={() => { handleLogout(); setShowProfileMenu(false); }}
-                  className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors border-t border-slate-700"
-                  data-testid="button-signout"
-                >
-                  Sign out
-                </button>
+                {channelsData && channelsData.length > 0 && (canShowControls || currentChannel) && isConnected && (
+                  <button
+                    onClick={() => { canShowControls ? setShowChannelModal(true) : setShowChannelPicker(true); setShowSettingsDropdown(false); }}
+                    className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3"
+                    data-testid="menu-channels"
+                  >
+                    <Radio className="w-4 h-4 text-amber-400" />
+                    {canShowControls ? 'Manage Channels' : 'Switch Channel'}
+                  </button>
+                )}
+                {isAdmin && isConnected && (
+                  <button
+                    onClick={() => { toggleAllCall(); setShowSettingsDropdown(false); }}
+                    disabled={allCallLoading || broadcastActive}
+                    className={`w-full px-4 py-3 text-left text-sm hover:bg-slate-700 transition-colors flex items-center gap-3 ${
+                      allCallActive ? 'text-red-400' : 'text-white'
+                    }`}
+                    data-testid="menu-all-call"
+                  >
+                    <PhoneCall className={`w-4 h-4 ${allCallActive ? 'text-red-400' : 'text-slate-400'}`} />
+                    {allCallActive ? 'End All-Call' : 'All-Call'}
+                  </button>
+                )}
+                {isAdmin && isConnected && (
+                  <button
+                    onClick={() => { toggleBroadcast(); setShowSettingsDropdown(false); }}
+                    disabled={broadcastLoading || allCallActive}
+                    className={`w-full px-4 py-3 text-left text-sm hover:bg-slate-700 transition-colors flex items-center gap-3 ${
+                      broadcastActive ? 'text-purple-400' : 'text-white'
+                    }`}
+                    data-testid="menu-broadcast"
+                  >
+                    <Megaphone className={`w-4 h-4 ${broadcastActive ? 'text-purple-400' : 'text-slate-400'}`} />
+                    {broadcastActive ? 'End Broadcast' : 'Start Broadcast'}
+                  </button>
+                )}
+                {isAdmin && isConnected && (
+                  <button
+                    onClick={() => { setShowAlertCrewConfirm(true); setShowSettingsDropdown(false); }}
+                    className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3"
+                    data-testid="menu-alert-crew"
+                  >
+                    <Bell className="w-4 h-4 text-amber-400" />
+                    Notify Group
+                  </button>
+                )}
+                {isSignedIn && (
+                  <>
+                    <button
+                      onClick={() => { 
+                        setProfileName(userName);
+                        setProfileEmail(localStorage.getItem('banter_user_email') || '');
+                        setShowMyProfile(true); 
+                        setShowSettingsDropdown(false); 
+                      }}
+                      className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3 border-t border-slate-700"
+                      data-testid="button-my-profile"
+                    >
+                      <User className="w-4 h-4 text-slate-400" />
+                      My Profile
+                    </button>
+                    <button
+                      onClick={() => { handleLogout(); setShowSettingsDropdown(false); }}
+                      className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-slate-700 transition-colors flex items-center gap-3 border-t border-slate-700"
+                      data-testid="button-signout"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Sign out
+                    </button>
+                  </>
+                )}
+                {!isSignedIn && (
+                  <button
+                    onClick={() => { setShowLoginModal(true); setShowSettingsDropdown(false); }}
+                    className="w-full px-4 py-3 text-left text-sm text-emerald-400 hover:bg-slate-700 transition-colors flex items-center gap-3 border-t border-slate-700"
+                    data-testid="menu-signin"
+                  >
+                    <User className="w-4 h-4" />
+                    Sign in
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -2263,62 +2350,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     <span className="text-lg font-bold mt-2">{isMuted ? 'Tap to Talk' : 'Live'}</span>
                   </button>
                 )}
-              </div>
-              <div className="flex items-center justify-center gap-3">
-                <button
-                  onClick={() => setShowAudioSettings(true)}
-                  className="p-3 bg-slate-800/60 hover:bg-slate-700 text-slate-500 hover:text-white rounded-full transition-all active:scale-95"
-                  data-testid="button-audio-settings"
-                >
-                  <Settings className="w-4 h-4" />
-                </button>
-                {channelsData && channelsData.length > 0 && (canShowControls || currentChannel) && (
-                  <button
-                    onClick={() => canShowControls ? setShowChannelModal(true) : setShowChannelPicker(true)}
-                    className="p-3 bg-slate-800/60 hover:bg-slate-700 text-slate-500 hover:text-amber-400 rounded-full transition-all active:scale-95"
-                    data-testid="button-channels"
-                    title={canShowControls ? "Manage Channels" : "Switch Channel"}
-                  >
-                    <Radio className="w-4 h-4" />
-                  </button>
-                )}
-                {isAdmin && isConnected && (
-                  <button
-                    onClick={toggleAllCall}
-                    disabled={allCallLoading || broadcastActive}
-                    className={`p-3 rounded-full transition-all active:scale-95 ${
-                      allCallActive
-                        ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
-                        : 'bg-slate-800/60 hover:bg-slate-700 text-slate-500 hover:text-red-400'
-                    }`}
-                    data-testid="button-all-call"
-                    title={allCallActive ? "End All-Call" : "All-Call"}
-                  >
-                    <PhoneCall className="w-4 h-4" />
-                  </button>
-                )}
-                {isAdmin && isConnected && (
-                  <button
-                    onClick={toggleBroadcast}
-                    disabled={broadcastLoading || allCallActive}
-                    className={`p-3 rounded-full transition-all active:scale-95 ${
-                      broadcastActive
-                        ? 'bg-purple-500 hover:bg-purple-600 text-white animate-pulse'
-                        : 'bg-slate-800/60 hover:bg-slate-700 text-slate-500 hover:text-purple-400'
-                    }`}
-                    data-testid="button-broadcast"
-                    title={broadcastActive ? "End Broadcast" : "Start Broadcast"}
-                  >
-                    <Megaphone className="w-4 h-4" />
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowDisconnectConfirm(true)}
-                  className="p-3 bg-slate-800/60 hover:bg-red-500 text-slate-500 hover:text-white rounded-full transition-all active:scale-95"
-                  data-testid="button-hangup"
-                >
-                  <X className="w-4 h-4" />
-                </button>
               </div>
             </div>
           ) : isConnecting ? (
