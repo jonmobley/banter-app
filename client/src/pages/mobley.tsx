@@ -2773,12 +2773,12 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     disabled={muteAllLoading}
                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm ${
                       muteAllActive
-                        ? 'bg-red-500 hover:bg-red-400 text-white animate-pulse'
-                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                        ? 'bg-amber-500 hover:bg-amber-400 text-white animate-pulse'
+                        : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400'
                     }`}
                     data-testid="button-mute-all"
                   >
-                    <VolumeX className={`w-4 h-4 ${muteAllActive ? 'text-white' : 'text-slate-400'}`} />
+                    <VolumeX className={`w-4 h-4 ${muteAllActive ? 'text-white' : 'text-amber-400'}`} />
                     {muteAllActive ? 'Unmute All' : 'Mute All'}
                   </button>
                   <button
