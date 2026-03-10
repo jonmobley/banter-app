@@ -2245,6 +2245,21 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               <Plus className="w-5 h-5" />
             </button>
           )}
+          {isAdmin && isConnected && (
+            <button
+              onClick={toggleMuteAll}
+              disabled={muteAllLoading}
+              className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
+                muteAllActive
+                  ? 'bg-red-500 hover:bg-red-400 text-white animate-pulse'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+              }`}
+              aria-label={muteAllActive ? 'Unmute all' : 'Mute all'}
+              data-testid="button-mute-all"
+            >
+              <VolumeX className="w-5 h-5" />
+            </button>
+          )}
           {isConnected && (
             <button
               onClick={() => setShowDisconnectConfirm(true)}
@@ -2277,7 +2292,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               </span>
             ) : (
               <p className="text-xs text-slate-400">
-                {conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
+                {conferenceActive ? `${participantsData?.count || 0} online` : 'Ready'}
               </p>
             )}
           </div>
@@ -2766,15 +2781,15 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 {broadcastActive && !canSpeakInBroadcast ? (
                   <button
                     onClick={toggleRaiseHand}
-                    className={`w-full h-44 flex flex-col items-center justify-center rounded-3xl font-semibold transition-all ${
+                    className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all ${
                       handRaised
-                        ? 'bg-amber-500 text-white shadow-2xl shadow-amber-500/50 border-4 border-amber-400'
-                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600'
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
                     }`}
                     data-testid="button-raise-hand"
                   >
-                    <Hand className="w-14 h-14" />
-                    <span className="text-lg font-bold mt-2">{handRaised ? 'Hand Up' : 'Raise Hand'}</span>
+                    <Hand className="w-5 h-5" />
+                    {handRaised ? 'Hand Up' : 'Raise Hand'}
                   </button>
                 ) : talkMode === 'ptt' ? (
                   <button
@@ -2786,54 +2801,39 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     onPointerUp={stopTalking}
                     onPointerLeave={stopTalking}
                     onPointerCancel={stopTalking}
-                    className={`w-full h-44 flex flex-col items-center justify-center rounded-3xl font-semibold transition-all select-none touch-none ${
+                    className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all select-none touch-none ${
                       isMuted 
-                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600' 
-                        : 'bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 border-4 border-emerald-400'
+                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
+                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
                     }`}
                     data-testid="button-ptt"
                   >
-                    {isMuted ? <MicOff className="w-14 h-14" /> : <Mic className="w-14 h-14" />}
-                    <span className="text-lg font-bold mt-2">{isMuted ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk') : 'Live'}</span>
+                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    {isMuted ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk') : 'Live'}
                   </button>
                 ) : talkMode === 'always' ? (
                   <div
-                    className="w-full h-44 flex flex-col items-center justify-center rounded-3xl font-semibold bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 border-4 border-emerald-400"
+                    className="w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
                     data-testid="status-always-on"
                   >
-                    <Radio className="w-14 h-14" />
-                    <span className="text-lg font-bold mt-2">Always On</span>
+                    <Radio className="w-5 h-5" />
+                    Always On
                   </div>
                 ) : (
                   <button
                     onClick={toggleMute}
-                    className={`w-full h-44 flex flex-col items-center justify-center rounded-3xl font-semibold transition-all ${
+                    className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all ${
                       isMuted 
-                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600' 
-                        : 'bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 border-4 border-emerald-400'
+                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
+                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
                     }`}
                     data-testid="button-toggle-mute"
                   >
-                    {isMuted ? <MicOff className="w-14 h-14" /> : <Mic className="w-14 h-14" />}
-                    <span className="text-lg font-bold mt-2">{isMuted ? ('ontouchstart' in window ? 'Tap to Talk' : 'Spacebar to Talk') : 'Live'}</span>
+                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    {isMuted ? ('ontouchstart' in window ? 'Tap to Talk' : 'Spacebar to Talk') : 'Live'}
                   </button>
                 )}
               </div>
-              {isAdmin && isConnected && (
-                <button
-                  onClick={toggleMuteAll}
-                  disabled={muteAllLoading}
-                  className={`w-full flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all ${
-                    muteAllActive
-                      ? 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/30 animate-pulse'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                  }`}
-                  data-testid="button-mute-all"
-                >
-                  <VolumeX className={`w-4 h-4 ${muteAllActive ? 'text-white' : 'text-slate-400'}`} />
-                  {muteAllActive ? 'Unmute All' : 'Mute All'}
-                </button>
-              )}
               {isAdmin && channelsData && channelsData.length > 0 && (
                 <button
                   onClick={toggleAllCall}
