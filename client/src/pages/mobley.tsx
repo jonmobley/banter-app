@@ -2081,28 +2081,21 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             const role = getParticipantRole(p.identity);
             
             const getCardStyle = () => {
-              if (role === 'host') {
-                return isSpeaking 
-                  ? 'bg-amber-500/30 ring-2 ring-amber-400/50' 
-                  : 'bg-amber-500/20';
-              }
-              if (role === 'participant') {
-                return isSpeaking
-                  ? 'bg-blue-500/30 ring-2 ring-blue-400/50'
-                  : 'bg-blue-500/20';
-              }
-              return isSpeaking 
-                ? 'bg-emerald-500/30 ring-2 ring-emerald-400/50' 
-                : 'bg-slate-800/50';
+              if (isSpeaking) return 'bg-emerald-500/30 ring-2 ring-emerald-400/50';
+              if (role === 'host') return 'bg-amber-500/20';
+              if (role === 'participant') return 'bg-blue-500/20';
+              return 'bg-slate-800/50';
             };
             
             const getAvatarStyle = () => {
-              if (role === 'host') return isSpeaking ? 'bg-amber-400/40' : 'bg-amber-500/30';
-              if (role === 'participant') return isSpeaking ? 'bg-blue-400/40' : 'bg-blue-500/30';
-              return isSpeaking ? 'bg-emerald-400/40' : 'bg-emerald-500/20';
+              if (isSpeaking) return 'bg-emerald-400/40';
+              if (role === 'host') return 'bg-amber-500/30';
+              if (role === 'participant') return 'bg-blue-500/30';
+              return 'bg-emerald-500/20';
             };
             
             const getTextColor = () => {
+              if (isSpeaking) return 'text-emerald-400';
               if (role === 'host') return 'text-amber-400';
               if (role === 'participant') return 'text-blue-400';
               return 'text-emerald-400';
