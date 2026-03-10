@@ -51,10 +51,12 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
     // The Flic 2 SDK (flic2lib) must be manually added to the Xcode project:
     // 1. Download flic2lib.xcframework from https://github.com/50ButtonsEach/flic2lib-ios
     // 2. Drag it into Frameworks, Libraries, and Embedded Content (Embed & Sign)
-    // 3. Register at https://partners.flic.io/ to get appID and appSecret
+    // 3. In Build Settings, set "Allow Non-modular includes in Framework Modules" to Yes
+    // 4. Enable "Uses Bluetooth LE accessories" in Background Modes (Signing & Capabilities)
     //
+    // No developer portal registration needed — the SDK is free and open.
     // Once flic2lib is available, uncomment the Flic integration code below.
-    // The button events feed into the same hardwarePTTPressed/hardwarePTTReleased
+    // Button events feed into the same hardwarePTTPressed/hardwarePTTReleased
     // pipeline that wired PTT accessories use.
 
     private func initializeFlicManager() {

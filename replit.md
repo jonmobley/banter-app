@@ -146,9 +146,8 @@ The Capacitor PTT plugin includes Flic 2 SDK integration (commented out, pending
 - Android: `flic2lib-android` via JitPack (uncomment dependency in `plugins/capacitor-pushtotalk/android/build.gradle`)
 
 **Activation steps**:
-1. Register at https://partners.flic.io/ to get App ID and App Secret
-2. iOS: Download `flic2lib.xcframework`, drag into Xcode Frameworks (Embed & Sign), uncomment Flic code blocks in `PushToTalkPlugin.swift`
-3. Android: Uncomment `flic2lib-android` dependency in `build.gradle`, uncomment Flic code blocks in `PushToTalkPlugin.java`
+1. iOS: Download `flic2lib.xcframework` from the GitHub repo, drag into Xcode Frameworks (Embed & Sign), set "Allow Non-modular includes in Framework Modules" to Yes, uncomment Flic code blocks in `PushToTalkPlugin.swift`
+2. Android: Uncomment `flic2lib-android` dependency in `build.gradle`, uncomment Flic code blocks in `PushToTalkPlugin.java`
 
 **Plugin methods**: `scanForFlicButtons()`, `stopScanForFlicButtons()`, `getFlicButtons()` — TypeScript definitions in `plugins/capacitor-pushtotalk/src/definitions.ts`
 **Events**: `flicButtonFound`, `flicConnected`, `flicDisconnected`, `flicDoubleClick`, `flicHold`
