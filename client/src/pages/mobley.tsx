@@ -1511,6 +1511,43 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     };
   }, [connectionState, talkMode, startTalking, stopTalking]);
 
+  // Hardware PTT via Capacitor plugin (native + web fallback for media keys)
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected) return;
+    let pttPressedHandle: any = null;
+    let pttReleasedHandle: any = null;
+    let active = true;
+    const setupHardwarePTT = async () => {
+      try {
+        const { PushToTalk } = await import('capacitor-pushtotalk');
+        await PushToTalk.enableHardwarePTT();
+        if (!active) return;
+        pttPressedHandle = await PushToTalk.addListener('hardwarePTTPressed', () => {
+          if (talkMode === 'ptt') startTalking();
+          else if (talkMode === 'auto') toggleMute();
+        });
+        pttReleasedHandle = await PushToTalk.addListener('hardwarePTTReleased', () => {
+          if (talkMode === 'ptt') stopTalking();
+        });
+      } catch {
+        // Plugin not available (running in browser without Capacitor)
+      }
+    };
+    setupHardwarePTT();
+    return () => {
+      active = false;
+      const cleanup = async () => {
+        try {
+          if (pttPressedHandle) await pttPressedHandle.remove();
+          if (pttReleasedHandle) await pttReleasedHandle.remove();
+          const { PushToTalk } = await import('capacitor-pushtotalk');
+          await PushToTalk.disableHardwarePTT();
+        } catch {}
+      };
+      cleanup();
+    };
+  }, [connectionState, talkMode, startTalking, stopTalking, toggleMute]);
+
   const isConnected = connectionState === ConnectionState.Connected;
   const isConnecting = connectionState === ConnectionState.Connecting;
 
@@ -2008,116 +2045,120 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowAudioSettings(true)}
-                className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
-                data-testid="button-audio-settings"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-              {channelsData && channelsData.length > 0 && (canShowControls || currentChannel) && (
+            <div className="flex flex-col items-center gap-4">
+              <div className="flex items-center justify-center gap-3">
                 <button
-                  onClick={() => canShowControls ? setShowChannelModal(true) : setShowChannelPicker(true)}
-                  className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-full transition-all active:scale-95"
-                  data-testid="button-channels"
-                  title={canShowControls ? "Manage Channels" : "Switch Channel"}
+                  onClick={() => setShowAudioSettings(true)}
+                  className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
+                  data-testid="button-audio-settings"
                 >
-                  <Radio className="w-5 h-5" />
+                  <Settings className="w-5 h-5" />
                 </button>
-              )}
-              {isAdmin && isConnected && (
+                {channelsData && channelsData.length > 0 && (canShowControls || currentChannel) && (
+                  <button
+                    onClick={() => canShowControls ? setShowChannelModal(true) : setShowChannelPicker(true)}
+                    className="p-4 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-full transition-all active:scale-95"
+                    data-testid="button-channels"
+                    title={canShowControls ? "Manage Channels" : "Switch Channel"}
+                  >
+                    <Radio className="w-5 h-5" />
+                  </button>
+                )}
+                {isAdmin && isConnected && (
+                  <button
+                    onClick={toggleAllCall}
+                    disabled={allCallLoading || broadcastActive}
+                    className={`p-4 rounded-full transition-all active:scale-95 ${
+                      allCallActive
+                        ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-red-400'
+                    }`}
+                    data-testid="button-all-call"
+                    title={allCallActive ? "End All-Call" : "All-Call"}
+                  >
+                    <PhoneCall className="w-5 h-5" />
+                  </button>
+                )}
+                {isAdmin && isConnected && (
+                  <button
+                    onClick={toggleBroadcast}
+                    disabled={broadcastLoading || allCallActive}
+                    className={`p-4 rounded-full transition-all active:scale-95 ${
+                      broadcastActive
+                        ? 'bg-purple-500 hover:bg-purple-600 text-white animate-pulse'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-purple-400'
+                    }`}
+                    data-testid="button-broadcast"
+                    title={broadcastActive ? "End Broadcast" : "Start Broadcast"}
+                  >
+                    <Megaphone className="w-5 h-5" />
+                  </button>
+                )}
                 <button
-                  onClick={toggleAllCall}
-                  disabled={allCallLoading || broadcastActive}
-                  className={`p-4 rounded-full transition-all active:scale-95 ${
-                    allCallActive
-                      ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-red-400'
-                  }`}
-                  data-testid="button-all-call"
-                  title={allCallActive ? "End All-Call" : "All-Call"}
+                  onClick={() => setShowDisconnectConfirm(true)}
+                  className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
+                  data-testid="button-hangup"
                 >
-                  <PhoneCall className="w-5 h-5" />
+                  <X className="w-5 h-5" />
                 </button>
-              )}
-              {isAdmin && isConnected && (
-                <button
-                  onClick={toggleBroadcast}
-                  disabled={broadcastLoading || allCallActive}
-                  className={`p-4 rounded-full transition-all active:scale-95 ${
-                    broadcastActive
-                      ? 'bg-purple-500 hover:bg-purple-600 text-white animate-pulse'
-                      : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-purple-400'
-                  }`}
-                  data-testid="button-broadcast"
-                  title={broadcastActive ? "End Broadcast" : "Start Broadcast"}
-                >
-                  <Megaphone className="w-5 h-5" />
-                </button>
-              )}
-              {broadcastActive && !canSpeakInBroadcast ? (
-                <button
-                  onClick={toggleRaiseHand}
-                  className={`w-28 h-28 flex flex-col items-center justify-center rounded-full font-semibold transition-all ${
-                    handRaised
-                      ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/40 border-4 border-amber-400'
-                      : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600'
-                  }`}
-                  data-testid="button-raise-hand"
-                >
-                  <Hand className="w-8 h-8" />
-                  <span className="text-sm mt-1">{handRaised ? 'Hand Up' : 'Raise Hand'}</span>
-                </button>
-              ) : talkMode === 'ptt' ? (
-                <button
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    unlockAudio();
-                    startTalking();
-                  }}
-                  onPointerUp={stopTalking}
-                  onPointerLeave={stopTalking}
-                  onPointerCancel={stopTalking}
-                  className={`w-28 h-28 flex flex-col items-center justify-center rounded-full font-semibold transition-all select-none touch-none ${
-                    isMuted 
-                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600' 
-                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 border-4 border-emerald-400'
-                  }`}
-                  data-testid="button-ptt"
-                >
-                  {isMuted ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
-                  <span className="text-sm mt-1">{isMuted ? 'Hold' : 'Live'}</span>
-                </button>
-              ) : talkMode === 'always' ? (
-                <div
-                  className="w-28 h-28 flex flex-col items-center justify-center rounded-full font-semibold bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 border-4 border-emerald-400"
-                  data-testid="status-always-on"
-                >
-                  <Radio className="w-8 h-8" />
-                  <span className="text-sm mt-1">On</span>
-                </div>
-              ) : (
-                <button
-                  onClick={toggleMute}
-                  className={`w-28 h-28 flex flex-col items-center justify-center rounded-full font-semibold transition-all ${
-                    isMuted 
-                      ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600' 
-                      : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/40 border-4 border-emerald-400'
-                  }`}
-                  data-testid="button-toggle-mute"
-                >
-                  {isMuted ? <MicOff className="w-8 h-8" /> : <Mic className="w-8 h-8" />}
-                  <span className="text-sm mt-1">{isMuted ? 'Tap' : 'Live'}</span>
-                </button>
-              )}
-              <button
-                onClick={() => setShowDisconnectConfirm(true)}
-                className="p-4 bg-slate-800 hover:bg-red-500 text-slate-400 hover:text-white rounded-full transition-all active:scale-95"
-                data-testid="button-hangup"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              </div>
+              <div className="flex items-center justify-center">
+                {broadcastActive && !canSpeakInBroadcast ? (
+                  <button
+                    onClick={toggleRaiseHand}
+                    className={`w-40 h-40 flex flex-col items-center justify-center rounded-full font-semibold transition-all ${
+                      handRaised
+                        ? 'bg-amber-500 text-white shadow-2xl shadow-amber-500/50 border-4 border-amber-400'
+                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600'
+                    }`}
+                    data-testid="button-raise-hand"
+                  >
+                    <Hand className="w-12 h-12" />
+                    <span className="text-base font-bold mt-1">{handRaised ? 'Hand Up' : 'Raise Hand'}</span>
+                  </button>
+                ) : talkMode === 'ptt' ? (
+                  <button
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      unlockAudio();
+                      startTalking();
+                    }}
+                    onPointerUp={stopTalking}
+                    onPointerLeave={stopTalking}
+                    onPointerCancel={stopTalking}
+                    className={`w-40 h-40 flex flex-col items-center justify-center rounded-full font-semibold transition-all select-none touch-none ${
+                      isMuted 
+                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600' 
+                        : 'bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 border-4 border-emerald-400'
+                    }`}
+                    data-testid="button-ptt"
+                  >
+                    {isMuted ? <MicOff className="w-12 h-12" /> : <Mic className="w-12 h-12" />}
+                    <span className="text-base font-bold mt-1">{isMuted ? 'Hold to Talk' : 'Live'}</span>
+                  </button>
+                ) : talkMode === 'always' ? (
+                  <div
+                    className="w-40 h-40 flex flex-col items-center justify-center rounded-full font-semibold bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 border-4 border-emerald-400"
+                    data-testid="status-always-on"
+                  >
+                    <Radio className="w-12 h-12" />
+                    <span className="text-base font-bold mt-1">Always On</span>
+                  </div>
+                ) : (
+                  <button
+                    onClick={toggleMute}
+                    className={`w-40 h-40 flex flex-col items-center justify-center rounded-full font-semibold transition-all ${
+                      isMuted 
+                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600' 
+                        : 'bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 border-4 border-emerald-400'
+                    }`}
+                    data-testid="button-toggle-mute"
+                  >
+                    {isMuted ? <MicOff className="w-12 h-12" /> : <Mic className="w-12 h-12" />}
+                    <span className="text-base font-bold mt-1">{isMuted ? 'Tap to Talk' : 'Live'}</span>
+                  </button>
+                )}
+              </div>
             </div>
           ) : isConnecting ? (
             <button

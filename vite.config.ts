@@ -28,6 +28,7 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      "capacitor-pushtotalk": path.resolve(import.meta.dirname, "plugins", "capacitor-pushtotalk", "src", "index.ts"),
     },
   },
   css: {
@@ -50,6 +51,13 @@ export default defineConfig({
     fs: {
       strict: true,
       deny: ["**/.*"],
+      allow: [
+        path.resolve(import.meta.dirname, "client"),
+        path.resolve(import.meta.dirname, "shared"),
+        path.resolve(import.meta.dirname, "attached_assets"),
+        path.resolve(import.meta.dirname, "plugins"),
+        path.resolve(import.meta.dirname, "node_modules"),
+      ],
     },
   },
 });

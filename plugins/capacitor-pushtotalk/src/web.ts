@@ -2,18 +2,14 @@ import { WebPlugin } from '@capacitor/core';
 
 import type { PushToTalkPlugin } from './definitions';
 
-/**
- * Web implementation of PushToTalk plugin
- * PushToTalk is iOS-only, so web provides stub implementations
- */
 export class PushToTalkWeb extends WebPlugin implements PushToTalkPlugin {
+  private mediaSessionActive = false;
+
   async isAvailable(): Promise<{ available: boolean }> {
-    // PushToTalk is not available on web
     return { available: false };
   }
 
   async requestPermission(): Promise<{ granted: boolean }> {
-    // Use standard Web Audio API for microphone on web
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach(track => track.stop());
@@ -47,5 +43,27 @@ export class PushToTalkWeb extends WebPlugin implements PushToTalkPlugin {
     participantName: string;
   }): Promise<void> {
     console.warn('PushToTalk: setActiveRemoteParticipant is only available on iOS 16+');
+  }
+
+  async enableHardwarePTT(): Promise<void> {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', () => {
+        this.notifyListeners('hardwarePTTPressed', {});
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        this.notifyListeners('hardwarePTTReleased', {});
+      });
+      this.mediaSessionActive = true;
+    }
+    console.log('PushToTalk: Hardware PTT enabled (web fallback via Media Session API)');
+  }
+
+  async disableHardwarePTT(): Promise<void> {
+    if (this.mediaSessionActive && 'mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', null);
+      navigator.mediaSession.setActionHandler('pause', null);
+      this.mediaSessionActive = false;
+    }
+    console.log('PushToTalk: Hardware PTT disabled');
   }
 }

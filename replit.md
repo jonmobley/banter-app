@@ -117,3 +117,28 @@ All endpoints below accept `banterId` to scope to a specific scheduled banter:
 - `@tanstack/react-query`
 - `express`
 - shadcn/ui components (Radix UI primitives)
+- `@capacitor/core`, `@capacitor/cli`, `@capacitor/ios`, `@capacitor/android`
+
+### Capacitor Native App (iOS/Android)
+- **Config**: `capacitor.config.ts` — app ID `com.banter.app`, web dir `dist/public`
+- **iOS project**: `ios/App/` — Xcode project with background audio & VoIP modes, microphone permission
+- **Android project**: `android/` — Gradle-based project
+- **Custom PTT Plugin**: `plugins/capacitor-pushtotalk/` — detects hardware PTT button presses
+
+### Hardware PTT Architecture
+USB-C and Bluetooth PTT accessories (Klein Victory, PrymeBLU, generic BLE PTT buttons) send HID media key events when their button is pressed. The Capacitor plugin intercepts these:
+
+**iOS flow**: `remoteControlReceived` in AppDelegate → plugin's `handleRemoteControlEvent` → emits `hardwarePTTPressed`/`hardwarePTTReleased` JS events
+**Android flow**: `handleOnKeyDown`/`handleOnKeyUp` for `KEYCODE_MEDIA_PLAY_PAUSE`/`KEYCODE_HEADSETHOOK` → emits same JS events
+**Web fallback**: Media Session API handlers + `keydown`/`keyup` for media key codes (best-effort, may not work on iOS Safari)
+
+**Frontend integration** (`mobley.tsx`): On room connect, imports `capacitor-pushtotalk` plugin, calls `enableHardwarePTT()`, and listens for `hardwarePTTPressed`/`hardwarePTTReleased` events to trigger `startTalking()`/`stopTalking()`. Falls back gracefully when plugin unavailable (browser-only mode).
+
+**Compatible hardware**: Any USB-C or Bluetooth accessory that sends standard HID media key events — Klein Victory, Klein BLU-PTT+, PrymeBLU BT-PTT-Z, Sheepdog Z-PTT, generic Amazon BLE PTT buttons, iPhone 15+ Action Button, AirPods/EarPods inline button.
+
+**To build/test**: Open `ios/App/App.xcworkspace` in Xcode on a Mac, run on a physical iPhone with the earpiece plugged in. Requires Apple Developer account ($99/year) for device deployment.
+
+### PTT Button UI
+- Bottom controls use two-row layout: small utility buttons (settings, channels, all-call, broadcast, hangup) on top, large centered PTT button (160px / `w-40 h-40`) below
+- PTT button is the dominant visual element — walkie-talkie-style layout
+- All talk modes (Hold, Toggle, Always On, Raise Hand) use the same large button size
