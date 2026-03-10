@@ -2381,9 +2381,28 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   />
                 </div>
               )}
+              {realParticipants.length > 0 && (
+                <div className="bg-slate-800/50 rounded-2xl p-4" data-testid="prejoin-participant-list">
+                  <p className="text-xs text-slate-400 mb-3 text-center">{realParticipants.length} {realParticipants.length === 1 ? 'person' : 'people'} on now</p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {realParticipants.map((p) => (
+                      <div
+                        key={p.identity}
+                        className="flex items-center gap-1.5 bg-slate-700/50 px-3 py-1.5 rounded-full"
+                        data-testid={`prejoin-participant-${p.identity}`}
+                      >
+                        <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                          <User className="w-3 h-3 text-emerald-400" />
+                        </div>
+                        <span className="text-sm text-white">{p.name || p.identity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <button
                 onClick={() => {
-                  unlockAudio(); // iOS Safari audio unlock on first interaction
+                  unlockAudio();
                   connectToRoom();
                 }}
                 className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
