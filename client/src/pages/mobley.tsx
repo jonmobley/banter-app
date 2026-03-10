@@ -1861,13 +1861,13 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               <X className="w-5 h-5" />
             </button>
           )}
-          {!isConnected && (
+          {isAdmin && (
             <button
-              onClick={() => isSignedIn ? setShowSettingsDropdown(!showSettingsDropdown) : setShowLoginModal(true)}
-              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400"
-              data-testid="button-profile"
+              onClick={() => setShowAddExpectedModal(true)}
+              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-emerald-400"
+              data-testid="button-add-expected"
             >
-              <User className={`w-5 h-5 ${isSignedIn ? 'text-blue-400' : 'text-slate-400'}`} />
+              <Plus className="w-5 h-5" />
             </button>
           )}
         </div>
@@ -1891,15 +1891,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <button
-              onClick={() => setShowAddExpectedModal(true)}
-              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-emerald-400"
-              data-testid="button-add-expected"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          )}
           <div className="relative" ref={settingsDropdownRef}>
             <button
               onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
