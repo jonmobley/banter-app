@@ -1504,7 +1504,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
       setShowProfileDrawer(false);
       setEditingParticipant(null);
-      toast({ title: "Profile updated" });
     },
     onError: () => {
       toast({ title: "Failed to update profile", variant: "destructive" });
@@ -3100,7 +3099,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     });
                   }
                   setShowMyProfile(false);
-                  toast({ title: "Profile updated" });
+                  
                 }}
                 className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
                 data-testid="button-save-profile"
