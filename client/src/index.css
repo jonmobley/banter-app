@@ -405,7 +405,7 @@
   }
   
   .pt-safe {
-    padding-top: max(1rem, env(safe-area-inset-top, 1rem));
+    padding-top: max(0.5rem, env(safe-area-inset-top, 0.5rem));
   }
 }
 
@@ -434,4 +434,5 @@ html {
 body {
   overscroll-behavior: none;
   -webkit-overflow-scrolling: touch;
+  background-color: #020617;
 }

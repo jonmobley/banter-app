@@ -13,14 +13,14 @@ const config: CapacitorConfig = {
   // iOS-specific configuration
   ios: {
     // Enable background audio for PTT
-    backgroundColor: '#0f172a',
+    backgroundColor: '#020617',
     contentInset: 'automatic',
     // Info.plist entries will be added manually for PTT
   },
   
   // Android-specific configuration
   android: {
-    backgroundColor: '#0f172a',
+    backgroundColor: '#020617',
     // Allow mixed content for WebRTC
     allowMixedContent: true,
   },

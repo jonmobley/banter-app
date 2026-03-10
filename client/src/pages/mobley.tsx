@@ -1953,8 +1953,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }
 
   return (
-    <div className="h-[100dvh] bg-slate-950 text-white flex flex-col safe-top safe-bottom overflow-hidden">
-      <header className="relative flex items-center justify-between p-4 border-b border-slate-800">
+    <div className="h-[100dvh] bg-slate-950 text-white flex flex-col safe-bottom overflow-hidden">
+      <header className="relative flex items-center justify-between p-4 pt-safe border-b border-slate-800">
         <div className="flex items-center gap-2 z-10">
           {isAdmin && (
             <button
