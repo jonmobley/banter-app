@@ -2363,17 +2363,19 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             </button>
           ) : (
             <div className="flex flex-col gap-3">
-              <div className="text-center">
-                <label className="text-xs text-slate-400 mb-1 block">Your name</label>
-                <input
-                  type="text"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full bg-transparent border-b border-slate-600 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-center text-lg"
-                  data-testid="input-user-name"
-                />
-              </div>
+              {!userName && (
+                <div className="text-center">
+                  <label className="text-xs text-slate-400 mb-1 block">Your name</label>
+                  <input
+                    type="text"
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="w-full bg-transparent border-b border-slate-600 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-center text-lg"
+                    data-testid="input-user-name"
+                  />
+                </div>
+              )}
               <button
                 onClick={() => {
                   unlockAudio(); // iOS Safari audio unlock on first interaction
