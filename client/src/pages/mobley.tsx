@@ -204,6 +204,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
   const [showAudioSettings, setShowAudioSettings] = useState(false);
+  const [showFlicModal, setShowFlicModal] = useState(false);
   const [showMicPicker, setShowMicPicker] = useState(false);
   const micPickerRef = useRef<HTMLDivElement>(null);
 
@@ -294,11 +295,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }, []);
 
   useEffect(() => {
-    if (showAudioSettings) {
+    if (showAudioSettings || showFlicModal) {
       checkFlicSupport();
       refreshFlicButtons();
     }
-  }, [showAudioSettings, checkFlicSupport, refreshFlicButtons]);
+  }, [showAudioSettings, showFlicModal, checkFlicSupport, refreshFlicButtons]);
 
   // Talk mode: PTT (push-to-talk), Auto (toggle), or Always On
   const [talkMode, setTalkMode] = useState<TalkMode>(() => {
@@ -1928,6 +1929,19 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           </div>
         </div>
         <div className="flex items-center gap-2 z-10">
+          {flicSupported !== false && (
+            <button
+              onClick={() => setShowFlicModal(true)}
+              className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
+                flicButtons.some(b => b.connectionState === 'connected')
+                  ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white'
+              }`}
+              data-testid="button-flic"
+            >
+              <Bluetooth className="w-5 h-5" />
+            </button>
+          )}
           <div className="relative" ref={settingsDropdownRef}>
             <button
               onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
@@ -2554,29 +2568,25 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             
             <div className="mb-6">
               <p className="text-sm text-slate-400 mb-3">Microphone</p>
-              <div className="space-y-2">
-                {audioDevices.length === 0 ? (
-                  <p className="text-slate-400 text-sm text-center py-4">No microphones found</p>
-                ) : (
-                  audioDevices.map((device) => (
-                    <button
-                      key={device.deviceId}
-                      onClick={() => changeAudioDevice(device.deviceId)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
-                        selectedAudioDevice === device.deviceId
-                          ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                          : 'bg-slate-800 border-2 border-transparent hover:bg-slate-700'
-                      }`}
-                      data-testid={`button-select-mic-${device.deviceId}`}
-                    >
-                      <Mic className={`w-5 h-5 ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-slate-400'}`} />
-                      <span className={`text-sm truncate ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-white'}`}>
+              {audioDevices.length === 0 ? (
+                <p className="text-slate-400 text-sm text-center py-4">No microphones found</p>
+              ) : (
+                <div className="relative">
+                  <Mic className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <select
+                    value={selectedAudioDevice}
+                    onChange={(e) => changeAudioDevice(e.target.value)}
+                    className="w-full appearance-none bg-slate-800 border-2 border-transparent hover:border-slate-600 focus:border-emerald-500 text-white text-sm rounded-xl pl-9 pr-8 py-3 outline-none transition-colors"
+                    data-testid="select-microphone"
+                  >
+                    {audioDevices.map((device) => (
+                      <option key={device.deviceId} value={device.deviceId}>
                         {device.label || `Microphone ${audioDevices.indexOf(device) + 1}`}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             
             <div className="mb-6">
@@ -2607,67 +2617,68 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               </div>
             </div>
             
-            {flicSupported !== false && (
-              <div className="mb-6">
-                <p className="text-sm text-slate-400 mb-3">Flic PTT Button</p>
-                <div className="space-y-2">
-                  {flicButtons.length > 0 ? (
-                    flicButtons.map((button) => (
-                      <div
-                        key={button.uuid}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${
-                          button.connectionState === 'connected'
-                            ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                            : 'bg-slate-800 border-2 border-transparent'
-                        }`}
-                        data-testid={`flic-button-${button.uuid}`}
-                      >
-                        <Bluetooth className={`w-5 h-5 ${
-                          button.connectionState === 'connected' ? 'text-emerald-400' : 
-                          button.connectionState === 'connecting' ? 'text-amber-400 animate-pulse' : 'text-slate-400'
-                        }`} />
-                        <div className="flex-1 min-w-0">
-                          <span className={`text-sm truncate block ${
-                            button.connectionState === 'connected' ? 'text-emerald-400' : 'text-white'
-                          }`}>
-                            {button.name}
-                          </span>
-                          <span className="text-xs text-slate-500 capitalize">{button.connectionState || 'unknown'}</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-slate-500 text-xs text-center py-2">No Flic buttons paired</p>
-                  )}
-                  <button
-                    onClick={scanForFlicButtons}
-                    disabled={flicScanning}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800 border-2 border-transparent hover:bg-slate-700 transition-colors disabled:opacity-50"
-                    data-testid="button-scan-flic"
-                  >
-                    {flicScanning ? (
-                      <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
-                    ) : (
-                      <Bluetooth className="w-4 h-4 text-slate-400" />
-                    )}
-                    <span className="text-sm text-white">{flicScanning ? 'Scanning...' : 'Scan for Flic Button'}</span>
-                  </button>
-                </div>
-              </div>
-            )}
-            
-            <button
-              onClick={() => refreshAudioDevices()}
-              className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors mb-3"
-              data-testid="button-refresh-devices"
-            >
-              Refresh Devices
-            </button>
-            
             <button
               onClick={() => setShowAudioSettings(false)}
               className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
               data-testid="button-close-audio-settings"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showFlicModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowFlicModal(false); }}>
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
+            <h2 className="text-xl font-bold text-center mb-6">Flic PTT Button</h2>
+            <div className="space-y-2 mb-6">
+              {flicButtons.length > 0 ? (
+                flicButtons.map((button) => (
+                  <div
+                    key={button.uuid}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${
+                      button.connectionState === 'connected'
+                        ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                        : 'bg-slate-800 border-2 border-transparent'
+                    }`}
+                    data-testid={`flic-button-${button.uuid}`}
+                  >
+                    <Bluetooth className={`w-5 h-5 ${
+                      button.connectionState === 'connected' ? 'text-emerald-400' : 
+                      button.connectionState === 'connecting' ? 'text-amber-400 animate-pulse' : 'text-slate-400'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-sm truncate block ${
+                        button.connectionState === 'connected' ? 'text-emerald-400' : 'text-white'
+                      }`}>
+                        {button.name}
+                      </span>
+                      <span className="text-xs text-slate-500 capitalize">{button.connectionState || 'unknown'}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-slate-500 text-sm text-center py-4">No Flic buttons paired</p>
+              )}
+            </div>
+            <button
+              onClick={scanForFlicButtons}
+              disabled={flicScanning}
+              className="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white font-medium py-3 rounded-full transition-colors mb-3"
+              data-testid="button-scan-flic"
+            >
+              {flicScanning ? (
+                <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+              ) : (
+                <Bluetooth className="w-4 h-4" />
+              )}
+              {flicScanning ? 'Scanning...' : 'Scan for Flic Button'}
+            </button>
+            <button
+              onClick={() => setShowFlicModal(false)}
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
+              data-testid="button-close-flic"
             >
               Done
             </button>
