@@ -2303,7 +2303,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               onClick={() => setShowFlicModal(true)}
               className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
                 flicButtons.some(b => b.connectionState === 'connected')
-                  ? 'bg-emerald-500 text-white hover:bg-emerald-400'
+                  ? 'bg-blue-500 text-white hover:bg-blue-400'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white'
               }`}
               data-testid="button-flic"
