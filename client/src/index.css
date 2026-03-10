@@ -425,14 +425,8 @@
   }
 }
 
-/* Smooth keyboard transitions */
-html {
+html, body {
   scroll-behavior: smooth;
-}
-
-/* Prevent overscroll on iOS */
-body {
-  overscroll-behavior: none;
-  -webkit-overflow-scrolling: touch;
   background-color: #020617;
+  -webkit-overflow-scrolling: touch;
 }
