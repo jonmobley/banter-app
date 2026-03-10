@@ -2235,31 +2235,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden">
       <header className="relative flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <button
-              onClick={() => setShowAddExpectedModal(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-400 transition-colors text-white"
-              aria-label="Add participant"
-              data-testid="button-add-expected"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          )}
-          {isAdmin && isConnected && (
-            <button
-              onClick={toggleMuteAll}
-              disabled={muteAllLoading}
-              className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
-                muteAllActive
-                  ? 'bg-red-500 hover:bg-red-400 text-white animate-pulse'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
-              }`}
-              aria-label={muteAllActive ? 'Unmute all' : 'Mute all'}
-              data-testid="button-mute-all"
-            >
-              <VolumeX className="w-5 h-5" />
-            </button>
-          )}
           {isConnected && (
             <button
               onClick={() => setShowDisconnectConfirm(true)}
@@ -2437,6 +2412,18 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         {/* Radio tab / participant grid */}
         <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} sm:flex flex-col flex-1 overflow-auto px-4 pb-96`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddExpectedModal(true)}
+              className="flex flex-col items-center justify-center rounded-xl p-4 border-2 border-dashed border-slate-700 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-colors cursor-pointer min-h-[120px]"
+              data-testid="button-add-participant-card"
+            >
+              <div className="w-14 h-14 rounded-full flex items-center justify-center bg-emerald-500/20">
+                <Plus className="w-6 h-6 text-emerald-400" />
+              </div>
+              <p className="font-medium text-sm mt-2 text-emerald-400">Add</p>
+            </button>
+          )}
           {participants.map((p, i) => {
             const isSpeaking = speakingState[p.identity] || false;
             const role = getParticipantRole(p.identity);
@@ -2644,18 +2631,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               );
             })}
           
-          {isAdmin && (
-            <button
-              onClick={() => setShowAddExpectedModal(true)}
-              className="flex flex-col items-center justify-center rounded-xl p-4 border-2 border-dashed border-slate-700 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-colors cursor-pointer min-h-[120px]"
-              data-testid="button-add-participant-card"
-            >
-              <div className="w-14 h-14 rounded-full flex items-center justify-center bg-emerald-500/20">
-                <Plus className="w-6 h-6 text-emerald-400" />
-              </div>
-              <p className="font-medium text-sm mt-2 text-emerald-400">Add</p>
-            </button>
-          )}
         </div>
         </div>
 
@@ -2777,6 +2752,31 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
             <div className="flex flex-col items-center gap-3">
+              {isAdmin && (
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={toggleMuteAll}
+                    disabled={muteAllLoading}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm ${
+                      muteAllActive
+                        ? 'bg-red-500 hover:bg-red-400 text-white animate-pulse'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                    }`}
+                    data-testid="button-mute-all"
+                  >
+                    <VolumeX className={`w-4 h-4 ${muteAllActive ? 'text-white' : 'text-slate-400'}`} />
+                    {muteAllActive ? 'Unmute All' : 'Mute All'}
+                  </button>
+                  <button
+                    onClick={() => setShowDisconnectConfirm(true)}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400"
+                    data-testid="button-end-call"
+                  >
+                    <PhoneOff className="w-4 h-4" />
+                    End
+                  </button>
+                </div>
+              )}
               <div className="w-full">
                 {broadcastActive && !canSpeakInBroadcast ? (
                   <button
