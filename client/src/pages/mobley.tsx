@@ -1832,7 +1832,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   if (banterLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 safe-top safe-bottom">
+      <div className="h-[100dvh] bg-slate-950 text-white flex flex-col items-center justify-center p-6 safe-top safe-bottom overflow-hidden">
         <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4 animate-pulse">
           <Radio className="w-8 h-8 text-emerald-400" />
         </div>
@@ -1843,7 +1843,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   if (banterError) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 safe-top safe-bottom">
+      <div className="h-[100dvh] bg-slate-950 text-white flex flex-col items-center justify-center p-6 safe-top safe-bottom overflow-hidden">
         <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
           <Radio className="w-8 h-8 text-red-400" />
         </div>
@@ -1857,14 +1857,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   // Require authentication to access /login
   if ((!verifiedPhone && !verifiedEmail) || !authToken) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 safe-top safe-bottom">
-        <div className="w-full max-w-sm space-y-6">
+      <div className="h-[100dvh] bg-slate-950 text-white flex flex-col items-center justify-center p-6 safe-top safe-bottom overflow-hidden">
+        <div className="w-full max-w-sm space-y-5">
           <div className="text-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
-              <Radio className="w-8 h-8 text-emerald-400" />
+            <div className="w-14 h-14 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+              <Radio className="w-7 h-7 text-emerald-400" />
             </div>
-            <h1 className="text-2xl font-bold mb-2">{banterInfo ? banterInfo.name : 'Banter'}</h1>
-            <p className="text-slate-400">{banterInfo ? 'Sign in to join this session' : 'Sign in to join'}</p>
+            <h1 className="text-xl font-bold mb-1">{banterInfo ? banterInfo.name : 'Banter'}</h1>
+            <p className="text-slate-400 text-sm">{banterInfo ? 'Sign in to join this session' : 'Sign in to join'}</p>
           </div>
 
           {loginStep === 'input' ? (
@@ -1953,7 +1953,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col safe-top safe-bottom">
+    <div className="h-[100dvh] bg-slate-950 text-white flex flex-col safe-top safe-bottom overflow-hidden">
       <header className="relative flex items-center justify-between p-4 border-b border-slate-800">
         <div className="flex items-center gap-2 z-10">
           {isAdmin && (

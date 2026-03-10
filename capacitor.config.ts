@@ -5,12 +5,9 @@ const config: CapacitorConfig = {
   appName: 'Banter',
   webDir: 'dist/public',
   
-  // Server configuration for development
   server: {
-    // In development, load from the live server
-    // In production builds, this is ignored and local files are used
-    url: process.env.NODE_ENV === 'development' ? 'http://localhost:5000' : undefined,
-    cleartext: true, // Allow HTTP in development
+    url: process.env.BANTER_SERVER_URL || undefined,
+    cleartext: true,
   },
   
   // iOS-specific configuration
