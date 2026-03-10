@@ -349,6 +349,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [profileEmail, setProfileEmail] = useState(() => {
     return localStorage.getItem('banter_user_email') || '';
   });
+  const [draftName, setDraftName] = useState('');
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
   const [loginStep, setLoginStep] = useState<'input' | 'code'>('input');
@@ -2496,8 +2497,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   <label className="text-xs text-slate-400 mb-1 block">Your name</label>
                   <input
                     type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
                     placeholder="Enter your name"
                     className="w-full bg-transparent border-b border-slate-600 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-center text-lg"
                     data-testid="input-user-name"
@@ -2506,10 +2507,26 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               )}
               <button
                 onClick={() => {
+                  if (!userName && draftName.trim()) {
+                    setUserName(draftName.trim());
+                    localStorage.setItem('banter_user_name', draftName.trim());
+                    if (authToken) {
+                      fetch('/api/user/profile', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ authToken, name: draftName.trim() })
+                      }).catch(() => {});
+                    }
+                  }
                   unlockAudio();
                   connectToRoom();
                 }}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                disabled={!userName && !draftName.trim()}
+                className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-colors ${
+                  !userName && !draftName.trim()
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-emerald-500 hover:bg-emerald-400 text-white'
+                }`}
                 data-testid="button-connect"
               >
                 Connect
@@ -3048,27 +3065,30 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   data-testid="input-profile-name"
                 />
               </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Phone</label>
-                <input
-                  type="tel"
-                  value={verifiedPhone || ''}
-                  disabled
-                  className="w-full px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700 text-slate-500"
-                  data-testid="input-profile-phone"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Email (optional)</label>
-                <input
-                  type="email"
-                  placeholder="your@email.com"
-                  value={profileEmail}
-                  onChange={(e) => setProfileEmail(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
-                  data-testid="input-profile-email"
-                />
-              </div>
+              {verifiedPhone && (
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Phone</label>
+                  <input
+                    type="tel"
+                    value={verifiedPhone}
+                    disabled
+                    className="w-full px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700 text-slate-500"
+                    data-testid="input-profile-phone"
+                  />
+                </div>
+              )}
+              {verifiedEmail && (
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Email</label>
+                  <input
+                    type="email"
+                    value={verifiedEmail}
+                    disabled
+                    className="w-full px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700 text-slate-500"
+                    data-testid="input-profile-email"
+                  />
+                </div>
+              )}
             </div>
             <div className="flex gap-3">
               <button
@@ -3082,11 +3102,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 onClick={() => {
                   setUserName(profileName);
                   localStorage.setItem('banter_user_name', profileName);
-                  if (profileEmail) {
-                    localStorage.setItem('banter_user_email', profileEmail);
-                  } else {
-                    localStorage.removeItem('banter_user_email');
-                  }
                   if (authToken && profileName.trim()) {
                     fetch('/api/user/profile', {
                       method: 'POST',
