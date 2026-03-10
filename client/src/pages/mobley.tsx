@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, PhoneOff, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw, Clock, Send } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, PhoneOff, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw, Clock, Send, Lock, Unlock } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets, DataPacket_Kind } from "livekit-client";
@@ -384,6 +384,12 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [muteAllLoading, setMuteAllLoading] = useState(false);
   const [allCallLoading, setAllCallLoading] = useState(false);
   const [awayUsers, setAwayUsers] = useState<Set<string>>(new Set());
+
+  const [talkLocked, setTalkLocked] = useState(false);
+  const [lockDragX, setLockDragX] = useState(0);
+  const [isDraggingLock, setIsDraggingLock] = useState(false);
+  const lockStartXRef = useRef(0);
+  const lockThreshold = 120;
 
   const [activeTab, setActiveTab] = useState<'radio' | 'chat'>('radio');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -1392,6 +1398,37 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setAllCallLoading(false);
     }
   }, [authToken, allCallActive, toast, currentBanterId]);
+
+  const handleLockPointerDown = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    setIsDraggingLock(true);
+    lockStartXRef.current = e.clientX;
+    setLockDragX(0);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, []);
+
+  const handleLockPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDraggingLock) return;
+    const dx = e.clientX - lockStartXRef.current;
+    setLockDragX(Math.max(0, Math.min(dx, lockThreshold)));
+  }, [isDraggingLock, lockThreshold]);
+
+  const handleLockPointerUp = useCallback(() => {
+    if (!isDraggingLock) return;
+    setIsDraggingLock(false);
+    if (lockDragX >= lockThreshold * 0.9) {
+      setTalkLocked(true);
+      startTalking();
+      changeTalkMode('always');
+    }
+    setLockDragX(0);
+  }, [isDraggingLock, lockDragX, lockThreshold, startTalking, changeTalkMode]);
+
+  const handleUnlock = useCallback(() => {
+    setTalkLocked(false);
+    changeTalkMode('ptt');
+    stopTalking();
+  }, [changeTalkMode, stopTalking]);
 
   const loadChatMessages = useCallback(async () => {
     if (!authToken) return;
@@ -2791,33 +2828,75 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     <Hand className="w-5 h-5" />
                     {handRaised ? 'Hand Up' : 'Raise Hand'}
                   </button>
+                ) : talkLocked ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleUnlock}
+                      className="w-12 h-12 flex items-center justify-center rounded-full bg-emerald-600 text-white flex-shrink-0 transition-all active:scale-95"
+                      data-testid="button-unlock-talk"
+                      aria-label="Unlock mic"
+                    >
+                      <Lock className="w-5 h-5" />
+                    </button>
+                    <div
+                      className="flex-1 flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                      data-testid="status-always-on"
+                    >
+                      <Mic className="w-5 h-5" />
+                      Live – Locked
+                    </div>
+                  </div>
                 ) : talkMode === 'ptt' ? (
-                  <button
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      unlockAudio();
-                      startTalking();
-                    }}
-                    onPointerUp={stopTalking}
-                    onPointerLeave={stopTalking}
-                    onPointerCancel={stopTalking}
-                    className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all select-none touch-none ${
-                      isMuted 
-                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
-                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                    }`}
-                    data-testid="button-ptt"
-                  >
-                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    {isMuted ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk') : 'Live'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <div
+                      onPointerDown={handleLockPointerDown}
+                      onPointerMove={handleLockPointerMove}
+                      onPointerUp={handleLockPointerUp}
+                      onPointerCancel={() => { setIsDraggingLock(false); setLockDragX(0); }}
+                      className="w-12 h-12 flex items-center justify-center rounded-full bg-slate-800 text-slate-400 flex-shrink-0 cursor-grab active:cursor-grabbing select-none touch-none transition-all"
+                      style={{ transform: `translateX(${lockDragX}px)`, opacity: isDraggingLock ? 1 : 0.7 }}
+                      data-testid="button-lock-talk"
+                      aria-label="Slide to lock mic on"
+                    >
+                      <Unlock className="w-5 h-5" />
+                    </div>
+                    <button
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        unlockAudio();
+                        startTalking();
+                      }}
+                      onPointerUp={stopTalking}
+                      onPointerLeave={stopTalking}
+                      onPointerCancel={stopTalking}
+                      className={`flex-1 flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all select-none touch-none ${
+                        isMuted 
+                          ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
+                          : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                      }`}
+                      data-testid="button-ptt"
+                    >
+                      {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                      {isMuted ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk') : 'Live'}
+                    </button>
+                  </div>
                 ) : talkMode === 'always' ? (
-                  <div
-                    className="w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
-                    data-testid="status-always-on"
-                  >
-                    <Radio className="w-5 h-5" />
-                    Always On
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleUnlock}
+                      className="w-12 h-12 flex items-center justify-center rounded-full bg-emerald-600 text-white flex-shrink-0 transition-all active:scale-95"
+                      data-testid="button-unlock-talk"
+                      aria-label="Unlock mic"
+                    >
+                      <Lock className="w-5 h-5" />
+                    </button>
+                    <div
+                      className="flex-1 flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                      data-testid="status-always-on"
+                    >
+                      <Radio className="w-5 h-5" />
+                      Always On
+                    </div>
                   </div>
                 ) : (
                   <button
