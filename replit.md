@@ -54,6 +54,7 @@ WebSocket communication, including speaking states and broadcasts, is scoped by 
 - **Live Event Crew Features**: Self-service channel switching, all-call broadcast, PWA support, Wake Lock, and "Notify Group" SMS functionality.
 - **Admin Groups Management**: UI for creating, renaming, deleting groups, and managing members.
 - **Pre-join Participant List**: Shows participants before joining a banter.
+- **Away Status Detection**: Detects when participants switch tabs or get phone calls; shows amber "Away" badge via WebSocket-broadcast `awayUsers` state per banter.
 - **Navigation**: Main app route is `/login` with redirects and accessible logout options.
 - **Safe Areas**: Support for iOS notch/home indicator via `safe-top safe-bottom` CSS classes.
 

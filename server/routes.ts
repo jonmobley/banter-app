@@ -202,6 +202,7 @@ export async function registerRoutes(
     raisedHands: Set<string>;
     chirpEnabled: boolean;
     muteAllActive: boolean;
+    awayUsers: Set<string>;
   }
 
   const banterStates = new Map<string, BanterSessionState>();
@@ -217,6 +218,7 @@ export async function registerRoutes(
         raisedHands: new Set(),
         chirpEnabled: true,
         muteAllActive: false,
+        awayUsers: new Set(),
       });
     }
     return banterStates.get(key)!;
@@ -254,6 +256,7 @@ export async function registerRoutes(
     ws.send(JSON.stringify(getBroadcastState(null)));
     ws.send(JSON.stringify({ type: 'chirp-setting', enabled: globalState.chirpEnabled, banterId: null }));
     ws.send(JSON.stringify({ type: 'mute-all', active: globalState.muteAllActive, banterId: null }));
+    ws.send(JSON.stringify({ type: 'away-users', identities: Array.from(globalState.awayUsers), banterId: null }));
     
     ws.on('message', (data) => {
       try {
@@ -273,6 +276,7 @@ export async function registerRoutes(
           ws.send(JSON.stringify(getBroadcastState(bId)));
           ws.send(JSON.stringify({ type: 'chirp-setting', enabled: bState.chirpEnabled, banterId: bId }));
           ws.send(JSON.stringify({ type: 'mute-all', active: bState.muteAllActive, banterId: bId }));
+          ws.send(JSON.stringify({ type: 'away-users', identities: Array.from(bState.awayUsers), banterId: bId }));
         } else if (msg.type === 'speaking-update' && msg.identity) {
           const clientInfo = frontendClients.get(ws);
           const bId = clientInfo?.banterId || null;
@@ -293,6 +297,16 @@ export async function registerRoutes(
           state.raisedHands.delete(msg.identity);
           log(`👇 ${msg.identity} lowered hand (banter: ${bId || 'global'})`, "broadcast");
           broadcastToFrontend(getBroadcastState(bId), bId);
+        } else if (msg.type === 'status-update' && msg.identity) {
+          const clientInfo = frontendClients.get(ws);
+          const bId = clientInfo?.banterId || null;
+          const state = getBanterState(bId);
+          if (msg.status === 'away') {
+            state.awayUsers.add(msg.identity);
+          } else {
+            state.awayUsers.delete(msg.identity);
+          }
+          broadcastToFrontend({ type: 'user-status', identity: msg.identity, status: msg.status, banterId: bId }, bId);
         } else if (msg.type === 'request-banter-state') {
           const bId = msg.banterId || null;
           frontendClients.set(ws, { banterId: bId });
@@ -307,6 +321,7 @@ export async function registerRoutes(
           ws.send(JSON.stringify(getBroadcastState(bId)));
           ws.send(JSON.stringify({ type: 'chirp-setting', enabled: bState.chirpEnabled, banterId: bId }));
           ws.send(JSON.stringify({ type: 'mute-all', active: bState.muteAllActive, banterId: bId }));
+          ws.send(JSON.stringify({ type: 'away-users', identities: Array.from(bState.awayUsers), banterId: bId }));
         }
       } catch (e) {
         // Ignore parse errors
@@ -1971,6 +1986,13 @@ export async function registerRoutes(
           const speaking = getSpeakingState(webhookBanterId);
           speaking.delete(event.participant?.identity);
           broadcastSpeakingState(webhookBanterId);
+          if (event.participant?.identity) {
+            const leftState = getBanterState(webhookBanterId);
+            if (leftState.awayUsers.has(event.participant.identity)) {
+              leftState.awayUsers.delete(event.participant.identity);
+              broadcastToFrontend({ type: 'user-status', identity: event.participant.identity, status: 'active', banterId: webhookBanterId }, webhookBanterId);
+            }
+          }
           broadcastParticipantEvent('leave', {
             identity: event.participant?.identity
           }, webhookBanterId);

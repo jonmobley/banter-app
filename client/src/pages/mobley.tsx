@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets, DataPacket_Kind } from "livekit-client";
@@ -374,6 +374,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [muteAllActive, setMuteAllActive] = useState(false);
   const [muteAllLoading, setMuteAllLoading] = useState(false);
   const [allCallLoading, setAllCallLoading] = useState(false);
+  const [awayUsers, setAwayUsers] = useState<Set<string>>(new Set());
 
   // Broadcast state
   const [broadcastActive, setBroadcastActive] = useState(false);
@@ -413,6 +414,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             setSpeakingState(msg.data);
           } else if (msg.type === 'participant-event') {
             queryClient.invalidateQueries({ queryKey: ["/api/participants", banterIdRef.current] });
+            if (msg.data?.event === 'leave' && msg.data?.identity) {
+              setAwayUsers(prev => {
+                if (!prev.has(msg.data.identity)) return prev;
+                const next = new Set(prev);
+                next.delete(msg.data.identity);
+                return next;
+              });
+            }
           } else if (msg.type === 'all-call') {
             const msgBanterId = msg.banterId || null;
             if (msgBanterId === myBanterId) {
@@ -422,6 +431,24 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             const msgBanterId = msg.banterId || null;
             if (msgBanterId === myBanterId) {
               queryClient.invalidateQueries({ queryKey: ["/api/channels", myBanterId] });
+            }
+          } else if (msg.type === 'user-status') {
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              setAwayUsers(prev => {
+                const next = new Set(prev);
+                if (msg.status === 'away') {
+                  next.add(msg.identity);
+                } else {
+                  next.delete(msg.identity);
+                }
+                return next;
+              });
+            }
+          } else if (msg.type === 'away-users') {
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              setAwayUsers(new Set(msg.identities || []));
             }
           } else if (msg.type === 'mute-all') {
             const msgBanterId = msg.banterId || null;
@@ -936,18 +963,27 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible' && room && connectionState === ConnectionState.Connected && !wakeLockRef.current && 'wakeLock' in navigator) {
-        try {
-          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-          wakeLockRef.current?.addEventListener('release', () => {
-            wakeLockRef.current = null;
-          });
-        } catch (e) {}
+      if (document.visibilityState === 'visible') {
+        if (room && connectionState === ConnectionState.Connected && !wakeLockRef.current && 'wakeLock' in navigator) {
+          try {
+            wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+            wakeLockRef.current?.addEventListener('release', () => {
+              wakeLockRef.current = null;
+            });
+          } catch (e) {}
+        }
+        if (localIdentity && wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'status-update', identity: localIdentity, status: 'active' }));
+        }
+      } else if (document.visibilityState === 'hidden') {
+        if (localIdentity && wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'status-update', identity: localIdentity, status: 'away' }));
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [room, connectionState]);
+  }, [room, connectionState, localIdentity]);
 
   // Auto-connect when authenticated and name is known
   useEffect(() => {
@@ -2360,23 +2396,20 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                         <Radio className="w-3 h-3 text-emerald-400" />
                         <span className="text-xs text-emerald-400">Speaking</span>
                       </div>
+                    ) : !p.muted ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/20">
+                        <Mic className="w-3 h-3 text-emerald-400" />
+                        <span className="text-xs text-emerald-400">Live</span>
+                      </div>
+                    ) : awayUsers.has(p.identity) ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/20">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        <span className="text-xs text-amber-400">Away</span>
+                      </div>
                     ) : (
-                      <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${
-                        p.muted 
-                          ? 'bg-slate-600/50' 
-                          : 'bg-emerald-500/20'
-                      }`}>
-                        {p.muted ? (
-                          <>
-                            <MicOff className="w-3 h-3 text-slate-400" />
-                            <span className="text-xs text-slate-400">Standby</span>
-                          </>
-                        ) : (
-                          <>
-                            <Mic className="w-3 h-3 text-emerald-400" />
-                            <span className="text-xs text-emerald-400">Live</span>
-                          </>
-                        )}
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-600/50">
+                        <MicOff className="w-3 h-3 text-slate-400" />
+                        <span className="text-xs text-slate-400">Standby</span>
                       </div>
                     )}
                   </div>
