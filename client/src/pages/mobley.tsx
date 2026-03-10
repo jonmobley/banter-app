@@ -2363,7 +2363,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     data-testid="button-ptt"
                   >
                     {isMuted ? <MicOff className="w-14 h-14" /> : <Mic className="w-14 h-14" />}
-                    <span className="text-lg font-bold mt-2">{isMuted ? 'Hold to Talk' : 'Live'}</span>
+                    <span className="text-lg font-bold mt-2">{isMuted ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk') : 'Live'}</span>
                   </button>
                 ) : talkMode === 'always' ? (
                   <div
@@ -2384,7 +2384,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     data-testid="button-toggle-mute"
                   >
                     {isMuted ? <MicOff className="w-14 h-14" /> : <Mic className="w-14 h-14" />}
-                    <span className="text-lg font-bold mt-2">{isMuted ? 'Tap to Talk' : 'Live'}</span>
+                    <span className="text-lg font-bold mt-2">{isMuted ? ('ontouchstart' in window ? 'Tap to Talk' : 'Spacebar to Talk') : 'Live'}</span>
                   </button>
                 )}
               </div>
