@@ -1625,7 +1625,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     };
   }, [room]);
 
-  // Spacebar activates PTT (hold to talk)
+  // Spacebar activates PTT (hold to talk) or toggles mute (auto mode)
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1635,6 +1635,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       e.preventDefault();
       if (talkMode === 'ptt') {
         startTalking();
+      } else if (talkMode === 'auto') {
+        toggleMute();
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -1652,7 +1654,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [connectionState, talkMode, startTalking, stopTalking]);
+  }, [connectionState, talkMode, startTalking, stopTalking, toggleMute]);
 
   // Hardware PTT via Capacitor plugin (native + web fallback for media keys)
   useEffect(() => {
