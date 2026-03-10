@@ -531,9 +531,39 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }, [selectedAudioDevice]);
 
   useEffect(() => {
-    // Refresh on page load to auto-select default mic
     refreshAudioDevices();
-  }, []);
+
+    const handleDeviceChange = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+        setAudioDevices(audioInputs);
+
+        const currentStillExists = audioInputs.some(d => d.deviceId === selectedAudioDevice);
+        if (!currentStillExists && audioInputs.length > 0) {
+          const defaultDevice = audioInputs[0].deviceId;
+          setSelectedAudioDevice(defaultDevice);
+
+          if (room?.localParticipant) {
+            const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+            if (micPub?.track) {
+              await room.localParticipant.setMicrophoneEnabled(false);
+              await room.localParticipant.setMicrophoneEnabled(true, {
+                deviceId: defaultDevice,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to handle device change:', err);
+      }
+    };
+
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
+  }, [selectedAudioDevice, room]);
 
   // Close profile menu when clicking outside
   useEffect(() => {
