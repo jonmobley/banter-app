@@ -26,9 +26,12 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
     private var isTransmitting = false
     private var flicManagerInitialized = false
 
+    private var wasTransmittingBeforeInterruption = false
+
     override public func load() {
         super.load()
         configureAudioSession()
+        observeAudioInterruptions()
         initializeFlicManager()
     }
 
@@ -43,6 +46,80 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
             try audioSession.setActive(true)
         } catch {
             print("PushToTalk: Failed to configure audio session: \(error)")
+        }
+    }
+
+    // MARK: - Audio Session Interruption Handling (phone calls, Siri, alarms)
+
+    private func observeAudioInterruptions() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioInterruption),
+            name: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance()
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioRouteChange),
+            name: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance()
+        )
+    }
+
+    @objc private func handleAudioInterruption(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+            return
+        }
+
+        switch type {
+        case .began:
+            print("PushToTalk: Audio interrupted (phone call, Siri, etc.)")
+            wasTransmittingBeforeInterruption = isTransmitting
+            if isTransmitting {
+                isTransmitting = false
+                notifyListeners("hardwarePTTReleased", data: [:])
+            }
+            notifyListeners("audioInterrupted", data: ["reason": "began"])
+
+        case .ended:
+            print("PushToTalk: Audio interruption ended")
+            let options = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            let shouldResume = AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume)
+
+            if shouldResume {
+                do {
+                    try AVAudioSession.sharedInstance().setActive(true)
+                    print("PushToTalk: Audio session reactivated after interruption")
+                } catch {
+                    print("PushToTalk: Failed to reactivate audio session: \(error)")
+                }
+            }
+            notifyListeners("audioResumed", data: ["shouldResume": shouldResume])
+
+        @unknown default:
+            break
+        }
+    }
+
+    @objc private func handleAudioRouteChange(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
+            return
+        }
+
+        switch reason {
+        case .oldDeviceUnavailable:
+            print("PushToTalk: Audio device disconnected (headphones unplugged, etc.)")
+            notifyListeners("audioRouteChanged", data: ["reason": "deviceUnavailable"])
+        case .newDeviceAvailable:
+            print("PushToTalk: New audio device connected")
+            notifyListeners("audioRouteChanged", data: ["reason": "newDevice"])
+        default:
+            break
         }
     }
 

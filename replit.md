@@ -156,6 +156,13 @@ The Capacitor PTT plugin includes Flic 2 SDK integration (commented out, pending
 **Info.plist**: `NSBluetoothAlwaysUsageDescription`, `NSBluetoothPeripheralUsageDescription`, `UIBackgroundModes` includes `bluetooth-central`, `LSApplicationQueriesSchemes` includes `flic20`
 **AndroidManifest.xml**: Bluetooth permissions for both pre-API 31 (`BLUETOOTH`, `BLUETOOTH_ADMIN`, `ACCESS_FINE_LOCATION`) and API 31+ (`BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`)
 
+### Audio Interruption Recovery
+When a phone call, Siri, or alarm interrupts the app:
+- **iOS**: `AVAudioSession.interruptionNotification` fires → plugin mutes mic, emits `audioInterrupted` → when call ends, reactivates audio session, emits `audioResumed` → frontend reconnects LiveKit if needed, restores mic state
+- **Android**: `AudioFocusChangeListener` + `PhoneStateListener` → same event flow
+- **Frontend** (`mobley.tsx`): Listens for `audioInterrupted` (mutes mic) and `audioResumed` (reconnects room if disconnected, restores "Always On" mic if applicable)
+- Background modes (`audio`, `voip`) keep the app alive during phone calls on iOS
+
 ### PTT Button UI
 - Bottom controls use two-row layout: small utility buttons (settings, channels, all-call, broadcast, hangup) on top, large centered PTT button (160px / `w-40 h-40`) below
 - PTT button is the dominant visual element — walkie-talkie-style layout

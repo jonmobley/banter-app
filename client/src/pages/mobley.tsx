@@ -1636,6 +1636,62 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     };
   }, [connectionState, talkMode, startTalking, stopTalking, toggleMute, changeTalkMode]);
 
+  // Audio interruption recovery (phone calls, Siri, alarms)
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected || !room) return;
+    let interruptedHandle: any = null;
+    let resumedHandle: any = null;
+    let active = true;
+
+    const setupInterruptionHandling = async () => {
+      try {
+        const { PushToTalk } = await import('capacitor-pushtotalk');
+        if (!active) return;
+
+        interruptedHandle = await PushToTalk.addListener('audioInterrupted', () => {
+          console.log('Banter: Audio interrupted — muting mic');
+          if (room?.localParticipant) {
+            room.localParticipant.setMicrophoneEnabled(false);
+            setIsMuted(true);
+          }
+        });
+
+        resumedHandle = await PushToTalk.addListener('audioResumed', async (data: { shouldResume: boolean }) => {
+          console.log('Banter: Audio resumed, shouldResume:', data.shouldResume);
+          if (!room) return;
+
+          if (room.state === ConnectionState.Disconnected) {
+            console.log('Banter: Reconnecting to room after interruption...');
+            try {
+              await room.connect(room.options?.url || '', '', { autoSubscribe: true });
+            } catch (err) {
+              console.error('Banter: Failed to reconnect after interruption:', err);
+            }
+          }
+
+          if (talkMode === 'always' && room?.localParticipant) {
+            await room.localParticipant.setMicrophoneEnabled(true);
+            setIsMuted(false);
+          }
+        });
+      } catch {
+        // Plugin not available
+      }
+    };
+
+    setupInterruptionHandling();
+    return () => {
+      active = false;
+      const cleanup = async () => {
+        try {
+          if (interruptedHandle) await interruptedHandle.remove();
+          if (resumedHandle) await resumedHandle.remove();
+        } catch {}
+      };
+      cleanup();
+    };
+  }, [connectionState, room, talkMode]);
+
   const isConnected = connectionState === ConnectionState.Connected;
   const isConnecting = connectionState === ConnectionState.Connecting;
 

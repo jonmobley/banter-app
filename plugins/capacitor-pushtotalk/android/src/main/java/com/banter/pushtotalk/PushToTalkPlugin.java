@@ -1,5 +1,12 @@
 package com.banter.pushtotalk;
 
+import android.content.Context;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
+import android.os.Build;
+import android.telephony.PhoneStateListener;
+import android.telephony.TelephonyManager;
 import android.view.KeyEvent;
 
 import com.getcapacitor.JSArray;
@@ -15,6 +22,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * Handles:
  * 1. HID media key events from wired/BT PTT accessories (Klein Victory, etc.)
  * 2. Flic 2 button events via flic2lib-android SDK
+ * 3. Audio focus management for phone call interruptions
  *
  * FLIC SETUP:
  * 1. Add JitPack to repositories in build.gradle
@@ -27,11 +35,91 @@ public class PushToTalkPlugin extends Plugin {
     private boolean hardwarePTTEnabled = false;
     private boolean isTransmitting = false;
     private boolean flicManagerInitialized = false;
+    private boolean wasTransmittingBeforeInterruption = false;
+    private AudioFocusRequest audioFocusRequest;
+    private AudioManager audioManager;
 
     @Override
     public void load() {
         super.load();
+        setupAudioFocusHandling();
         initializeFlicManager();
+    }
+
+    private void setupAudioFocusHandling() {
+        audioManager = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+
+        AudioManager.OnAudioFocusChangeListener focusChangeListener = focusChange -> {
+            switch (focusChange) {
+                case AudioManager.AUDIOFOCUS_LOSS:
+                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                    android.util.Log.d("PushToTalk", "Audio focus lost (phone call, other app, etc.)");
+                    wasTransmittingBeforeInterruption = isTransmitting;
+                    if (isTransmitting) {
+                        isTransmitting = false;
+                        notifyListeners("hardwarePTTReleased", new JSObject());
+                    }
+                    JSObject interruptData = new JSObject();
+                    interruptData.put("reason", "began");
+                    notifyListeners("audioInterrupted", interruptData);
+                    break;
+
+                case AudioManager.AUDIOFOCUS_GAIN:
+                    android.util.Log.d("PushToTalk", "Audio focus regained");
+                    JSObject resumeData = new JSObject();
+                    resumeData.put("shouldResume", true);
+                    notifyListeners("audioResumed", resumeData);
+                    break;
+
+                case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                    break;
+            }
+        };
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build())
+                .setOnAudioFocusChangeListener(focusChangeListener)
+                .build();
+            audioManager.requestAudioFocus(audioFocusRequest);
+        }
+
+        try {
+            TelephonyManager telephonyManager = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);
+            if (telephonyManager != null) {
+                telephonyManager.listen(new PhoneStateListener() {
+                    @Override
+                    public void onCallStateChanged(int state, String phoneNumber) {
+                        switch (state) {
+                            case TelephonyManager.CALL_STATE_RINGING:
+                            case TelephonyManager.CALL_STATE_OFFHOOK:
+                                android.util.Log.d("PushToTalk", "Phone call active — audio interrupted");
+                                wasTransmittingBeforeInterruption = isTransmitting;
+                                if (isTransmitting) {
+                                    isTransmitting = false;
+                                    notifyListeners("hardwarePTTReleased", new JSObject());
+                                }
+                                JSObject callInterruptData = new JSObject();
+                                callInterruptData.put("reason", "began");
+                                notifyListeners("audioInterrupted", callInterruptData);
+                                break;
+
+                            case TelephonyManager.CALL_STATE_IDLE:
+                                android.util.Log.d("PushToTalk", "Phone call ended — resuming audio");
+                                JSObject callResumeData = new JSObject();
+                                callResumeData.put("shouldResume", true);
+                                notifyListeners("audioResumed", callResumeData);
+                                break;
+                        }
+                    }
+                }, PhoneStateListener.LISTEN_CALL_STATE);
+            }
+        } catch (Exception e) {
+            android.util.Log.w("PushToTalk", "Could not listen for phone state: " + e.getMessage());
+        }
     }
 
     private void initializeFlicManager() {

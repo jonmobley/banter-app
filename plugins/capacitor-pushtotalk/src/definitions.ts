@@ -87,4 +87,19 @@ export interface PushToTalkPlugin {
     eventName: 'flicHold',
     listenerFunc: (data: { uuid: string }) => void
   ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'audioInterrupted',
+    listenerFunc: (data: { reason: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'audioResumed',
+    listenerFunc: (data: { shouldResume: boolean }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'audioRouteChanged',
+    listenerFunc: (data: { reason: string }) => void
+  ): Promise<PluginListenerHandle>;
 }
