@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -11,11 +11,14 @@ import Schedule from "@/pages/schedule";
 import Admin from "@/pages/admin";
 import NotFound from "@/pages/not-found";
 
+const isNativeApp = typeof (window as any).Capacitor !== 'undefined';
+
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/mobley" component={Mobley} />
+      <Route path="/">{isNativeApp ? <Redirect to="/login" /> : <Home />}</Route>
+      <Route path="/login" component={Mobley} />
+      <Route path="/mobley"><Redirect to="/login" /></Route>
       <Route path="/join/:slug">{(params) => <Mobley slug={params.slug} />}</Route>
       <Route path="/account" component={Account} />
       <Route path="/contacts" component={Contacts} />

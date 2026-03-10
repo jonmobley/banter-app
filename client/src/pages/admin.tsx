@@ -267,7 +267,7 @@ export default function Admin() {
     localStorage.removeItem('banter_verified_email');
     localStorage.removeItem('banter_auth_token');
     toast({ title: "Signed out" });
-    navigate("/mobley");
+    navigate("/login");
   };
 
   const handleAddUser = () => {
@@ -284,10 +284,10 @@ export default function Admin() {
 
   if (!authToken) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col safe-top safe-bottom">
         <header className="flex items-center gap-4 px-4 py-4 border-b border-slate-800">
           <Link 
-            href="/mobley"
+            href="/login"
             className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
             data-testid="button-back"
           >
@@ -299,7 +299,7 @@ export default function Admin() {
           <div className="text-center">
             <p className="text-slate-300 mb-4">Please sign in on the main page first</p>
             <Link 
-              href="/mobley"
+              href="/login"
               className="text-emerald-500 hover:text-emerald-400 transition-colors"
               data-testid="link-signin"
             >
@@ -312,10 +312,10 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col safe-top safe-bottom">
       <header className="flex items-center gap-4 px-4 py-4 border-b border-slate-800">
         <Link 
-          href="/mobley"
+          href="/login"
           className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
           data-testid="button-back"
         >

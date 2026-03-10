@@ -77,7 +77,7 @@ export default function Schedule() {
 
   useEffect(() => {
     if (!authToken) {
-      navigate('/mobley');
+      navigate('/login');
     }
   }, [authToken, navigate]);
 
@@ -212,7 +212,7 @@ export default function Schedule() {
   const hasFilteredResults = filteredActive.length > 0 || filteredPending.length > 0 || filteredPast.length > 0;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col safe-top safe-bottom">
       <header className="flex items-center gap-4 px-4 py-4 border-b border-slate-800">
         <Link 
           href="/account"

@@ -46,7 +46,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-950 text-white safe-top safe-bottom">
       <header className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-lg border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -57,7 +57,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             <a
-              href="/mobley"
+              href="/login"
               className="text-slate-300 hover:text-white font-medium px-4 py-2 rounded-full text-sm transition-colors"
               data-testid="link-sign-in"
             >

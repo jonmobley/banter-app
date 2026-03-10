@@ -48,14 +48,14 @@ export default function Account() {
     localStorage.removeItem('banter_verified_email');
     localStorage.removeItem('banter_auth_token');
     toast({ title: "Signed out" });
-    navigate("/mobley");
+    navigate("/login");
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col safe-top safe-bottom">
       <div className="flex-1 flex flex-col items-center px-6 py-8">
         <div className="w-full max-w-xs">
-          <Link href="/mobley" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8" data-testid="link-back">
+          <Link href="/login" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8" data-testid="link-back">
             <ArrowLeft className="w-4 h-4" />
             <span className="text-sm">Back</span>
           </Link>
@@ -63,7 +63,7 @@ export default function Account() {
           <h1 className="text-2xl font-bold mb-8 text-center" data-testid="text-title">Account</h1>
 
           <Link
-            href="/mobley"
+            href="/login"
             className="flex items-center justify-center gap-2 w-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors mb-3"
             data-testid="button-join"
           >
@@ -73,7 +73,7 @@ export default function Account() {
 
           <button
             onClick={async () => {
-              const shareUrl = `${window.location.origin}/mobley`;
+              const shareUrl = `${window.location.origin}/login`;
               if (navigator.share) {
                 try {
                   await navigator.share({
@@ -94,7 +94,7 @@ export default function Account() {
           >
             <Share className="w-5 h-5 text-emerald-400" />
             <span className="ml-3">Share</span>
-            <span className="ml-auto text-slate-400 text-xs truncate max-w-32">{window.location.host}/mobley</span>
+            <span className="ml-auto text-slate-400 text-xs truncate max-w-32">{window.location.host}/login</span>
           </button>
 
           <div className="flex flex-col gap-3">

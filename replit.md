@@ -46,7 +46,7 @@ Each Scheduled Banter is a fully isolated session with its own:
 - **Broadcast/All-Call state**: Server-side `Map<string, BanterSessionState>` keyed by `banterId` (or `"global"`)
 - **Shareable join link**: `/join/{slug}` — 6-char alphanumeric slug, auto-generated on banter creation
 
-**Backward compatibility**: When `banterId` is `null`, all queries return global/un-scoped records (the always-on banter at `/mobley`).
+**Backward compatibility**: When `banterId` is `null`, all queries return global/un-scoped records (the always-on banter at `/login`).
 
 **Room naming convention**:
 - Global: `banter-main`, `banter-channel-{n}`, `banter-all-call`, `banter-broadcast`
@@ -85,7 +85,8 @@ Each Scheduled Banter is a fully isolated session with its own:
 - **Share Links**: Each scheduled banter has a unique `/join/{slug}` URL. "Copy Link" button on the schedule page.
 - **Admin Groups Management**: Admin page at `/admin` includes a Groups section — create groups, rename, delete, add/remove users as members. Groups use user IDs as `participantId` in `group_members` table. Expandable group cards show current members with remove buttons and non-member users as add buttons.
 - **Pre-join Participant List**: The connect screen shows who's already on the banter (name chips with count) before joining, visible to logged-in users.
-- **Navigation**: Logout available from account, admin, and mobley pages. Admin page discoverable from account page for admin users. 404 page has user-friendly messaging with "Go Home" link.
+- **Navigation**: Main app route is `/login` (renamed from `/mobley`). Old `/mobley` URLs redirect to `/login`. Native Capacitor app redirects `/` to `/login` automatically. Logout available from account, admin, and login pages. Admin page discoverable from account page for admin users. 404 page has user-friendly messaging with "Go Home" link.
+- **Safe Areas**: All pages use `safe-top safe-bottom` CSS classes for iOS notch/home indicator support via `env(safe-area-inset-*)`.
 
 ### Shared Utilities
 - **Phone formatting**: `formatPhone()` in `client/src/lib/utils.ts` — shared by mobley and contacts pages

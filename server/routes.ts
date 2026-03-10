@@ -1677,7 +1677,7 @@ export async function registerRoutes(
         return res.status(429).json({ error: "Alert already sent recently. Please wait 5 minutes." });
       }
 
-      let joinPath = '/mobley';
+      let joinPath = '/login';
       if (banterId) {
         const banter = await storage.getScheduledBanter(banterId);
         if (banter?.slug) {

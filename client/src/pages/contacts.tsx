@@ -63,9 +63,9 @@ export default function Contacts() {
   
   if (!authToken) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-6">
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center px-6 safe-top safe-bottom">
         <p className="text-slate-400 mb-4" data-testid="text-sign-in-prompt">Please sign in on the main page first</p>
-        <Link href="/mobley" className="text-emerald-400 hover:text-emerald-300 transition-colors" data-testid="link-sign-in">
+        <Link href="/login" className="text-emerald-400 hover:text-emerald-300 transition-colors" data-testid="link-sign-in">
           Go to sign in
         </Link>
       </div>
@@ -299,7 +299,7 @@ export default function Contacts() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col safe-top safe-bottom">
       <div className="flex-1 flex flex-col items-center px-6 py-8">
         <div className="w-full max-w-xs">
           <Link href="/account" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors mb-8" data-testid="link-back">
