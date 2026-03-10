@@ -306,12 +306,31 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     return (saved === 'auto' || saved === 'ptt' || saved === 'always') ? saved : 'ptt';
   });
 
+  const isTokenExpired = (() => {
+    const token = localStorage.getItem('banter_auth_token');
+    if (!token) return false;
+    try {
+      const decoded = atob(token);
+      const parts = decoded.split(':');
+      if (parts.length >= 2) {
+        const expiry = parseInt(parts[1], 10);
+        if (Date.now() > expiry) {
+          localStorage.removeItem('banter_auth_token');
+          localStorage.removeItem('banter_verified_phone');
+          localStorage.removeItem('banter_verified_email');
+          return true;
+        }
+      }
+    } catch {}
+    return false;
+  })();
+
   // Phone verification state
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(() => {
-    return localStorage.getItem('banter_verified_phone');
+    return isTokenExpired ? null : localStorage.getItem('banter_verified_phone');
   });
   const [authToken, setAuthToken] = useState<string | null>(() => {
-    return localStorage.getItem('banter_auth_token');
+    return isTokenExpired ? null : localStorage.getItem('banter_auth_token');
   });
 
   // User display name (editable before joining)
@@ -338,7 +357,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [verifiedEmail, setVerifiedEmail] = useState<string | null>(() => {
-    return localStorage.getItem('banter_verified_email');
+    return isTokenExpired ? null : localStorage.getItem('banter_verified_email');
   });
 
   // Channel management state
