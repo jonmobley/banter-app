@@ -428,11 +428,17 @@
 html {
   scroll-behavior: smooth;
   background-color: #020617;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
   background-color: #020617;
   -webkit-overflow-scrolling: touch;
+  height: 100%;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
 }
 
 body::before {
@@ -445,5 +451,6 @@ body::before {
 
 #root {
   background-color: #020617;
-  min-height: 100dvh;
+  height: 100%;
+  overflow: hidden;
 }
