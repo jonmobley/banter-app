@@ -1864,8 +1864,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      <header className="flex items-center justify-between p-4 border-b border-slate-800">
-        <div className="flex items-center gap-2">
+      <header className="relative flex items-center justify-between p-4 border-b border-slate-800">
+        <div className="flex items-center gap-2 z-10">
           {isConnected && (
             <button
               onClick={() => setShowDisconnectConfirm(true)}
@@ -1885,26 +1885,28 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             </button>
           )}
         </div>
-        <div className="text-center flex-1 min-w-0">
-          <div className="flex items-center justify-center gap-2">
-            <h1 className="font-semibold truncate" data-testid="text-banter-title">{banterInfo ? banterInfo.name : (isConnected ? (userName || 'Connected') : 'Banter')}</h1>
-            {isConnected && currentChannel && (
-              <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full flex-shrink-0">
-                CH {currentChannel.number}
-              </span>
-            )}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center">
+            <div className="flex items-center justify-center gap-2">
+              <h1 className="font-semibold truncate" data-testid="text-banter-title">{banterInfo ? banterInfo.name : (isConnected ? (userName || 'Connected') : 'Banter')}</h1>
+              {isConnected && currentChannel && (
+                <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full flex-shrink-0">
+                  CH {currentChannel.number}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-400">
+              {isConnected 
+                ? (broadcastActive
+                    ? `BROADCAST • ${formatDuration(callDuration)}`
+                    : allCallActive 
+                    ? `ALL CALL • ${formatDuration(callDuration)}`
+                    : `Connected${currentChannel ? ` • CH ${currentChannel.number}` : ''} • ${formatDuration(callDuration)}`)
+                : conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
+            </p>
           </div>
-          <p className="text-xs text-slate-400">
-            {isConnected 
-              ? (broadcastActive
-                  ? `BROADCAST • ${formatDuration(callDuration)}`
-                  : allCallActive 
-                  ? `ALL CALL • ${formatDuration(callDuration)}`
-                  : `Connected${currentChannel ? ` • CH ${currentChannel.number}` : ''} • ${formatDuration(callDuration)}`)
-              : conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
-          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 z-10">
           <div className="relative" ref={settingsDropdownRef}>
             <button
               onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
