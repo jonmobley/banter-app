@@ -1888,19 +1888,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
       <header className="relative flex items-center justify-between p-4 border-b border-slate-800">
         <div className="flex items-center gap-2 z-10">
-          {isConnected && (
-            <button
-              onClick={() => setShowDisconnectConfirm(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 transition-colors text-slate-400 hover:text-red-400"
-              data-testid="button-hangup-header"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
           {isAdmin && (
             <button
               onClick={() => setShowAddExpectedModal(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 transition-colors text-slate-400 hover:text-emerald-400"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-400 transition-colors text-white"
+              aria-label="Add participant"
               data-testid="button-add-expected"
             >
               <Plus className="w-5 h-5" />
@@ -1929,6 +1921,16 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           </div>
         </div>
         <div className="flex items-center gap-2 z-10">
+          {isConnected && (
+            <button
+              onClick={() => setShowDisconnectConfirm(true)}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-400 transition-colors text-white"
+              aria-label="Disconnect call"
+              data-testid="button-hangup-header"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
           {flicSupported !== false && (
             <button
               onClick={() => setShowFlicModal(true)}
@@ -2309,6 +2311,19 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 </div>
               );
             })}
+          
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddExpectedModal(true)}
+              className="flex flex-col items-center justify-center rounded-xl p-4 border-2 border-dashed border-slate-700 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-colors cursor-pointer min-h-[120px]"
+              data-testid="button-add-participant-card"
+            >
+              <div className="w-14 h-14 rounded-full flex items-center justify-center bg-emerald-500/20">
+                <Plus className="w-6 h-6 text-emerald-400" />
+              </div>
+              <p className="font-medium text-sm mt-2 text-emerald-400">Add</p>
+            </button>
+          )}
         </div>
       </div>
 
