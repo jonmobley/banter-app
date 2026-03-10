@@ -239,7 +239,7 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
 //     }
 //
 //     public func flicButton(_ button: FLICButton, didReceiveButtonDoubleClick queued: Bool, age: Int) {
-//         // Intentionally not mapped — avoids accidental triggers during long PTT holds
+//         notifyListeners("flicDoubleClick", data: ["uuid": button.uuid])
 //     }
 //
 //     public func flicButton(_ button: FLICButton, didReceiveButtonHold queued: Bool, age: Int) {

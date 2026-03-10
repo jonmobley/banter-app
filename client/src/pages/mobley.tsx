@@ -1595,6 +1595,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     if (connectionState !== ConnectionState.Connected) return;
     let pttPressedHandle: any = null;
     let pttReleasedHandle: any = null;
+    let flicDoubleClickHandle: any = null;
     let active = true;
     const setupHardwarePTT = async () => {
       try {
@@ -1608,6 +1609,13 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         pttReleasedHandle = await PushToTalk.addListener('hardwarePTTReleased', () => {
           if (talkMode === 'ptt') stopTalking();
         });
+        flicDoubleClickHandle = await PushToTalk.addListener('flicDoubleClick', () => {
+          if (talkMode === 'always') {
+            changeTalkMode('ptt');
+          } else {
+            changeTalkMode('always');
+          }
+        });
       } catch {
         // Plugin not available (running in browser without Capacitor)
       }
@@ -1619,13 +1627,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         try {
           if (pttPressedHandle) await pttPressedHandle.remove();
           if (pttReleasedHandle) await pttReleasedHandle.remove();
+          if (flicDoubleClickHandle) await flicDoubleClickHandle.remove();
           const { PushToTalk } = await import('capacitor-pushtotalk');
           await PushToTalk.disableHardwarePTT();
         } catch {}
       };
       cleanup();
     };
-  }, [connectionState, talkMode, startTalking, stopTalking, toggleMute]);
+  }, [connectionState, talkMode, startTalking, stopTalking, toggleMute, changeTalkMode]);
 
   const isConnected = connectionState === ConnectionState.Connected;
   const isConnecting = connectionState === ConnectionState.Connecting;
