@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
@@ -1368,7 +1368,41 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [showAddExpectedModal, setShowAddExpectedModal] = useState(false);
   const [newExpectedName, setNewExpectedName] = useState("");
   const [newExpectedPhone, setNewExpectedPhone] = useState("");
+  const [addParticipantSearch, setAddParticipantSearch] = useState("");
+  const [showManualAdd, setShowManualAdd] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const { data: allUsersData } = useQuery<{ id: number; name: string; phone: string | null; email: string | null }[]>({
+    queryKey: ["/api/users"],
+    queryFn: async () => {
+      const token = localStorage.getItem('banter_auth_token') || '';
+      const res = await fetch("/api/users", {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: showAddExpectedModal && isAdmin,
+  });
+
+  const addExpectedByUser = useMutation({
+    mutationFn: async (user: { name: string; phone: string | null; email: string | null }) => {
+      const res = await fetch("/api/expected", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authToken, name: user.name, phone: user.phone || '', email: user.email, banterId: currentBanterId || undefined }),
+      });
+      if (!res.ok) throw new Error("Failed to add");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
+      toast({ title: "Participant added" });
+    },
+    onError: () => {
+      toast({ title: "Failed to add participant", variant: "destructive" });
+    },
+  });
 
   const addExpected = useMutation({
     mutationFn: async () => {
@@ -1382,7 +1416,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
-      setShowAddExpectedModal(false);
+      setShowManualAdd(false);
       setNewExpectedName("");
       setNewExpectedPhone("");
       toast({ title: "Participant added" });
@@ -3064,44 +3098,122 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {showAddExpectedModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowAddExpectedModal(false); }}>
-          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-            <h2 className="text-xl font-bold text-center mb-6" data-testid="text-add-participant-title">Add Participant</h2>
-            <div className="space-y-4 mb-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) { setShowAddExpectedModal(false); setAddParticipantSearch(""); setShowManualAdd(false); }}}>
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-sm max-h-[85vh] flex flex-col">
+            <h2 className="text-xl font-bold text-center mb-4" data-testid="text-add-participant-title">Add Participant</h2>
+            
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Name"
-                value={newExpectedName}
-                onChange={(e) => setNewExpectedName(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
-                data-testid="input-expected-name"
-              />
-              <input
-                type="tel"
-                placeholder="Phone number"
-                value={newExpectedPhone}
-                onChange={(e) => setNewExpectedPhone(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
-                data-testid="input-expected-phone"
+                placeholder="Search people..."
+                value={addParticipantSearch}
+                onChange={(e) => setAddParticipantSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none text-sm"
+                data-testid="input-search-participants"
+                autoFocus
               />
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setShowAddExpectedModal(false); setNewExpectedName(""); setNewExpectedPhone(""); }}
-                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors"
-                data-testid="button-cancel-add-expected"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => addExpected.mutate()}
-                disabled={!newExpectedName || !newExpectedPhone}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors"
-                data-testid="button-save-expected"
-              >
-                Add
-              </button>
+
+            <div className="flex-1 overflow-y-auto min-h-0 mb-4 -mx-1 px-1">
+              {(() => {
+                const alreadyAdded = new Set(
+                  (expectedData || []).map(ep => ep.name.toLowerCase())
+                );
+                const filtered = (allUsersData || [])
+                  .filter(u => !alreadyAdded.has(u.name.toLowerCase()))
+                  .filter(u => {
+                    if (!addParticipantSearch) return true;
+                    const q = addParticipantSearch.toLowerCase();
+                    return u.name.toLowerCase().includes(q) || 
+                           (u.phone && u.phone.includes(q)) ||
+                           (u.email && u.email.toLowerCase().includes(q));
+                  });
+                
+                if (filtered.length === 0 && !addParticipantSearch) {
+                  return <p className="text-slate-500 text-sm text-center py-6">No users available to add</p>;
+                }
+                if (filtered.length === 0) {
+                  return <p className="text-slate-500 text-sm text-center py-6">No matching people found</p>;
+                }
+                return (
+                  <div className="space-y-1">
+                    {filtered.map(user => (
+                      <button
+                        key={user.id}
+                        onClick={() => addExpectedByUser.mutate({ name: user.name, phone: user.phone, email: user.email })}
+                        className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-slate-800 transition-colors text-left"
+                        data-testid={`button-add-user-${user.id}`}
+                      >
+                        <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                          <span className="text-sm font-medium text-emerald-400">{user.name.charAt(0).toUpperCase()}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white truncate">{user.name}</p>
+                          <p className="text-xs text-slate-500 truncate">{user.phone || user.email || ''}</p>
+                        </div>
+                        <Plus className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
+
+            {showManualAdd ? (
+              <div className="space-y-3 mb-4 pt-3 border-t border-slate-800">
+                <input
+                  type="text"
+                  placeholder="Name"
+                  value={newExpectedName}
+                  onChange={(e) => setNewExpectedName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none text-sm"
+                  data-testid="input-expected-name"
+                />
+                <input
+                  type="tel"
+                  placeholder="Phone number"
+                  value={newExpectedPhone}
+                  onChange={(e) => setNewExpectedPhone(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none text-sm"
+                  data-testid="input-expected-phone"
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setShowManualAdd(false); setNewExpectedName(""); setNewExpectedPhone(""); }}
+                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors text-sm"
+                    data-testid="button-cancel-manual-add"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => addExpected.mutate()}
+                    disabled={!newExpectedName || !newExpectedPhone}
+                    className="flex-1 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors text-sm"
+                    data-testid="button-save-expected"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowManualAdd(true)}
+                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-3 rounded-full transition-colors text-sm mb-4"
+                data-testid="button-show-manual-add"
+              >
+                <UserPlus className="w-4 h-4" />
+                Add New Person
+              </button>
+            )}
+
+            <button
+              onClick={() => { setShowAddExpectedModal(false); setAddParticipantSearch(""); setShowManualAdd(false); setNewExpectedName(""); setNewExpectedPhone(""); }}
+              className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
+              data-testid="button-close-add-expected"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}
