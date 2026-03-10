@@ -23,7 +23,7 @@ export type ParticipantRole = typeof participantRoles[number];
 export const expectedParticipants = pgTable("expected_participants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  phone: text("phone").notNull(),
+  phone: text("phone").notNull().default(''),
   email: text("email"),
   role: text("role").notNull().default('participant'),
   banterId: varchar("banter_id"),

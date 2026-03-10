@@ -1368,6 +1368,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [showAddExpectedModal, setShowAddExpectedModal] = useState(false);
   const [newExpectedName, setNewExpectedName] = useState("");
   const [newExpectedPhone, setNewExpectedPhone] = useState("");
+  const [newExpectedEmail, setNewExpectedEmail] = useState("");
   const [addParticipantSearch, setAddParticipantSearch] = useState("");
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -1383,6 +1384,38 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       return res.json();
     },
     enabled: showAddExpectedModal && isAdmin,
+  });
+
+  const { data: groupsData } = useQuery<{ id: string; name: string; memberIds: string[] }[]>({
+    queryKey: ["/api/groups"],
+    queryFn: async () => {
+      const token = localStorage.getItem('banter_auth_token') || '';
+      const res = await fetch("/api/groups", {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: showAddExpectedModal && isAdmin,
+  });
+
+  const addGroupToBanter = useMutation({
+    mutationFn: async (groupId: string) => {
+      const res = await fetch("/api/expected/add-group", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authToken, groupId, banterId: currentBanterId || undefined }),
+      });
+      if (!res.ok) throw new Error("Failed to add group");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
+      toast({ title: `${data.added} participant${data.added !== 1 ? 's' : ''} added` });
+    },
+    onError: () => {
+      toast({ title: "Failed to add group", variant: "destructive" });
+    },
   });
 
   const addExpectedByUser = useMutation({
@@ -1409,7 +1442,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       const res = await fetch("/api/expected", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authToken, name: newExpectedName, phone: newExpectedPhone, banterId: currentBanterId || undefined }),
+        body: JSON.stringify({ authToken, name: newExpectedName, phone: newExpectedPhone || undefined, email: newExpectedEmail || undefined, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error("Failed to add");
       return res.json();
@@ -1419,6 +1452,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setShowManualAdd(false);
       setNewExpectedName("");
       setNewExpectedPhone("");
+      setNewExpectedEmail("");
       toast({ title: "Participant added" });
     },
     onError: () => {
@@ -3109,6 +3143,27 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             </div>
 
             <div className="flex-1 overflow-y-auto min-h-0 mb-4 -mx-1 px-1">
+              {groupsData && groupsData.length > 0 && !addParticipantSearch && (
+                <div className="mb-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide mb-2 px-1">Groups</p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {groupsData.map(g => (
+                      <button
+                        key={g.id}
+                        onClick={() => addGroupToBanter.mutate(g.id)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm transition-colors"
+                        data-testid={`button-add-group-${g.id}`}
+                      >
+                        <Users className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-white">{g.name}</span>
+                        <span className="text-slate-500">({g.memberIds.length})</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-slate-800 mb-3" />
+                  <p className="text-xs text-slate-500 uppercase tracking-wide mb-2 px-1">People</p>
+                </div>
+              )}
               {(() => {
                 const alreadyAdded = new Set(
                   (expectedData || []).map(ep => ep.name.toLowerCase())
@@ -3171,9 +3226,17 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none text-sm"
                   data-testid="input-expected-phone"
                 />
+                <input
+                  type="email"
+                  placeholder="Email (optional if phone provided)"
+                  value={newExpectedEmail}
+                  onChange={(e) => setNewExpectedEmail(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none text-sm"
+                  data-testid="input-expected-email"
+                />
                 <div className="flex gap-3">
                   <button
-                    onClick={() => { setShowManualAdd(false); setNewExpectedName(""); setNewExpectedPhone(""); }}
+                    onClick={() => { setShowManualAdd(false); setNewExpectedName(""); setNewExpectedPhone(""); setNewExpectedEmail(""); }}
                     className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors text-sm"
                     data-testid="button-cancel-manual-add"
                   >
@@ -3181,7 +3244,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   </button>
                   <button
                     onClick={() => addExpected.mutate()}
-                    disabled={!newExpectedName || !newExpectedPhone}
+                    disabled={!newExpectedName || (!newExpectedPhone && !newExpectedEmail)}
                     className="flex-1 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors text-sm"
                     data-testid="button-save-expected"
                   >

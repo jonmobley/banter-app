@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Calendar, Clock, Bell, X, Trash2, Users, Radio, Copy, Check } from "lucide-react";
+import { ArrowLeft, Plus, Calendar, Clock, Bell, X, Trash2, Users, Radio, Copy, Check, Search } from "lucide-react";
 import { Link, useLocation } from "wouter";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ExpectedParticipant {
@@ -65,6 +65,8 @@ export default function Schedule() {
   const [reminderEnabled, setReminderEnabled] = useState(true);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [banterSearchQuery, setBanterSearchQuery] = useState("");
+  const [participantSearchQuery, setParticipantSearchQuery] = useState("");
   
   const handleConfirmDelete = () => {
     if (confirmDeleteId) {
@@ -168,6 +170,7 @@ export default function Schedule() {
     setAutoCallEnabled(false);
     setReminderEnabled(true);
     setSelectedParticipants([]);
+    setParticipantSearchQuery("");
   };
 
   const toggleParticipant = (id: string) => {
@@ -185,8 +188,28 @@ export default function Schedule() {
     });
   };
 
+  const activeBanters = banters.filter(b => b.status === 'active');
   const pendingBanters = banters.filter(b => b.status === 'pending');
-  const pastBanters = banters.filter(b => b.status !== 'pending');
+  const pastBanters = banters.filter(b => b.status !== 'pending' && b.status !== 'active');
+
+  const filterBanters = (list: ScheduledBanter[]) => {
+    if (!banterSearchQuery.trim()) return list;
+    const q = banterSearchQuery.toLowerCase();
+    return list.filter(b => b.name.toLowerCase().includes(q));
+  };
+
+  const filteredActive = filterBanters(activeBanters);
+  const filteredPending = filterBanters(pendingBanters);
+  const filteredPast = filterBanters(pastBanters);
+
+  const filteredParticipants = useMemo(() => {
+    if (!participantSearchQuery.trim()) return expectedParticipants;
+    const q = participantSearchQuery.toLowerCase();
+    return expectedParticipants.filter(p => p.name.toLowerCase().includes(q));
+  }, [expectedParticipants, participantSearchQuery]);
+
+  const hasAnyBanters = banters.length > 0;
+  const hasFilteredResults = filteredActive.length > 0 || filteredPending.length > 0 || filteredPast.length > 0;
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
@@ -223,7 +246,7 @@ export default function Schedule() {
               </div>
             ))}
           </div>
-        ) : pendingBanters.length === 0 && pastBanters.length === 0 ? (
+        ) : !hasAnyBanters ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Calendar className="w-16 h-16 text-slate-600 mb-4" />
             <h2 className="text-lg font-medium text-slate-400 mb-2">No Scheduled Banters</h2>
@@ -239,11 +262,103 @@ export default function Schedule() {
           </div>
         ) : (
           <div className="space-y-6">
-            {pendingBanters.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <input
+                type="text"
+                value={banterSearchQuery}
+                onChange={(e) => setBanterSearchQuery(e.target.value)}
+                placeholder="Search banters..."
+                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700/50 focus:border-emerald-500 outline-none text-sm transition-colors"
+                style={{ fontSize: '16px' }}
+                data-testid="input-search-banters"
+              />
+            </div>
+
+            {!hasFilteredResults && banterSearchQuery.trim() && (
+              <div className="text-center py-8">
+                <p className="text-sm text-slate-500">No banters matching "{banterSearchQuery}"</p>
+              </div>
+            )}
+
+            {filteredActive.length > 0 && (
+              <div>
+                <h2 className="text-sm font-medium text-emerald-400 uppercase tracking-wide mb-3">Active Now</h2>
+                <div className="space-y-3">
+                  {filteredActive.map(banter => (
+                    <div 
+                      key={banter.id} 
+                      className="bg-slate-800/50 rounded-xl p-4 border border-emerald-500/30"
+                      data-testid={`banter-${banter.id}`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <span className="relative flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                          </span>
+                          <div>
+                            <h3 className="font-medium text-lg">{banter.name}</h3>
+                            <div className="flex items-center gap-2 text-sm text-slate-400 mt-1">
+                              <Clock className="w-4 h-4" />
+                              {formatDateTime(banter.scheduledAt)}
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setConfirmDeleteId(banter.id)}
+                          className="p-2 rounded-lg hover:bg-slate-700 transition-colors"
+                          data-testid={`button-delete-${banter.id}`}
+                        >
+                          <Trash2 className="w-4 h-4 text-red-400" />
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full flex items-center gap-1">
+                          <Radio className="w-3 h-3" />
+                          Live
+                        </span>
+                        <span className="text-xs bg-slate-700 text-slate-300 px-2 py-1 rounded-full flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          {banter.participantIds.length} participants
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Link
+                          href={`/join/${banter.slug}`}
+                          className="flex items-center justify-center gap-2 flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-2.5 rounded-full transition-colors"
+                          data-testid={`button-join-${banter.id}`}
+                        >
+                          <Radio className="w-4 h-4" />
+                          Join Banter
+                        </Link>
+                        <button
+                          onClick={() => {
+                            const url = `${window.location.origin}/join/${banter.slug}`;
+                            navigator.clipboard.writeText(url).then(() => {
+                              toast({ title: 'Link copied!' });
+                            }).catch(() => {
+                              toast({ title: 'Failed to copy link', variant: 'destructive' });
+                            });
+                          }}
+                          className="flex items-center justify-center px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-full transition-colors"
+                          data-testid={`button-copy-link-${banter.id}`}
+                          title="Copy join link"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {filteredPending.length > 0 && (
               <div>
                 <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wide mb-3">Upcoming</h2>
                 <div className="space-y-3">
-                  {pendingBanters.map(banter => (
+                  {filteredPending.map(banter => (
                     <div 
                       key={banter.id} 
                       className="bg-slate-800/50 rounded-xl p-4"
@@ -314,11 +429,11 @@ export default function Schedule() {
               </div>
             )}
 
-            {pastBanters.length > 0 && (
+            {filteredPast.length > 0 && (
               <div>
                 <h2 className="text-sm font-medium text-slate-400 uppercase tracking-wide mb-3">Past</h2>
                 <div className="space-y-3">
-                  {pastBanters.map(banter => (
+                  {filteredPast.map(banter => (
                     <div 
                       key={banter.id} 
                       className="bg-slate-800/30 rounded-xl p-4 opacity-60"
@@ -346,8 +461,17 @@ export default function Schedule() {
       </div>
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-end justify-center z-50">
-          <div className="bg-slate-900 rounded-t-3xl w-full max-w-lg max-h-[90vh] max-h-[90dvh] overflow-auto">
+        <div
+          className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowCreateModal(false);
+              resetModal();
+            }
+          }}
+          data-testid="modal-backdrop-create"
+        >
+          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl w-full max-w-lg max-h-[90vh] max-h-[90dvh] overflow-auto">
             <div className="sticky top-0 bg-slate-900 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
               <h2 className="text-xl font-bold">Schedule a Banter</h2>
               <button
@@ -448,9 +572,24 @@ export default function Schedule() {
                     </div>
                   </div>
                 )}
+
+                {expectedParticipants.length > 5 && (
+                  <div className="relative mb-2">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input
+                      type="text"
+                      value={participantSearchQuery}
+                      onChange={(e) => setParticipantSearchQuery(e.target.value)}
+                      placeholder="Search participants..."
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50 focus:border-emerald-500 outline-none text-sm transition-colors"
+                      style={{ fontSize: '16px' }}
+                      data-testid="input-search-participants"
+                    />
+                  </div>
+                )}
                 
                 <div className="space-y-2 max-h-40 overflow-auto">
-                  {expectedParticipants.map(p => (
+                  {filteredParticipants.map(p => (
                     <label 
                       key={p.id}
                       className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
@@ -474,6 +613,11 @@ export default function Schedule() {
                       <span className="font-medium">{p.name}</span>
                     </label>
                   ))}
+                  {expectedParticipants.length > 0 && filteredParticipants.length === 0 && participantSearchQuery.trim() && (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-slate-500">No participants matching "{participantSearchQuery}"</p>
+                    </div>
+                  )}
                   {expectedParticipants.length === 0 && (
                     <div className="text-center py-4">
                       <p className="text-sm text-slate-500 mb-2">
@@ -542,7 +686,15 @@ export default function Schedule() {
       )}
       
       {confirmDeleteId && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div
+          className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setConfirmDeleteId(null);
+            }
+          }}
+          data-testid="modal-backdrop-delete"
+        >
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-2">Cancel Banter?</h2>
             <p className="text-sm text-slate-400 text-center mb-6">

@@ -19,7 +19,7 @@ Banter is a web-based walkie-talkie/audio conference application that enables re
 - **State Management**: TanStack React Query
 - **Styling**: Tailwind CSS v4 with shadcn/ui (New York style)
 - **Build Tool**: Vite
-- **PWA Support**: `manifest.json`, service worker, and meta tags for "Add to Home Screen".
+- **PWA Support**: `manifest.json`, service worker with offline caching (cache-first for static assets, network-first for navigation), and meta tags for "Add to Home Screen".
 - **Wake Lock**: Screen stays awake during active calls.
 
 ### Backend Architecture
@@ -79,7 +79,7 @@ Each Scheduled Banter is a fully isolated session with its own:
 - **Supporting Concepts**: Banter Groups (saved contact lists), Admin, Host, Participant, Listener roles.
 - **Authentication**: Email or phone-based magic code login. Admin status determined by phone number verification.
 - **User Profiles**: Server-side `users` table stores name, phone, email. Names persist across devices/browsers. Profile auto-created on first login or when admin adds a user. Name returned in verify-code response and saved to server when user connects or edits profile.
-- **Scheduling**: SMS reminder system and background scheduler for auto-activating scheduled banters. SMS includes banter-specific join links. Schedule page validates against past dates.
+- **Scheduling**: SMS + email reminder system and background scheduler for auto-activating scheduled banters. SMS includes banter-specific join links. Email fallback for participants without phone numbers via Resend. Schedule page validates against past dates, has search/filter, active banter indicators, and participant search in create modal.
 - **Security**: Strict E.164 phone number matching, API rate limiting, bearer token authentication for all API access (including GET /api/participants, GET /api/speaking, GET /api/channels/all-call), and database transactions for critical operations (deleteGroup, deleteChannel).
 - **Live Event Crew Features**: Self-service channel switching, all-call broadcast, PWA support, Wake Lock, and "Notify Group" SMS functionality.
 - **Share Links**: Each scheduled banter has a unique `/join/{slug}` URL. "Copy Link" button on the schedule page.
@@ -101,7 +101,8 @@ All endpoints below accept `banterId` to scope to a specific scheduled banter:
 - `POST /api/channels` — accepts `banterId` to create scoped channel
 - `POST /api/channels/:id/assign`, `POST /api/channels/unassign`, `POST /api/channels/switch` — scoped by `banterId`
 - `POST /api/channels/all-call`, `POST /api/broadcast`, `POST /api/broadcast/grant` — scoped by `banterId`
-- `POST /api/alert-crew` — generates banter-specific join link in SMS
+- `POST /api/expected/add-group` — bulk-add all members of a group as expected participants
+- `POST /api/alert-crew` — generates banter-specific join link in SMS/email
 - `GET /api/banters/by-slug/:slug` — resolves a banter by its slug (no auth required)
 - `GET /api/user/profile` — get current user's profile (auth required)
 - `POST /api/user/profile` — save/update current user's name (auth required, creates user if needed)

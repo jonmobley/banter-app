@@ -949,14 +949,64 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Unauthorized" });
       }
       
-      if (!name || !phone) {
-        return res.status(400).json({ error: "Name and phone are required" });
+      const email = req.body.email;
+      if (!name || (!phone && !email)) {
+        return res.status(400).json({ error: "Name and either phone or email are required" });
       }
-      const participant = await storage.addExpectedParticipant({ name, phone, banterId: banterId || null });
+      const participant = await storage.addExpectedParticipant({ name, phone: phone || '', email: email || null, banterId: banterId || null });
       res.json(participant);
     } catch (error: any) {
       log(`Error adding expected participant: ${error.message}`, "api");
       res.status(500).json({ error: "Failed to add expected participant" });
+    }
+  });
+
+  /**
+   * POST /api/expected/add-group
+   * Adds all members of a group as expected participants for a banter.
+   */
+  app.post("/api/expected/add-group", async (req, res) => {
+    try {
+      const { authToken: clientAuthToken, groupId, banterId } = req.body;
+      if (!verifyAdminAuth(clientAuthToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (!groupId) {
+        return res.status(400).json({ error: "groupId is required" });
+      }
+
+      const members = await storage.getGroupMembers(groupId);
+      const existingExpected = await storage.getExpectedParticipants(banterId || null);
+      const existingKeys = new Set<string>();
+      for (const ep of existingExpected) {
+        if (ep.phone) existingKeys.add(`phone:${ep.phone}`);
+        if (ep.email) existingKeys.add(`email:${ep.email.toLowerCase()}`);
+        existingKeys.add(`name:${ep.name.toLowerCase()}`);
+      }
+
+      const added: any[] = [];
+      for (const member of members) {
+        const participant = await storage.getExpectedParticipant(member.participantId);
+        if (!participant) continue;
+        const phoneKey = participant.phone ? `phone:${participant.phone}` : null;
+        const emailKey = participant.email ? `email:${participant.email.toLowerCase()}` : null;
+        if ((phoneKey && existingKeys.has(phoneKey)) || (emailKey && existingKeys.has(emailKey))) continue;
+
+        const newParticipant = await storage.addExpectedParticipant({
+          name: participant.name,
+          phone: participant.phone || '',
+          email: participant.email,
+          banterId: banterId || null,
+        });
+        added.push(newParticipant);
+        if (phoneKey) existingKeys.add(phoneKey);
+        if (emailKey) existingKeys.add(emailKey);
+      }
+
+      res.json({ added: added.length, participants: added });
+    } catch (error: any) {
+      log(`Error adding group to banter: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to add group members" });
     }
   });
 
@@ -1639,36 +1689,45 @@ export async function registerRoutes(
       const joinLink = baseUrl ? `${baseUrl}${joinPath}` : 'your Banter link';
 
       const bId = banterId || null;
-      let targets: { name: string; phone: string }[] = [];
+      let targets: { name: string; phone: string; email?: string | null }[] = [];
 
-      if (participantIds && Array.isArray(participantIds) && participantIds.length > 0) {
-        const allExpected = await storage.getExpectedParticipants(bId);
-        targets = allExpected
-          .filter(p => participantIds.includes(p.id) && p.phone)
-          .map(p => ({ name: p.name, phone: p.phone }));
-      } else {
-        const allExpected = await storage.getExpectedParticipants(bId);
-        targets = allExpected
-          .filter(p => p.phone)
-          .map(p => ({ name: p.name, phone: p.phone }));
-      }
+      const allExpected = await storage.getExpectedParticipants(bId);
+      const filtered = participantIds && Array.isArray(participantIds) && participantIds.length > 0
+        ? allExpected.filter(p => participantIds.includes(p.id))
+        : allExpected;
+      targets = filtered
+        .filter(p => (p.phone && p.phone.trim() !== '') || p.email)
+        .map(p => ({ name: p.name, phone: p.phone, email: p.email }));
 
       if (targets.length === 0) {
-        return res.status(400).json({ error: "No participants with phone numbers to alert" });
+        return res.status(400).json({ error: "No participants with phone or email to alert" });
       }
 
       const { sendAlertSMS } = await import('./twilio-sms.js');
+      const { sendAlertEmail } = await import('./resend-email.js');
       let sent = 0;
       let failed = 0;
       for (const target of targets) {
-        const normalizedPhone = normalizePhone(target.phone);
-        const success = await sendAlertSMS(normalizedPhone, joinLink);
-        if (success) {
-          sent++;
-          log(`📲 Alert SMS sent to ${target.name} (${normalizedPhone})`, "alert");
-        } else {
-          failed++;
-          log(`📲 Alert SMS failed for ${target.name} (${normalizedPhone})`, "alert");
+        const hasPhone = target.phone && target.phone.trim() !== '';
+        if (hasPhone) {
+          const normalizedPhone = normalizePhone(target.phone);
+          const success = await sendAlertSMS(normalizedPhone, joinLink);
+          if (success) {
+            sent++;
+            log(`📲 Alert SMS sent to ${target.name} (${normalizedPhone})`, "alert");
+          } else {
+            failed++;
+            log(`📲 Alert SMS failed for ${target.name} (${normalizedPhone})`, "alert");
+          }
+        } else if (target.email) {
+          const success = await sendAlertEmail(target.email, joinLink);
+          if (success) {
+            sent++;
+            log(`📧 Alert email sent to ${target.name} (${target.email})`, "alert");
+          } else {
+            failed++;
+            log(`📧 Alert email failed for ${target.name} (${target.email})`, "alert");
+          }
         }
       }
 

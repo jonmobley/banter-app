@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { log } from "./index";
 import { sendReminderSMS } from "./twilio-sms";
+import { sendReminderEmail } from "./resend-email";
 import { normalizePhone } from "@shared/schema";
 
 let schedulerInterval: NodeJS.Timeout | null = null;
@@ -45,12 +46,26 @@ export async function startScheduler(getHost: () => string) {
         for (const participant of participants) {
           if (!participant) continue;
           try {
-            const normalizedPhone = normalizePhone(participant.phone);
-            const sent = await sendReminderSMS(normalizedPhone, banter.name, minutesUntilStart, joinLink || undefined);
-            if (sent) {
-              log(`📱 Reminder sent to ${participant.name} (${participant.phone})`, "scheduler");
+            const hasPhone = participant.phone && participant.phone.trim() !== '';
+            if (hasPhone) {
+              const normalizedPhone = normalizePhone(participant.phone);
+              const sent = await sendReminderSMS(normalizedPhone, banter.name, minutesUntilStart, joinLink || undefined);
+              if (sent) {
+                log(`📱 Reminder sent to ${participant.name} (${participant.phone})`, "scheduler");
+              } else {
+                log(`⚠️ Failed to send SMS reminder to ${participant.name}`, "scheduler");
+                allSent = false;
+              }
+            } else if (participant.email) {
+              const sent = await sendReminderEmail(participant.email, banter.name, minutesUntilStart, joinLink || undefined);
+              if (sent) {
+                log(`📧 Email reminder sent to ${participant.name} (${participant.email})`, "scheduler");
+              } else {
+                log(`⚠️ Failed to send email reminder to ${participant.name}`, "scheduler");
+                allSent = false;
+              }
             } else {
-              log(`⚠️ Failed to send reminder to ${participant.name}`, "scheduler");
+              log(`⚠️ No phone or email for ${participant.name}, skipping reminder`, "scheduler");
               allSent = false;
             }
           } catch (err: any) {
@@ -83,10 +98,18 @@ export async function startScheduler(getHost: () => string) {
           for (const participant of participants) {
             if (!participant) continue;
             try {
-              const normalizedPhone = normalizePhone(participant.phone);
-              const sent = await sendReminderSMS(normalizedPhone, banter.name, 0, startLink || undefined);
-              if (sent) {
-                log(`📱 Start notification sent to ${participant.name}`, "scheduler");
+              const hasStartPhone = participant.phone && participant.phone.trim() !== '';
+              if (hasStartPhone) {
+                const normalizedPhone = normalizePhone(participant.phone);
+                const sent = await sendReminderSMS(normalizedPhone, banter.name, 0, startLink || undefined);
+                if (sent) {
+                  log(`📱 Start notification sent to ${participant.name}`, "scheduler");
+                }
+              } else if (participant.email) {
+                const sent = await sendReminderEmail(participant.email, banter.name, 0, startLink || undefined);
+                if (sent) {
+                  log(`📧 Start email sent to ${participant.name}`, "scheduler");
+                }
               }
             } catch (err: any) {
               log(`⚠️ Error sending start notification to ${participant.name}: ${err.message}`, "scheduler");
