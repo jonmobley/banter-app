@@ -2114,7 +2114,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       </header>
 
       <div className="flex-1 overflow-auto px-4 pb-48">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
+        <div className={`grid gap-3 mt-4 ${participants.length === 1 ? 'grid-cols-1 max-w-[50%] mx-auto' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
           {participants.map((p, i) => {
             const isSpeaking = speakingState[p.identity] || false;
             const role = getParticipantRole(p.identity);
@@ -2499,31 +2499,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   />
                 </div>
               )}
-              {(() => {
-                const otherParticipants = realParticipants.filter(p => {
-                  const normalizedName = userName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
-                  return p.identity !== normalizedName && p.name !== userName;
-                });
-                return otherParticipants.length > 0 ? (
-                <div className="bg-slate-800/50 rounded-2xl p-4" data-testid="prejoin-participant-list">
-                  <p className="text-xs text-slate-400 mb-3 text-center">{otherParticipants.length} {otherParticipants.length === 1 ? 'person' : 'people'} on now</p>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {otherParticipants.map((p) => (
-                      <div
-                        key={p.identity}
-                        className="flex items-center gap-1.5 bg-slate-700/50 px-3 py-1.5 rounded-full"
-                        data-testid={`prejoin-participant-${p.identity}`}
-                      >
-                        <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                          <User className="w-3 h-3 text-emerald-400" />
-                        </div>
-                        <span className="text-sm text-white">{p.name || p.identity}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null;
-              })()}
               <button
                 onClick={() => {
                   unlockAudio();
