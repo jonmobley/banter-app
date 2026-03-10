@@ -83,6 +83,8 @@ Each Scheduled Banter is a fully isolated session with its own:
 - **Security**: Strict E.164 phone number matching, API rate limiting, bearer token authentication for all API access (including GET /api/participants, GET /api/speaking, GET /api/channels/all-call), and database transactions for critical operations (deleteGroup, deleteChannel).
 - **Live Event Crew Features**: Self-service channel switching, all-call broadcast, PWA support, Wake Lock, and "Notify Group" SMS functionality.
 - **Share Links**: Each scheduled banter has a unique `/join/{slug}` URL. "Copy Link" button on the schedule page.
+- **Admin Groups Management**: Admin page at `/admin` includes a Groups section — create groups, rename, delete, add/remove users as members. Groups use user IDs as `participantId` in `group_members` table. Expandable group cards show current members with remove buttons and non-member users as add buttons.
+- **Pre-join Participant List**: The connect screen shows who's already on the banter (name chips with count) before joining, visible to logged-in users.
 - **Navigation**: Logout available from account, admin, and mobley pages. Admin page discoverable from account page for admin users. 404 page has user-friendly messaging with "Go Home" link.
 
 ### Shared Utilities
