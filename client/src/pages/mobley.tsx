@@ -2233,7 +2233,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   return (
     <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden">
-      <header className="relative flex items-center justify-between p-4 pb-6 pt-safe border-b border-slate-800 flex-shrink-0">
+      <header className="relative flex items-end justify-between p-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0 min-h-[72px]">
         <div className="flex items-center gap-2">
           {isAdmin && (
             <button
@@ -2256,7 +2256,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             </button>
           )}
         </div>
-        <div className="absolute left-0 right-0 bottom-3 flex justify-center pointer-events-none">
+        <div className="absolute left-0 right-0 bottom-2 flex justify-center pointer-events-none">
           <div className="text-center">
             <div className="flex items-center justify-center gap-2">
               <h1 className="font-semibold truncate" data-testid="text-banter-title">{banterInfo ? banterInfo.name : 'Banter'}</h1>
