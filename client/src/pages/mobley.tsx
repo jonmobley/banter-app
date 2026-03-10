@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
@@ -1977,6 +1977,17 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 )}
                 {isSignedIn && (
                   <>
+                    {isAdmin && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setShowSettingsDropdown(false)}
+                        className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3 border-t border-slate-700"
+                        data-testid="menu-admin"
+                      >
+                        <Shield className="w-4 h-4 text-slate-400" />
+                        Admin
+                      </Link>
+                    )}
                     <button
                       onClick={() => { 
                         setProfileName(userName);
@@ -1984,7 +1995,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                         setShowMyProfile(true); 
                         setShowSettingsDropdown(false); 
                       }}
-                      className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3 border-t border-slate-700"
+                      className={`w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3 ${!isAdmin ? 'border-t border-slate-700' : ''}`}
                       data-testid="button-my-profile"
                     >
                       <User className="w-4 h-4 text-slate-400" />
