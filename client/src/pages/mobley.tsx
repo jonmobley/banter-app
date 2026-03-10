@@ -2434,7 +2434,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
       {/* Modals */}
       {showDisconnectConfirm && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowDisconnectConfirm(false); }}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-6">Disconnect?</h2>
             <div className="flex gap-3">
@@ -2458,7 +2458,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {showAudioSettings && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowAudioSettings(false); }}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs max-h-[80vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-center mb-6">Audio Settings</h2>
             
@@ -2628,7 +2628,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {showChannelModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowChannelModal(false); }}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-md max-h-[80vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-center mb-6">Channels</h2>
             
@@ -2751,7 +2751,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {showChannelPicker && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowChannelPicker(false); }}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-sm">
             <h2 className="text-xl font-bold text-center mb-2" data-testid="text-channel-picker-title">Switch Channel</h2>
             <p className="text-sm text-slate-400 text-center mb-6">
@@ -2817,7 +2817,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {showLoginModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) { setShowLoginModal(false); }}}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-2">Sign In</h2>
             <p className="text-sm text-slate-400 text-center mb-6">
@@ -2915,7 +2915,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {showMyProfile && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowMyProfile(false); }}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-6">My Profile</h2>
             <div className="space-y-4 mb-6">
@@ -2992,7 +2992,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {showAddExpectedModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowAddExpectedModal(false); }}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-6" data-testid="text-add-participant-title">Add Participant</h2>
             <div className="space-y-4 mb-6">
@@ -3035,7 +3035,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {showProfileDrawer && editingParticipant && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowProfileDrawer(false); }}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-6" data-testid="text-edit-profile-title">Edit Profile</h2>
             <div className="space-y-4 mb-6">
@@ -3085,7 +3085,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {showAlertCrewConfirm && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowAlertCrewConfirm(false); }}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <div className="flex items-center justify-center mb-4">
               <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center">
@@ -3119,7 +3119,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {confirmDeleteId && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6">
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setConfirmDeleteId(null); }}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-6" data-testid="text-remove-participant-title">Remove Participant?</h2>
             <div className="flex gap-3">
