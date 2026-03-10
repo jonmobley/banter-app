@@ -425,8 +425,25 @@
   }
 }
 
-html, body {
+html {
   scroll-behavior: smooth;
   background-color: #020617;
+}
+
+body {
+  background-color: #020617;
   -webkit-overflow-scrolling: touch;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: -100px;
+  background-color: #020617;
+  z-index: -1;
+}
+
+#root {
+  background-color: #020617;
+  min-height: 100dvh;
 }
