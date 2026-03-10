@@ -1,5 +1,13 @@
 import type { PluginListenerHandle } from '@capacitor/core';
 
+export interface FlicButton {
+  uuid: string;
+  name: string;
+  serialNumber?: string;
+  connectionState?: 'connected' | 'connecting' | 'disconnected';
+  batteryVoltage?: number;
+}
+
 export interface PushToTalkPlugin {
   isAvailable(): Promise<{ available: boolean }>;
   requestPermission(): Promise<{ granted: boolean }>;
@@ -20,6 +28,10 @@ export interface PushToTalkPlugin {
 
   enableHardwarePTT(): Promise<void>;
   disableHardwarePTT(): Promise<void>;
+
+  scanForFlicButtons(): Promise<{ uuid: string; name: string }>;
+  stopScanForFlicButtons(): Promise<void>;
+  getFlicButtons(): Promise<{ buttons: FlicButton[] }>;
 
   addListener(
     eventName: 'transmissionStarted',
@@ -49,5 +61,30 @@ export interface PushToTalkPlugin {
   addListener(
     eventName: 'hardwarePTTReleased',
     listenerFunc: () => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'flicButtonFound',
+    listenerFunc: (data: { uuid: string; name: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'flicConnected',
+    listenerFunc: (data: { uuid: string; name: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'flicDisconnected',
+    listenerFunc: (data: { uuid: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'flicDoubleClick',
+    listenerFunc: (data: { uuid: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'flicHold',
+    listenerFunc: (data: { uuid: string }) => void
   ): Promise<PluginListenerHandle>;
 }

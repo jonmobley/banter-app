@@ -38,6 +38,7 @@ android {
 repositories {
     google()
     mavenCentral()
+    maven { url 'https://jitpack.io' }
 }
 
 dependencies {
@@ -45,4 +46,7 @@ dependencies {
     implementation project(':capacitor-android')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     testImplementation "junit:junit:$junitVersion"
+
+    // FLIC INTEGRATION - Uncomment to enable Flic 2 button support:
+    // implementation 'com.github.50ButtonsEach:flic2lib-android:2.+'
 }

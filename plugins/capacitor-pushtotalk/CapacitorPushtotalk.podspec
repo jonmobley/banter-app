@@ -15,6 +15,10 @@ Pod::Spec.new do |s|
   s.dependency 'Capacitor'
   s.swift_version = '5.1'
   
-  # PushToTalk framework
-  s.frameworks = 'PushToTalk', 'AVFoundation'
+  # Core frameworks
+  s.frameworks = 'AVFoundation', 'CoreBluetooth'
+
+  # Flic 2 SDK: manually add flic2lib.xcframework to Xcode project
+  # Download from: https://github.com/50ButtonsEach/flic2lib-ios
+  # Then drag into Frameworks, Libraries, and Embedded Content (Embed & Sign)
 end

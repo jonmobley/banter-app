@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import AVFoundation
+import CoreBluetooth
 
 @objc(PushToTalkPlugin)
 public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -16,14 +17,19 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setActiveRemoteParticipant", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "enableHardwarePTT", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "disableHardwarePTT", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "scanForFlicButtons", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopScanForFlicButtons", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getFlicButtons", returnType: CAPPluginReturnPromise),
     ]
 
     private var hardwarePTTEnabled = false
     private var isTransmitting = false
+    private var flicManagerInitialized = false
 
     override public func load() {
         super.load()
         configureAudioSession()
+        initializeFlicManager()
     }
 
     private func configureAudioSession() {
@@ -38,6 +44,92 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
         } catch {
             print("PushToTalk: Failed to configure audio session: \(error)")
         }
+    }
+
+    // MARK: - Flic 2 Integration
+    //
+    // The Flic 2 SDK (flic2lib) must be manually added to the Xcode project:
+    // 1. Download flic2lib.xcframework from https://github.com/50ButtonsEach/flic2lib-ios
+    // 2. Drag it into Frameworks, Libraries, and Embedded Content (Embed & Sign)
+    // 3. Register at https://partners.flic.io/ to get appID and appSecret
+    //
+    // Once flic2lib is available, uncomment the Flic integration code below.
+    // The button events feed into the same hardwarePTTPressed/hardwarePTTReleased
+    // pipeline that wired PTT accessories use.
+
+    private func initializeFlicManager() {
+        // FLIC INTEGRATION - Uncomment when flic2lib.xcframework is added to Xcode project:
+        //
+        // import flic2lib  (add at top of file)
+        //
+        // FLICManager.configure(with: self, buttonDelegate: self, background: true)
+        // flicManagerInitialized = true
+        // print("PushToTalk: Flic manager initialized")
+
+        print("PushToTalk: Flic SDK not yet linked — add flic2lib.xcframework to enable Flic button support")
+    }
+
+    @objc func scanForFlicButtons(_ call: CAPPluginCall) {
+        // FLIC INTEGRATION - Uncomment when flic2lib.xcframework is added:
+        //
+        // guard flicManagerInitialized else {
+        //     call.reject("Flic manager not initialized")
+        //     return
+        // }
+        // FLICManager.shared()?.scanForButtons(stateChangeHandler: { state in
+        //     switch state {
+        //     case .discovered:
+        //         print("PushToTalk: Flic button discovered")
+        //     case .connected:
+        //         print("PushToTalk: Flic button connected")
+        //     default:
+        //         break
+        //     }
+        // }, completion: { button, error in
+        //     if let button = button {
+        //         button.delegate = self
+        //         button.triggerMode = .clickAndDoubleClickAndHold
+        //         self.notifyListeners("flicButtonFound", data: [
+        //             "uuid": button.uuid,
+        //             "name": button.name ?? "Flic Button",
+        //             "serialNumber": button.serialNumber ?? ""
+        //         ])
+        //         call.resolve(["uuid": button.uuid, "name": button.name ?? "Flic Button"])
+        //     } else if let error = error {
+        //         call.reject("Flic scan failed: \(error.localizedDescription)")
+        //     }
+        // })
+
+        call.reject("Flic SDK not linked — add flic2lib.xcframework to enable Flic support")
+    }
+
+    @objc func stopScanForFlicButtons(_ call: CAPPluginCall) {
+        // FLIC INTEGRATION - Uncomment when flic2lib.xcframework is added:
+        // FLICManager.shared()?.stopScan()
+
+        call.resolve()
+    }
+
+    @objc func getFlicButtons(_ call: CAPPluginCall) {
+        // FLIC INTEGRATION - Uncomment when flic2lib.xcframework is added:
+        //
+        // guard let buttons = FLICManager.shared()?.buttons() else {
+        //     call.resolve(["buttons": []])
+        //     return
+        // }
+        // let buttonList = buttons.map { button -> [String: Any] in
+        //     return [
+        //         "uuid": button.uuid,
+        //         "name": button.name ?? "Flic Button",
+        //         "serialNumber": button.serialNumber ?? "",
+        //         "connectionState": button.state == .connected ? "connected" :
+        //                           button.state == .connecting ? "connecting" : "disconnected",
+        //         "batteryVoltage": button.batteryVoltage
+        //     ]
+        // }
+        // call.resolve(["buttons": buttonList])
+
+        call.resolve(["buttons": []])
     }
 
     // MARK: - Hardware PTT via Remote Control Events
@@ -114,3 +206,58 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve()
     }
 }
+
+// MARK: - Flic 2 Button Delegate Extensions
+//
+// FLIC INTEGRATION — Uncomment the extensions below when flic2lib.xcframework
+// is added to the Xcode project. These MUST be outside the class body (Swift
+// extensions cannot be nested inside a class declaration).
+//
+// import flic2lib  (add at top of file alongside other imports)
+//
+// extension PushToTalkPlugin: FLICButtonDelegate {
+//     public func flicButton(_ button: FLICButton, didReceiveButtonDown queued: Bool, age: Int) {
+//         guard hardwarePTTEnabled else { return }
+//         if !isTransmitting {
+//             isTransmitting = true
+//             notifyListeners("hardwarePTTPressed", data: [:])
+//         }
+//     }
+//
+//     public func flicButton(_ button: FLICButton, didReceiveButtonUp queued: Bool, age: Int) {
+//         guard hardwarePTTEnabled else { return }
+//         if isTransmitting {
+//             isTransmitting = false
+//             notifyListeners("hardwarePTTReleased", data: [:])
+//         }
+//     }
+//
+//     public func flicButton(_ button: FLICButton, didReceiveButtonClick queued: Bool, age: Int) {
+//         // Single click handled by down/up for PTT
+//     }
+//
+//     public func flicButton(_ button: FLICButton, didReceiveButtonDoubleClick queued: Bool, age: Int) {
+//         notifyListeners("flicDoubleClick", data: ["uuid": button.uuid])
+//     }
+//
+//     public func flicButton(_ button: FLICButton, didReceiveButtonHold queued: Bool, age: Int) {
+//         notifyListeners("flicHold", data: ["uuid": button.uuid])
+//     }
+//
+//     public func flicButton(_ button: FLICButton, didDisconnectWithError error: Error?) {
+//         notifyListeners("flicDisconnected", data: ["uuid": button.uuid])
+//     }
+//
+//     public func flicButton(_ button: FLICButton, didConnect complete: Bool) {
+//         notifyListeners("flicConnected", data: ["uuid": button.uuid, "name": button.name ?? "Flic Button"])
+//     }
+// }
+//
+// extension PushToTalkPlugin: FLICManagerDelegate {
+//     public func managerDidRestoreState(_ manager: FLICManager) {
+//         for button in manager.buttons() {
+//             button.delegate = self
+//             button.triggerMode = .clickAndDoubleClickAndHold
+//         }
+//     }
+// }

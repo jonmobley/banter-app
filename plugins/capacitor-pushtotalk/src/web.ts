@@ -1,6 +1,6 @@
 import { WebPlugin } from '@capacitor/core';
 
-import type { PushToTalkPlugin } from './definitions';
+import type { PushToTalkPlugin, FlicButton } from './definitions';
 
 export class PushToTalkWeb extends WebPlugin implements PushToTalkPlugin {
   private mediaSessionActive = false;
@@ -65,5 +65,17 @@ export class PushToTalkWeb extends WebPlugin implements PushToTalkPlugin {
       this.mediaSessionActive = false;
     }
     console.log('PushToTalk: Hardware PTT disabled');
+  }
+
+  async scanForFlicButtons(): Promise<{ uuid: string; name: string }> {
+    throw new Error('Flic buttons are only supported in the native app');
+  }
+
+  async stopScanForFlicButtons(): Promise<void> {
+    console.warn('PushToTalk: Flic buttons are only supported in the native app');
+  }
+
+  async getFlicButtons(): Promise<{ buttons: FlicButton[] }> {
+    return { buttons: [] };
   }
 }

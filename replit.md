@@ -134,9 +134,28 @@ USB-C and Bluetooth PTT accessories (Klein Victory, PrymeBLU, generic BLE PTT bu
 
 **Frontend integration** (`mobley.tsx`): On room connect, imports `capacitor-pushtotalk` plugin, calls `enableHardwarePTT()`, and listens for `hardwarePTTPressed`/`hardwarePTTReleased` events to trigger `startTalking()`/`stopTalking()`. Falls back gracefully when plugin unavailable (browser-only mode).
 
-**Compatible hardware**: Any USB-C or Bluetooth accessory that sends standard HID media key events — Klein Victory, Klein BLU-PTT+, PrymeBLU BT-PTT-Z, Sheepdog Z-PTT, generic Amazon BLE PTT buttons, iPhone 15+ Action Button, AirPods/EarPods inline button.
+**Compatible hardware**: Any USB-C or Bluetooth accessory that sends standard HID media key events — Klein Victory, Klein BLU-PTT+, PrymeBLU BT-PTT-Z, Sheepdog Z-PTT, generic Amazon BLE PTT buttons, iPhone 15+ Action Button, AirPods/EarPods inline button, Flic 2 Bluetooth button.
 
 **To build/test**: Open `ios/App/App.xcworkspace` in Xcode on a Mac, run on a physical iPhone with the earpiece plugged in. Requires Apple Developer account ($99/year) for device deployment.
+
+### Flic 2 Button Integration
+The Capacitor PTT plugin includes Flic 2 SDK integration (commented out, pending manual SDK setup). Flic buttons connect via Bluetooth LE and emit the same `hardwarePTTPressed`/`hardwarePTTReleased` events as wired accessories.
+
+**SDK sources**:
+- iOS: `flic2lib.xcframework` from https://github.com/50ButtonsEach/flic2lib-ios (manual XCFramework install in Xcode)
+- Android: `flic2lib-android` via JitPack (uncomment dependency in `plugins/capacitor-pushtotalk/android/build.gradle`)
+
+**Activation steps**:
+1. Register at https://partners.flic.io/ to get App ID and App Secret
+2. iOS: Download `flic2lib.xcframework`, drag into Xcode Frameworks (Embed & Sign), uncomment Flic code blocks in `PushToTalkPlugin.swift`
+3. Android: Uncomment `flic2lib-android` dependency in `build.gradle`, uncomment Flic code blocks in `PushToTalkPlugin.java`
+
+**Plugin methods**: `scanForFlicButtons()`, `stopScanForFlicButtons()`, `getFlicButtons()` — TypeScript definitions in `plugins/capacitor-pushtotalk/src/definitions.ts`
+**Events**: `flicButtonFound`, `flicConnected`, `flicDisconnected`, `flicDoubleClick`, `flicHold`
+**Pairing UI**: Audio Settings modal in `mobley.tsx` — "Flic PTT Button" section with scan/pair/status display
+
+**Info.plist**: `NSBluetoothAlwaysUsageDescription`, `NSBluetoothPeripheralUsageDescription`, `UIBackgroundModes` includes `bluetooth-central`, `LSApplicationQueriesSchemes` includes `flic20`
+**AndroidManifest.xml**: Bluetooth permissions for both pre-API 31 (`BLUETOOTH`, `BLUETOOTH_ADMIN`, `ACCESS_FINE_LOCATION`) and API 31+ (`BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`)
 
 ### PTT Button UI
 - Bottom controls use two-row layout: small utility buttons (settings, channels, all-call, broadcast, hangup) on top, large centered PTT button (160px / `w-40 h-40`) below

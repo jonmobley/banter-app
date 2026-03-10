@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
@@ -218,6 +218,85 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     const saved = localStorage.getItem('banter_auto_gain_control');
     return saved !== null ? saved === 'true' : true;
   });
+
+  // Flic button state
+  const [flicButtons, setFlicButtons] = useState<Array<{ uuid: string; name: string; connectionState?: string }>>([]);
+  const [flicScanning, setFlicScanning] = useState(false);
+
+  const [flicSupported, setFlicSupported] = useState<boolean | null>(null);
+
+  const checkFlicSupport = useCallback(async () => {
+    try {
+      const { PushToTalk } = await import('capacitor-pushtotalk');
+      const result = await PushToTalk.getFlicButtons();
+      setFlicSupported(result !== undefined);
+    } catch {
+      setFlicSupported(false);
+    }
+  }, []);
+
+  const scanForFlicButtons = useCallback(async () => {
+    try {
+      setFlicScanning(true);
+      const { PushToTalk } = await import('capacitor-pushtotalk');
+      
+      const foundHandler = await PushToTalk.addListener('flicButtonFound', (data: { uuid: string; name: string }) => {
+        setFlicButtons(prev => {
+          if (prev.some(b => b.uuid === data.uuid)) return prev;
+          return [...prev, { uuid: data.uuid, name: data.name, connectionState: 'connecting' }];
+        });
+      });
+      
+      const connectedHandler = await PushToTalk.addListener('flicConnected', (data: { uuid: string; name: string }) => {
+        setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'connected' } : b));
+      });
+      
+      const disconnectedHandler = await PushToTalk.addListener('flicDisconnected', (data: { uuid: string }) => {
+        setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'disconnected' } : b));
+      });
+
+      try {
+        await PushToTalk.scanForFlicButtons();
+      } catch {
+        setFlicScanning(false);
+        foundHandler.remove();
+        connectedHandler.remove();
+        disconnectedHandler.remove();
+        return;
+      }
+
+      setTimeout(async () => {
+        setFlicScanning(false);
+        await PushToTalk.stopScanForFlicButtons().catch(() => {});
+        foundHandler.remove();
+        connectedHandler.remove();
+        disconnectedHandler.remove();
+      }, 30000);
+    } catch {
+      setFlicScanning(false);
+    }
+  }, []);
+
+  const refreshFlicButtons = useCallback(async () => {
+    try {
+      const { PushToTalk } = await import('capacitor-pushtotalk');
+      const result = await PushToTalk.getFlicButtons();
+      if (result.buttons && result.buttons.length > 0) {
+        setFlicButtons(result.buttons.map(b => ({
+          uuid: b.uuid,
+          name: b.name,
+          connectionState: b.connectionState || 'disconnected'
+        })));
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (showAudioSettings) {
+      checkFlicSupport();
+      refreshFlicButtons();
+    }
+  }, [showAudioSettings, checkFlicSupport, refreshFlicButtons]);
 
   // Talk mode: PTT (push-to-talk), Auto (toggle), or Always On
   const [talkMode, setTalkMode] = useState<TalkMode>(() => {
@@ -2336,6 +2415,55 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 ))}
               </div>
             </div>
+            
+            {flicSupported !== false && (
+              <div className="mb-6">
+                <p className="text-sm text-slate-400 mb-3">Flic PTT Button</p>
+                <div className="space-y-2">
+                  {flicButtons.length > 0 ? (
+                    flicButtons.map((button) => (
+                      <div
+                        key={button.uuid}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${
+                          button.connectionState === 'connected'
+                            ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                            : 'bg-slate-800 border-2 border-transparent'
+                        }`}
+                        data-testid={`flic-button-${button.uuid}`}
+                      >
+                        <Bluetooth className={`w-5 h-5 ${
+                          button.connectionState === 'connected' ? 'text-emerald-400' : 
+                          button.connectionState === 'connecting' ? 'text-amber-400 animate-pulse' : 'text-slate-400'
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-sm truncate block ${
+                            button.connectionState === 'connected' ? 'text-emerald-400' : 'text-white'
+                          }`}>
+                            {button.name}
+                          </span>
+                          <span className="text-xs text-slate-500 capitalize">{button.connectionState || 'unknown'}</span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-500 text-xs text-center py-2">No Flic buttons paired</p>
+                  )}
+                  <button
+                    onClick={scanForFlicButtons}
+                    disabled={flicScanning}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-800 border-2 border-transparent hover:bg-slate-700 transition-colors disabled:opacity-50"
+                    data-testid="button-scan-flic"
+                  >
+                    {flicScanning ? (
+                      <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                    ) : (
+                      <Bluetooth className="w-4 h-4 text-slate-400" />
+                    )}
+                    <span className="text-sm text-white">{flicScanning ? 'Scanning...' : 'Scan for Flic Button'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
             
             <button
               onClick={() => refreshAudioDevices()}

@@ -47,10 +47,19 @@
         <true/>
         <key>NSMicrophoneUsageDescription</key>
         <string>Banter needs microphone access for walkie-talkie voice communication.</string>
+        <key>NSBluetoothAlwaysUsageDescription</key>
+        <string>Banter uses Bluetooth to connect to Flic PTT buttons and wireless accessories.</string>
+        <key>NSBluetoothPeripheralUsageDescription</key>
+        <string>Banter uses Bluetooth to connect to Flic PTT buttons in the background.</string>
+        <key>LSApplicationQueriesSchemes</key>
+        <array>
+                <string>flic20</string>
+        </array>
         <key>UIBackgroundModes</key>
         <array>
                 <string>audio</string>
                 <string>voip</string>
+                <string>bluetooth-central</string>
         </array>
 </dict>
 </plist>
