@@ -1855,7 +1855,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           {isConnected && (
             <button
               onClick={() => setShowDisconnectConfirm(true)}
-              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-red-400"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 transition-colors text-slate-400 hover:text-red-400"
               data-testid="button-hangup-header"
             >
               <X className="w-5 h-5" />
@@ -1864,7 +1864,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           {isAdmin && (
             <button
               onClick={() => setShowAddExpectedModal(true)}
-              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-emerald-400"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 transition-colors text-slate-400 hover:text-emerald-400"
               data-testid="button-add-expected"
             >
               <Plus className="w-5 h-5" />
@@ -1894,7 +1894,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           <div className="relative" ref={settingsDropdownRef}>
             <button
               onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
-              className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-white"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 transition-colors text-slate-400 hover:text-white"
               data-testid="button-settings-menu"
             >
               <Settings className="w-5 h-5" />
