@@ -1005,11 +1005,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     setRemoteAudioMuted(true);
     
     if (chirpEnabled) {
-      playChirp('start');
       broadcastChirp('start');
     }
     await room.localParticipant.setMicrophoneEnabled(true);
-  }, [room, isTalking, setRemoteAudioMuted, playChirp, broadcastChirp, chirpEnabled]);
+  }, [room, isTalking, setRemoteAudioMuted, broadcastChirp, chirpEnabled]);
 
   const stopTalking = useCallback(async () => {
     if (!isTalking || !room?.localParticipant || talkMode !== 'ptt') return;
@@ -1020,7 +1019,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     setIsMuted(true);
     
     if (chirpEnabled) {
-      playChirp('end');
       broadcastChirp('end');
     }
     
