@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw, Clock } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, PhoneOff, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets, DataPacket_Kind } from "livekit-client";
@@ -1624,6 +1624,40 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
   };
 
+  const [actionDrawerParticipant, setActionDrawerParticipant] = useState<{
+    identity?: string;
+    name: string;
+    muted?: boolean;
+    isConnected: boolean;
+    expectedId?: string;
+    phone?: string;
+    email?: string | null;
+  } | null>(null);
+  const [remindLoading, setRemindLoading] = useState(false);
+
+  const handleRemindParticipant = async () => {
+    if (!actionDrawerParticipant?.expectedId) return;
+    setRemindLoading(true);
+    try {
+      const res = await fetch('/api/alert-crew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, participantIds: [actionDrawerParticipant.expectedId], banterId: currentBanterId || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: data.error || 'Failed to send reminder', variant: 'destructive' });
+      } else {
+        toast({ title: `Reminder sent to ${actionDrawerParticipant.name}` });
+      }
+    } catch {
+      toast({ title: 'Failed to send reminder', variant: 'destructive' });
+    } finally {
+      setRemindLoading(false);
+      setActionDrawerParticipant(null);
+    }
+  };
+
   // Profile drawer
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState<ExpectedParticipant | null>(null);
@@ -2312,20 +2346,26 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             return (
               <div 
                 key={p.identity} 
-                className={`group relative flex flex-col items-center rounded-xl p-4 transition-colors duration-200 ${getCardStyle()}`}
+                className={`group relative flex flex-col items-center rounded-xl p-4 transition-colors duration-200 ${getCardStyle()} ${canShowControls && !isMyParticipant(p.identity) ? 'cursor-pointer active:scale-95' : ''}`}
                 data-testid={`participant-${i}`}
+                onClick={() => {
+                  if (canShowControls && !isMyParticipant(p.identity)) {
+                    const ep = expectedParticipants.find(e => {
+                      const normalizedName = e.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+                      return normalizedName === p.identity || e.name === p.name;
+                    });
+                    setActionDrawerParticipant({
+                      identity: p.identity,
+                      name: p.name || p.identity,
+                      muted: p.muted,
+                      isConnected: true,
+                      expectedId: ep?.id,
+                      phone: ep?.phone,
+                      email: ep?.email,
+                    });
+                  }
+                }}
               >
-                {/* Kick button - top right corner */}
-                {canShowControls && !isMyParticipant(p.identity) && (
-                  <button
-                    onClick={() => kickParticipant.mutate(p.identity)}
-                    className="absolute top-2 right-2 p-1 rounded-md hover:bg-red-500/30 transition-all sm:opacity-0 sm:group-hover:opacity-100"
-                    title="Remove from call"
-                    data-testid={`button-kick-${i}`}
-                  >
-                    <X className="w-3.5 h-3.5 text-slate-500 hover:text-red-400" />
-                  </button>
-                )}
                 
                 {/* Avatar */}
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors duration-200 ${getAvatarStyle()} ${isSpeaking ? 'animate-pulse' : ''}`}>
@@ -2362,7 +2402,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   <div className="mt-1">
                     {broadcastGrantedSpeakers.includes(p.identity) ? (
                       <button
-                        onClick={() => grantSpeaker(p.identity, false)}
+                        onClick={(e) => { e.stopPropagation(); grantSpeaker(p.identity, false); }}
                         className="text-[10px] bg-red-500/20 text-red-400 hover:bg-red-500/30 px-2 py-0.5 rounded-full transition-colors"
                         data-testid={`button-revoke-mic-${i}`}
                       >
@@ -2370,7 +2410,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       </button>
                     ) : raisedHands.includes(p.identity) ? (
                       <button
-                        onClick={() => grantSpeaker(p.identity, true)}
+                        onClick={(e) => { e.stopPropagation(); grantSpeaker(p.identity, true); }}
                         className="text-[10px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-2 py-0.5 rounded-full transition-colors animate-pulse"
                         data-testid={`button-grant-mic-${i}`}
                       >
@@ -2378,7 +2418,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       </button>
                     ) : (
                       <button
-                        onClick={() => grantSpeaker(p.identity, true)}
+                        onClick={(e) => { e.stopPropagation(); grantSpeaker(p.identity, true); }}
                         className="text-[10px] bg-slate-600/50 text-slate-400 hover:bg-slate-600 px-2 py-0.5 rounded-full transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                         data-testid={`button-grant-mic-${i}`}
                       >
@@ -2443,80 +2483,20 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               return (
                 <div 
                   key={ep.id} 
-                  className={`group relative flex flex-col items-center rounded-xl p-4 ${getExpectedCardStyle()}`}
+                  className={`group relative flex flex-col items-center rounded-xl p-4 ${getExpectedCardStyle()} ${canShowControls ? 'cursor-pointer active:scale-95' : ''}`}
                   data-testid={`expected-${i}`}
+                  onClick={() => {
+                    if (canShowControls) {
+                      setActionDrawerParticipant({
+                        name: ep.name,
+                        isConnected: false,
+                        expectedId: ep.id,
+                        phone: ep.phone,
+                        email: ep.email,
+                      });
+                    }
+                  }}
                 >
-                  {/* Menu button - top right corner */}
-                  {canShowControls && (
-                    <div className="absolute top-2 right-2" ref={openDropdown === ep.id ? dropdownRef : undefined}>
-                      <button
-                        onClick={(e) => handleOpenDropdown(ep.id, e)}
-                        className="p-1 rounded-md hover:bg-slate-600/50 transition-all sm:opacity-0 sm:group-hover:opacity-100"
-                        data-testid={`button-menu-${i}`}
-                      >
-                        <MoreVertical className="w-4 h-4 text-slate-400" />
-                      </button>
-                      {openDropdown === ep.id && (
-                        <div 
-                          style={dropdownStyle}
-                          className="fixed bg-slate-800 rounded-lg shadow-xl py-1 z-[100] min-w-[160px] overflow-y-auto"
-                        >
-                          <button
-                            onClick={() => {
-                              openProfileDrawer(ep);
-                              setOpenDropdown(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
-                            data-testid={`button-edit-${i}`}
-                          >
-                            <Pencil className="w-4 h-4" />
-                            Edit
-                          </button>
-                          <div className="border-t border-slate-700 my-1" />
-                          <button
-                            onClick={() => {
-                              updateRole.mutate({ id: ep.id, role: 'host' });
-                              setOpenDropdown(null);
-                            }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'host' ? 'text-amber-400' : 'text-slate-300'}`}
-                          >
-                            Host
-                          </button>
-                          <button
-                            onClick={() => {
-                              updateRole.mutate({ id: ep.id, role: 'participant' });
-                              setOpenDropdown(null);
-                            }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'participant' ? 'text-blue-400' : 'text-slate-300'}`}
-                          >
-                            Participant
-                          </button>
-                          <button
-                            onClick={() => {
-                              updateRole.mutate({ id: ep.id, role: 'listener' });
-                              setOpenDropdown(null);
-                            }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'listener' ? 'text-emerald-400' : 'text-slate-300'}`}
-                          >
-                            Listener
-                          </button>
-                          <div className="border-t border-slate-700 my-1" />
-                          <button
-                            onClick={() => {
-                              setConfirmDeleteId(ep.id);
-                              setOpenDropdown(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-slate-700"
-                            data-testid={`button-remove-${i}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
                   {/* Avatar */}
                   <div className={`w-14 h-14 rounded-full flex items-center justify-center ${getExpectedAvatarStyle()}`}>
                     <span className={`text-xl font-medium ${getExpectedTextColor()}`}>
@@ -2537,7 +2517,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   {/* Status */}
                   <div className="mt-2">
                     <div className="flex items-center gap-1 px-2 py-1 bg-slate-600/30 rounded-full">
-                      <span className="text-xs text-slate-500">Not joined</span>
+                      <Bell className="w-3 h-3 text-slate-500" />
+                      <span className="text-xs text-slate-500">Invited</span>
                     </div>
                   </div>
                 </div>
@@ -3536,6 +3517,103 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 data-testid="button-alert-crew-confirm"
               >
                 {alertCrewLoading ? 'Sending...' : 'Notify'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {actionDrawerParticipant && (
+        <div 
+          className="fixed inset-0 bg-black/70 flex items-end z-50" 
+          onClick={(e) => { if (e.target === e.currentTarget) setActionDrawerParticipant(null); }}
+          data-testid="drawer-participant-actions"
+        >
+          <div className="bg-slate-900 rounded-t-2xl w-full pb-safe animate-in slide-in-from-bottom duration-200">
+            <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto mt-3 mb-4" />
+            <div className="flex items-center gap-3 px-6 mb-4">
+              <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center">
+                <span className="text-lg font-medium text-white">
+                  {actionDrawerParticipant.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div>
+                <p className="font-semibold text-white">{actionDrawerParticipant.name}</p>
+                <p className="text-xs text-slate-400">
+                  {actionDrawerParticipant.isConnected ? 'Connected' : 'Invited'}
+                </p>
+              </div>
+            </div>
+            <div className="px-4 space-y-1 mb-2">
+              {actionDrawerParticipant.isConnected && actionDrawerParticipant.identity && (
+                <button
+                  onClick={() => {
+                    toggleParticipantMute.mutate({ 
+                      identity: actionDrawerParticipant.identity!, 
+                      muted: !actionDrawerParticipant.muted 
+                    });
+                    setActionDrawerParticipant(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left hover:bg-slate-800 transition-colors"
+                  data-testid="drawer-action-mute"
+                >
+                  {actionDrawerParticipant.muted ? (
+                    <Mic className="w-5 h-5 text-emerald-400" />
+                  ) : (
+                    <MicOff className="w-5 h-5 text-slate-400" />
+                  )}
+                  <span className="text-white font-medium">
+                    {actionDrawerParticipant.muted ? 'Unmute' : 'Mute'}
+                  </span>
+                </button>
+              )}
+              {(actionDrawerParticipant.phone || actionDrawerParticipant.email) && (
+                <button
+                  onClick={handleRemindParticipant}
+                  disabled={remindLoading}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left hover:bg-slate-800 transition-colors disabled:opacity-50"
+                  data-testid="drawer-action-remind"
+                >
+                  <Bell className="w-5 h-5 text-amber-400" />
+                  <span className="text-white font-medium">
+                    {remindLoading ? 'Sending...' : 'Remind'}
+                  </span>
+                </button>
+              )}
+              {actionDrawerParticipant.isConnected && actionDrawerParticipant.identity && (
+                <button
+                  onClick={() => {
+                    kickParticipant.mutate(actionDrawerParticipant.identity!);
+                    setActionDrawerParticipant(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left hover:bg-slate-800 transition-colors"
+                  data-testid="drawer-action-kick"
+                >
+                  <PhoneOff className="w-5 h-5 text-red-400" />
+                  <span className="text-red-400 font-medium">Remove from Call</span>
+                </button>
+              )}
+              {!actionDrawerParticipant.isConnected && actionDrawerParticipant.expectedId && (
+                <button
+                  onClick={() => {
+                    setConfirmDeleteId(actionDrawerParticipant.expectedId!);
+                    setActionDrawerParticipant(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left hover:bg-slate-800 transition-colors"
+                  data-testid="drawer-action-remove"
+                >
+                  <Trash2 className="w-5 h-5 text-red-400" />
+                  <span className="text-red-400 font-medium">Remove</span>
+                </button>
+              )}
+            </div>
+            <div className="px-4 pb-4">
+              <button
+                onClick={() => setActionDrawerParticipant(null)}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3.5 rounded-xl transition-colors"
+                data-testid="drawer-action-done"
+              >
+                Done
               </button>
             </div>
           </div>
