@@ -77,7 +77,7 @@ function getAuthSecret(): string {
 function createAuthToken(identifier: string): string {
   const isEmail = identifier.includes('@');
   const normalizedId = isEmail ? identifier.toLowerCase().trim() : normalizePhone(identifier);
-  const expiry = Date.now() + 24 * 60 * 60 * 1000;
+  const expiry = Date.now() + 30 * 24 * 60 * 60 * 1000;
   const data = `${normalizedId}:${expiry}`;
   const signature = crypto.createHmac('sha256', getAuthSecret()).update(data).digest('hex');
   return Buffer.from(`${data}:${signature}`).toString('base64');
