@@ -235,15 +235,15 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
 //     }
 //
 //     public func flicButton(_ button: FLICButton, didReceiveButtonClick queued: Bool, age: Int) {
-//         // Single click handled by down/up for PTT
+//         // Not used — PTT relies on raw down/up events only
 //     }
 //
 //     public func flicButton(_ button: FLICButton, didReceiveButtonDoubleClick queued: Bool, age: Int) {
-//         notifyListeners("flicDoubleClick", data: ["uuid": button.uuid])
+//         // Intentionally not mapped — avoids accidental triggers during long PTT holds
 //     }
 //
 //     public func flicButton(_ button: FLICButton, didReceiveButtonHold queued: Bool, age: Int) {
-//         notifyListeners("flicHold", data: ["uuid": button.uuid])
+//         // Intentionally not mapped — avoids accidental triggers during long PTT holds
 //     }
 //
 //     public func flicButton(_ button: FLICButton, didDisconnectWithError error: Error?) {

@@ -73,20 +73,12 @@ public class PushToTalkPlugin extends Plugin {
     //
     //         @Override
     //         public void onButtonClickOrHold(Flic2Button button, boolean wasQueued, boolean lastQueued, long timestamp, boolean isClick, boolean isHold, int age) {
-    //             if (isHold) {
-    //                 JSObject data = new JSObject();
-    //                 data.put("uuid", button.getUuid());
-    //                 notifyListeners("flicHold", data);
-    //             }
+    //             // Intentionally not mapped — avoids accidental triggers during long PTT holds
     //         }
     //
     //         @Override
     //         public void onButtonSingleOrDoubleClick(Flic2Button button, boolean wasQueued, boolean lastQueued, long timestamp, boolean isSingleClick, boolean isDoubleClick, int age) {
-    //             if (isDoubleClick) {
-    //                 JSObject data = new JSObject();
-    //                 data.put("uuid", button.getUuid());
-    //                 notifyListeners("flicDoubleClick", data);
-    //             }
+    //             // Intentionally not mapped — avoids accidental triggers during long PTT holds
     //         }
     //
     //         @Override
