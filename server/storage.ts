@@ -428,6 +428,30 @@ export class DatabaseStorage implements IStorage {
     const [newUser] = await db.insert(users).values({ name, email: normalizedEmail }).returning();
     return newUser;
   }
+
+  async createMessage(msg: InsertMessage): Promise<Message> {
+    const [newMsg] = await db.insert(messages).values(msg).returning();
+    return newMsg;
+  }
+
+  async getMessages(banterId: string | null, limit: number = 50, before?: string): Promise<Message[]> {
+    const conditions = [];
+    if (banterId) {
+      conditions.push(eq(messages.banterId, banterId));
+    } else {
+      conditions.push(isNull(messages.banterId));
+    }
+    if (before) {
+      const [ref] = await db.select().from(messages).where(eq(messages.id, before));
+      if (ref) {
+        conditions.push(lt(messages.createdAt, ref.createdAt));
+      }
+    }
+    return await db.select().from(messages)
+      .where(and(...conditions))
+      .orderBy(desc(messages.createdAt))
+      .limit(limit);
+  }
 }
 
 export const storage = new DatabaseStorage();

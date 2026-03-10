@@ -55,6 +55,7 @@ WebSocket communication, including speaking states and broadcasts, is scoped by 
 - **Admin Groups Management**: UI for creating, renaming, deleting groups, and managing members.
 - **Pre-join Participant List**: Shows participants before joining a banter.
 - **Away Status Detection**: Detects when participants switch tabs or get phone calls; shows amber "Away" badge via WebSocket-broadcast `awayUsers` state per banter.
+- **Group Chat**: Per-banter text chat with `messages` table. REST endpoints for send/fetch with pagination. Real-time via WebSocket broadcast. Mobile: Radio/Chat tab switcher at bottom. Desktop: side panel alongside participant grid. Sender grouping, relative timestamps, unread badge, message deduplication.
 - **Navigation**: Main app route is `/login` with redirects and accessible logout options.
 - **Safe Areas**: Support for iOS notch/home indicator via `safe-top safe-bottom` CSS classes.
 

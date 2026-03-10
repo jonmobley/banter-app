@@ -1748,6 +1748,73 @@ export async function registerRoutes(
   });
 
   /**
+   * GET /api/messages
+   * Fetches chat messages for a banter session.
+   */
+  app.get("/api/messages", async (req, res) => {
+    try {
+      const authToken = req.headers.authorization?.replace('Bearer ', '') || req.query.authToken as string;
+      if (!authToken || !verifyAuthToken(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const banterId = (req.query.banterId as string) || null;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const before = req.query.before as string | undefined;
+      const msgs = await storage.getMessages(banterId, limit, before);
+      res.json(msgs.reverse());
+    } catch (error: any) {
+      log(`Error fetching messages: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  /**
+   * POST /api/messages
+   * Sends a chat message.
+   */
+  app.post("/api/messages", async (req, res) => {
+    try {
+      const { authToken: clientAuthToken, content, banterId } = req.body;
+      if (!clientAuthToken || !verifyAuthToken(clientAuthToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      if (!content || typeof content !== 'string' || content.trim().length === 0) {
+        return res.status(400).json({ error: "Message content is required" });
+      }
+      if (content.length > 1000) {
+        return res.status(400).json({ error: "Message too long (max 1000 characters)" });
+      }
+
+      const identifier = verifyAuthToken(clientAuthToken);
+      if (!identifier) return res.status(401).json({ error: "Unauthorized" });
+      const senderIdentity = identifier.includes('@') ? identifier : identifier.replace(/\D/g, '').slice(-10);
+
+      let senderName = senderIdentity;
+      if (identifier.includes('@')) {
+        const user = await storage.getUserByEmail(identifier);
+        if (user) senderName = user.name;
+      } else {
+        const user = await storage.getUserByPhone(identifier);
+        if (user) senderName = user.name;
+      }
+
+      const bId = banterId || null;
+      const msg = await storage.createMessage({
+        banterId: bId,
+        senderIdentity,
+        senderName,
+        content: content.trim(),
+      });
+
+      broadcastToFrontend({ type: 'chat-message', message: msg, banterId: bId }, bId);
+      res.json(msg);
+    } catch (error: any) {
+      log(`Error sending message: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to send message" });
+    }
+  });
+
+  /**
    * POST /api/alert-crew
    * Sends an instant "Join Now" SMS to crew members. Requires admin auth.
    * Rate limited to 1 alert per 5 minutes.

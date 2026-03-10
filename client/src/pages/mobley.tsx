@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, PhoneOff, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw, Clock } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, PhoneOff, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw, Clock, Send } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets, DataPacket_Kind } from "livekit-client";
@@ -7,6 +7,15 @@ import { useToast } from "@/hooks/use-toast";
 import { formatPhone } from "@/lib/utils";
 
 type TalkMode = 'ptt' | 'auto' | 'always';
+
+interface ChatMessage {
+  id: string;
+  banterId: string | null;
+  senderIdentity: string;
+  senderName: string;
+  content: string;
+  createdAt: string;
+}
 
 interface Participant {
   identity: string;
@@ -376,6 +385,21 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [allCallLoading, setAllCallLoading] = useState(false);
   const [awayUsers, setAwayUsers] = useState<Set<string>>(new Set());
 
+  const [activeTab, setActiveTab] = useState<'radio' | 'chat'>('radio');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const activeTabRef = useRef<'radio' | 'chat'>('radio');
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+    if (activeTab === 'chat') setUnreadCount(0);
+  }, [activeTab]);
+
   // Broadcast state
   const [broadcastActive, setBroadcastActive] = useState(false);
   const [broadcastSpeakerId, setBroadcastSpeakerId] = useState<string | null>(null);
@@ -431,6 +455,18 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             const msgBanterId = msg.banterId || null;
             if (msgBanterId === myBanterId) {
               queryClient.invalidateQueries({ queryKey: ["/api/channels", myBanterId] });
+            }
+          } else if (msg.type === 'chat-message') {
+            const msgBanterId = msg.message?.banterId || msg.banterId || null;
+            if (msgBanterId === myBanterId && msg.message?.id) {
+              setChatMessages(prev => {
+                if (prev.some(m => m.id === msg.message.id)) return prev;
+                return [...prev, msg.message];
+              });
+              if (activeTabRef.current !== 'chat') {
+                setUnreadCount(c => c + 1);
+              }
+              setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
             }
           } else if (msg.type === 'user-status') {
             const msgBanterId = msg.banterId || null;
@@ -1357,6 +1393,58 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
   }, [authToken, allCallActive, toast, currentBanterId]);
 
+  const loadChatMessages = useCallback(async () => {
+    if (!authToken) return;
+    try {
+      const params = new URLSearchParams({ authToken, limit: '50' });
+      if (currentBanterId) params.set('banterId', currentBanterId);
+      const res = await fetch(`/api/messages?${params}`);
+      if (res.ok) {
+        const msgs = await res.json();
+        setChatMessages(msgs);
+        setHasMoreMessages(msgs.length >= 50);
+        setTimeout(() => chatEndRef.current?.scrollIntoView(), 100);
+      }
+    } catch {}
+  }, [authToken, currentBanterId]);
+
+  useEffect(() => {
+    if (authToken) loadChatMessages();
+  }, [authToken, currentBanterId, loadChatMessages]);
+
+  const sendChatMessage = useCallback(async () => {
+    if (!authToken || !chatInput.trim() || chatSending) return;
+    setChatSending(true);
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, content: chatInput.trim(), banterId: currentBanterId || undefined }),
+      });
+      if (res.ok) {
+        setChatInput('');
+      }
+    } catch {}
+    setChatSending(false);
+  }, [authToken, chatInput, chatSending, currentBanterId]);
+
+  const loadMoreMessages = useCallback(async () => {
+    if (!authToken || loadingMore || !hasMoreMessages || chatMessages.length === 0) return;
+    setLoadingMore(true);
+    try {
+      const oldest = chatMessages[0];
+      const params = new URLSearchParams({ authToken, limit: '50', before: oldest.id });
+      if (currentBanterId) params.set('banterId', currentBanterId);
+      const res = await fetch(`/api/messages?${params}`);
+      if (res.ok) {
+        const older = await res.json();
+        setHasMoreMessages(older.length >= 50);
+        setChatMessages(prev => [...older, ...prev]);
+      }
+    } catch {}
+    setLoadingMore(false);
+  }, [authToken, loadingMore, hasMoreMessages, chatMessages, currentBanterId]);
+
   const toggleMuteAll = useCallback(async () => {
     if (muteAllLoading) return;
     setMuteAllLoading(true);
@@ -1834,6 +1922,20 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   };
 
   const canShowControls = isAdmin || isUserHost();
+
+  const formatMessageTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    if (diff < 60000) return 'now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+    if (diff < 86400000) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  const isMyMessage = (msg: ChatMessage) => {
+    return msg.senderIdentity === localIdentity;
+  };
 
   const participants = [...realParticipants].sort((a, b) => {
     const roleA = getParticipantRole(a.identity) || 'participant';
@@ -2316,7 +2418,9 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto px-4 pb-96">
+      <div className="flex-1 flex overflow-hidden">
+        {/* Radio tab / participant grid */}
+        <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} sm:flex flex-col flex-1 overflow-auto px-4 pb-96`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
           {participants.map((p, i) => {
             const isSpeaking = speakingState[p.identity] || false;
@@ -2538,7 +2642,116 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             </button>
           )}
         </div>
+        </div>
+
+        {/* Chat panel - full screen on mobile, side panel on desktop */}
+        <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} sm:flex flex-col sm:w-80 sm:border-l sm:border-slate-800 bg-slate-950 ${activeTab === 'chat' ? 'w-full' : ''}`}>
+          <div className="hidden sm:flex items-center justify-between px-4 py-3 border-b border-slate-800">
+            <h3 className="font-semibold text-sm text-slate-300">Group Chat</h3>
+            <span className="text-xs text-slate-500">{chatMessages.length} messages</span>
+          </div>
+          <div ref={chatContainerRef} className="flex-1 overflow-auto px-3 py-2 space-y-1" data-testid="chat-messages">
+            {hasMoreMessages && chatMessages.length > 0 && (
+              <button
+                onClick={loadMoreMessages}
+                disabled={loadingMore}
+                className="w-full text-center py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                data-testid="button-load-more-messages"
+              >
+                {loadingMore ? 'Loading...' : 'Load earlier messages'}
+              </button>
+            )}
+            {chatMessages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                <MessageSquare className="w-10 h-10 text-slate-700 mb-3" />
+                <p className="text-slate-500 text-sm">No messages yet</p>
+                <p className="text-slate-600 text-xs mt-1">Send a message to the group</p>
+              </div>
+            )}
+            {chatMessages.map((msg, i) => {
+              const mine = isMyMessage(msg);
+              const showName = !mine && (i === 0 || chatMessages[i - 1].senderIdentity !== msg.senderIdentity);
+              return (
+                <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid={`chat-message-${i}`}>
+                  <div className={`max-w-[80%] ${mine ? 'items-end' : 'items-start'}`}>
+                    {showName && (
+                      <p className="text-[10px] text-slate-500 px-2 mb-0.5">{msg.senderName}</p>
+                    )}
+                    <div className={`px-3 py-1.5 rounded-2xl text-sm ${
+                      mine 
+                        ? 'bg-emerald-600 text-white rounded-br-md' 
+                        : 'bg-slate-800 text-slate-200 rounded-bl-md'
+                    }`}>
+                      {msg.content}
+                    </div>
+                    <p className={`text-[10px] text-slate-600 px-2 mt-0.5 ${mine ? 'text-right' : ''}`}>
+                      {formatMessageTime(msg.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={chatEndRef} />
+          </div>
+          {authToken && (
+            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-32' : ''} sm:pb-3`}>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                  placeholder="Message..."
+                  maxLength={1000}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+                  data-testid="input-chat-message"
+                />
+                <button
+                  onClick={sendChatMessage}
+                  disabled={chatSending || !chatInput.trim()}
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white transition-colors flex-shrink-0"
+                  data-testid="button-send-chat"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Tab bar - mobile only */}
+      {authToken && (
+        <div className="sm:hidden flex border-t border-slate-800 bg-slate-950">
+          <button
+            onClick={() => setActiveTab('radio')}
+            className={`flex-1 flex flex-col items-center py-2 transition-colors ${
+              activeTab === 'radio' ? 'text-emerald-400' : 'text-slate-500'
+            }`}
+            data-testid="tab-radio"
+          >
+            <Radio className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5 font-medium">Radio</span>
+          </button>
+          <button
+            onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
+            className={`flex-1 flex flex-col items-center py-2 transition-colors relative ${
+              activeTab === 'chat' ? 'text-emerald-400' : 'text-slate-500'
+            }`}
+            data-testid="tab-chat"
+          >
+            <div className="relative">
+              <MessageSquare className="w-5 h-5" />
+              {unreadCount > 0 && activeTab !== 'chat' && (
+                <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] mt-0.5 font-medium">Chat</span>
+          </button>
+        </div>
+      )}
 
       {/* Bottom controls */}
       <div className={`fixed left-0 right-0 px-6 ${
