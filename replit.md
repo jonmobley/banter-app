@@ -164,6 +164,6 @@ When a phone call, Siri, or alarm interrupts the app:
 - Background modes (`audio`, `voip`) keep the app alive during phone calls on iOS
 
 ### PTT Button UI
-- Bottom controls use two-row layout: small utility buttons (settings, channels, all-call, broadcast, hangup) on top, large centered PTT button (160px / `w-40 h-40`) below
-- PTT button is the dominant visual element — walkie-talkie-style layout
-- All talk modes (Hold, Toggle, Always On, Raise Hand) use the same large button size
+- PTT button is a full-width rounded rectangle (`w-full h-44 rounded-3xl`) — the dominant visual element
+- Utility buttons (settings, channels, all-call, broadcast, hangup) are small (`p-3`, `w-4 h-4` icons) and sit below the PTT button in a subtle row
+- All talk modes (Hold, Toggle, Always On, Raise Hand) use the same large button shape
