@@ -1768,7 +1768,9 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const participants = [...realParticipants].sort((a, b) => {
     const roleA = getParticipantRole(a.identity) || 'participant';
     const roleB = getParticipantRole(b.identity) || 'participant';
-    return roleOrder[roleA] - roleOrder[roleB];
+    const roleDiff = roleOrder[roleA] - roleOrder[roleB];
+    if (roleDiff !== 0) return roleDiff;
+    return (a.joinedAt || 0) - (b.joinedAt || 0);
   });
 
   const hasActiveCall = conferenceActive || connectionState === ConnectionState.Connected;
@@ -2367,7 +2369,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                         {p.muted ? (
                           <>
                             <MicOff className="w-3 h-3 text-slate-400" />
-                            <span className="text-xs text-slate-400">Muted</span>
+                            <span className="text-xs text-slate-400">Standby</span>
                           </>
                         ) : (
                           <>
