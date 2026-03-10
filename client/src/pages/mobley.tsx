@@ -2237,16 +2237,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden">
       <header className="relative flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
-          {isConnected && (
-            <button
-              onClick={() => setShowDisconnectConfirm(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-400 transition-colors text-white"
-              aria-label="Disconnect call"
-              data-testid="button-hangup-header"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
         </div>
         <div className="absolute left-0 right-0 bottom-2 flex justify-center pointer-events-none">
           <div className="text-center">
