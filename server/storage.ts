@@ -1,6 +1,6 @@
-import { type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments, type User, type InsertUser, type UpdateUser, users, normalizePhone, generateSlug } from "@shared/schema";
+import { type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments, type User, type InsertUser, type UpdateUser, users, type Message, type InsertMessage, messages, normalizePhone, generateSlug } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, and, gt, lt, lte, sql, isNull } from "drizzle-orm";
+import { eq, and, gt, lt, lte, desc, sql, isNull } from "drizzle-orm";
 import pg from "pg";
 
 const pool = new pg.Pool({
@@ -84,6 +84,9 @@ export interface IStorage {
   deleteUser(id: string): Promise<void>;
   upsertUserByPhone(phone: string, name: string): Promise<User>;
   upsertUserByEmail(email: string, name: string): Promise<User>;
+  
+  createMessage(msg: InsertMessage): Promise<Message>;
+  getMessages(banterId: string | null, limit?: number, before?: string): Promise<Message[]>;
 }
 
 export class DatabaseStorage implements IStorage {
