@@ -1964,32 +1964,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 )}
                 {isAdmin && isConnected && (
                   <button
-                    onClick={() => { toggleAllCall(); setShowSettingsDropdown(false); }}
-                    disabled={allCallLoading || broadcastActive}
-                    className={`w-full px-4 py-3 text-left text-sm hover:bg-slate-700 transition-colors flex items-center gap-3 ${
-                      allCallActive ? 'text-red-400' : 'text-white'
-                    }`}
-                    data-testid="menu-all-call"
-                  >
-                    <PhoneCall className={`w-4 h-4 ${allCallActive ? 'text-red-400' : 'text-slate-400'}`} />
-                    {allCallActive ? 'End All-Call' : 'All-Call'}
-                  </button>
-                )}
-                {isAdmin && isConnected && (
-                  <button
-                    onClick={() => { toggleBroadcast(); setShowSettingsDropdown(false); }}
-                    disabled={broadcastLoading || allCallActive}
-                    className={`w-full px-4 py-3 text-left text-sm hover:bg-slate-700 transition-colors flex items-center gap-3 ${
-                      broadcastActive ? 'text-purple-400' : 'text-white'
-                    }`}
-                    data-testid="menu-broadcast"
-                  >
-                    <Megaphone className={`w-4 h-4 ${broadcastActive ? 'text-purple-400' : 'text-slate-400'}`} />
-                    {broadcastActive ? 'End Broadcast' : 'Start Broadcast'}
-                  </button>
-                )}
-                {isAdmin && isConnected && (
-                  <button
                     onClick={() => { setShowAlertCrewConfirm(true); setShowSettingsDropdown(false); }}
                     className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3"
                     data-testid="menu-alert-crew"
@@ -2390,6 +2364,21 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   </button>
                 )}
               </div>
+              {isAdmin && channelsData && channelsData.length > 0 && (
+                <button
+                  onClick={toggleAllCall}
+                  disabled={allCallLoading}
+                  className={`w-full flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all ${
+                    allCallActive
+                      ? 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/30 animate-pulse'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                  }`}
+                  data-testid="button-all-call"
+                >
+                  <PhoneCall className={`w-4 h-4 ${allCallActive ? 'text-white' : 'text-slate-400'}`} />
+                  {allCallActive ? 'End All-Call' : 'All-Call'}
+                </button>
+              )}
             </div>
           ) : isConnecting ? (
             <button
