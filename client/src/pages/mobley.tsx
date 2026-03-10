@@ -995,12 +995,15 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
   }, [room, isMuted]);
 
-  // Update audio processing
   const updateAudioProcessing = useCallback(async (settings: {
     echoCancellation?: boolean;
     noiseSuppression?: boolean;
     autoGainControl?: boolean;
   }) => {
+    const newEcho = settings.echoCancellation ?? echoCancellation;
+    const newNoise = settings.noiseSuppression ?? noiseSuppression;
+    const newGain = settings.autoGainControl ?? autoGainControl;
+
     if (settings.echoCancellation !== undefined) {
       setEchoCancellation(settings.echoCancellation);
       localStorage.setItem('banter_echo_cancellation', String(settings.echoCancellation));
@@ -1013,7 +1016,25 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setAutoGainControl(settings.autoGainControl);
       localStorage.setItem('banter_auto_gain_control', String(settings.autoGainControl));
     }
-  }, []);
+
+    if (room && room.localParticipant) {
+      try {
+        const micPub = room.localParticipant.getTrackPublication('microphone' as any);
+        if (micPub?.track) {
+          const track = micPub.track as any;
+          if (track.mediaStreamTrack) {
+            await track.mediaStreamTrack.applyConstraints({
+              echoCancellation: newEcho,
+              noiseSuppression: newNoise,
+              autoGainControl: newGain,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Could not apply audio constraints live, will take effect on next connect');
+      }
+    }
+  }, [room, echoCancellation, noiseSuppression, autoGainControl]);
 
   // Check admin status when auth token changes
   useEffect(() => {
