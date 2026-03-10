@@ -200,6 +200,7 @@ export async function registerRoutes(
     broadcastSpeakerId: string | null;
     broadcastGrantedSpeakers: Set<string>;
     raisedHands: Set<string>;
+    chirpEnabled: boolean;
   }
 
   const banterStates = new Map<string, BanterSessionState>();
@@ -213,6 +214,7 @@ export async function registerRoutes(
         broadcastSpeakerId: null,
         broadcastGrantedSpeakers: new Set(),
         raisedHands: new Set(),
+        chirpEnabled: true,
       });
     }
     return banterStates.get(key)!;
@@ -245,10 +247,10 @@ export async function registerRoutes(
     });
     ws.send(JSON.stringify({ type: 'speaking', data: stateObj }));
     
-    // Send current state for global banter on connect
     const globalState = getBanterState(null);
     ws.send(JSON.stringify({ type: 'all-call', active: globalState.allCallActive, banterId: null }));
     ws.send(JSON.stringify(getBroadcastState(null)));
+    ws.send(JSON.stringify({ type: 'chirp-setting', enabled: globalState.chirpEnabled, banterId: null }));
     
     ws.on('message', (data) => {
       try {
@@ -266,6 +268,7 @@ export async function registerRoutes(
           const bState = getBanterState(bId);
           ws.send(JSON.stringify({ type: 'all-call', active: bState.allCallActive, banterId: bId }));
           ws.send(JSON.stringify(getBroadcastState(bId)));
+          ws.send(JSON.stringify({ type: 'chirp-setting', enabled: bState.chirpEnabled, banterId: bId }));
         } else if (msg.type === 'speaking-update' && msg.identity) {
           const clientInfo = frontendClients.get(ws);
           const bId = clientInfo?.banterId || null;
@@ -298,6 +301,7 @@ export async function registerRoutes(
           ws.send(JSON.stringify({ type: 'speaking', data: speakObj }));
           ws.send(JSON.stringify({ type: 'all-call', active: bState.allCallActive, banterId: bId }));
           ws.send(JSON.stringify(getBroadcastState(bId)));
+          ws.send(JSON.stringify({ type: 'chirp-setting', enabled: bState.chirpEnabled, banterId: bId }));
         }
       } catch (e) {
         // Ignore parse errors
@@ -1465,6 +1469,24 @@ export async function registerRoutes(
     const banterId = (req.query.banterId as string) || null;
     const state = getBanterState(banterId);
     res.json({ active: state.allCallActive });
+  });
+
+  app.post("/api/chirp", async (req, res) => {
+    try {
+      const { authToken, enabled, banterId } = req.body;
+      if (!verifyAdminAuth(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const bId = banterId || null;
+      const state = getBanterState(bId);
+      state.chirpEnabled = !!enabled;
+      log(`🔔 Chirp ${state.chirpEnabled ? 'ENABLED' : 'DISABLED'} by admin (banter: ${bId || 'global'})`, "admin");
+      broadcastToFrontend({ type: 'chirp-setting', enabled: state.chirpEnabled, banterId: bId }, bId);
+      res.json({ success: true, enabled: state.chirpEnabled });
+    } catch (error: any) {
+      log(`Error toggling chirp: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to toggle chirp" });
+    }
   });
 
   /**

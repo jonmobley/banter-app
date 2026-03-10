@@ -369,6 +369,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [newChannelNumber, setNewChannelNumber] = useState(1);
   const [newChannelName, setNewChannelName] = useState('');
   const [allCallActive, setAllCallActive] = useState(false);
+  const [chirpEnabled, setChirpEnabled] = useState(true);
+  const chirpEnabledRef = useRef(true);
   const [allCallLoading, setAllCallLoading] = useState(false);
 
   // Broadcast state
@@ -418,6 +420,12 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             const msgBanterId = msg.banterId || null;
             if (msgBanterId === myBanterId) {
               queryClient.invalidateQueries({ queryKey: ["/api/channels", myBanterId] });
+            }
+          } else if (msg.type === 'chirp-setting') {
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              setChirpEnabled(msg.enabled);
+              chirpEnabledRef.current = msg.enabled;
             }
           } else if (msg.type === 'broadcast') {
             const msgBanterId = msg.banterId || null;
@@ -840,7 +848,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         try {
           const decoder = new TextDecoder();
           const data = JSON.parse(decoder.decode(payload));
-          if (data.type === 'chirp' && chirpAudioRef.current) {
+          if (data.type === 'chirp' && chirpAudioRef.current && chirpEnabledRef.current) {
             const audio = chirpAudioRef.current.cloneNode() as HTMLAudioElement;
             audio.volume = 0.5;
             audio.currentTime = 0;
@@ -996,10 +1004,12 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     
     setRemoteAudioMuted(true);
     
-    playChirp('start');
-    broadcastChirp('start');
+    if (chirpEnabled) {
+      playChirp('start');
+      broadcastChirp('start');
+    }
     await room.localParticipant.setMicrophoneEnabled(true);
-  }, [room, isTalking, setRemoteAudioMuted, playChirp, broadcastChirp]);
+  }, [room, isTalking, setRemoteAudioMuted, playChirp, broadcastChirp, chirpEnabled]);
 
   const stopTalking = useCallback(async () => {
     if (!isTalking || !room?.localParticipant || talkMode !== 'ptt') return;
@@ -1009,13 +1019,15 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     await room.localParticipant.setMicrophoneEnabled(false);
     setIsMuted(true);
     
-    playChirp('end');
-    broadcastChirp('end');
+    if (chirpEnabled) {
+      playChirp('end');
+      broadcastChirp('end');
+    }
     
     setTimeout(() => {
       setRemoteAudioMuted(false);
     }, 150);
-  }, [room, isTalking, talkMode, setRemoteAudioMuted, playChirp, broadcastChirp]);
+  }, [room, isTalking, talkMode, setRemoteAudioMuted, playChirp, broadcastChirp, chirpEnabled]);
 
   // Change talk mode
   const changeTalkMode = useCallback(async (mode: TalkMode) => {
@@ -2127,6 +2139,24 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   >
                     <Radio className="w-4 h-4 text-amber-400" />
                     {canShowControls ? 'Manage Channels' : 'Switch Channel'}
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await fetch('/api/chirp', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ authToken, enabled: !chirpEnabled, banterId: currentBanterId })
+                        });
+                      } catch {}
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3"
+                    data-testid="menu-toggle-chirp"
+                  >
+                    <Volume2 className="w-4 h-4 text-slate-400" />
+                    PTT Chirp {chirpEnabled ? 'On' : 'Off'}
                   </button>
                 )}
                 {isAdmin && isConnected && (
