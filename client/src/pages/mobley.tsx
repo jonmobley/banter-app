@@ -2122,7 +2122,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       </header>
 
       <div className="flex-1 overflow-auto px-4 pb-96">
-        <div className={`grid gap-3 mt-4 ${participants.length === 1 ? 'grid-cols-1 max-w-[50%] mx-auto' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'}`}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
           {participants.map((p, i) => {
             const isSpeaking = speakingState[p.identity] || false;
             const role = getParticipantRole(p.identity);
