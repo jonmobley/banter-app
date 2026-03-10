@@ -1763,9 +1763,8 @@ export async function registerRoutes(
         return res.status(401).json({ error: "Authentication required" });
       }
       
-      // Use verified phone for stable identity if available
       const stableIdentity = verifiedPhone 
-        ? verifiedPhone.replace(/\D/g, '').slice(-10) 
+        ? (verifiedPhone.includes('@') ? verifiedPhone : verifiedPhone.replace(/\D/g, '').slice(-10))
         : identity;
 
       // Resolve banter context
@@ -1789,6 +1788,9 @@ export async function registerRoutes(
         const participants = await storage.getExpectedParticipants(resolvedBanterId);
         const matchingParticipant = participants.find(p => {
           if (verifiedPhone) {
+            if (verifiedPhone.includes('@')) {
+              return p.email?.toLowerCase() === verifiedPhone.toLowerCase();
+            }
             return normalizePhone(p.phone) === normalizePhone(verifiedPhone);
           }
           return p.name === name || p.name === identity;
