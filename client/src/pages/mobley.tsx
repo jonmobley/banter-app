@@ -204,6 +204,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
   const [showAudioSettings, setShowAudioSettings] = useState(false);
+  const [showMicPicker, setShowMicPicker] = useState(false);
+  const micPickerRef = useRef<HTMLDivElement>(null);
 
   // Audio processing settings
   const [echoCancellation, setEchoCancellation] = useState<boolean>(() => {
@@ -536,6 +538,18 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showSettingsDropdown]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (micPickerRef.current && !micPickerRef.current.contains(e.target as Node)) {
+        setShowMicPicker(false);
+      }
+    };
+    if (showMicPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showMicPicker]);
   
   useEffect(() => {
     if (showAudioSettings) {
@@ -2377,16 +2391,39 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               >
                 Connect
               </button>
-              <button
-                onClick={() => setShowAudioSettings(true)}
-                className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 px-6 rounded-full transition-colors"
-                data-testid="button-audio-settings-prejoin"
-              >
-                <Mic className="w-4 h-4 text-slate-400" />
-                <span className="truncate text-sm">
-                  {audioDevices.find(d => d.deviceId === selectedAudioDevice)?.label || 'Select microphone'}
-                </span>
-              </button>
+              {audioDevices.length > 1 && (
+                <div className="relative" ref={micPickerRef}>
+                  <button
+                    onClick={() => setShowMicPicker(!showMicPicker)}
+                    className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 px-6 rounded-full transition-colors"
+                    data-testid="button-mic-picker"
+                  >
+                    <Mic className="w-4 h-4 text-slate-400" />
+                    <span className="truncate text-sm">
+                      {audioDevices.find(d => d.deviceId === selectedAudioDevice)?.label || 'Select microphone'}
+                    </span>
+                  </button>
+                  {showMicPicker && (
+                    <div className="absolute left-0 right-0 top-full mt-2 bg-slate-800 border border-slate-700 rounded-xl shadow-lg overflow-hidden z-50">
+                      {audioDevices.map((device) => (
+                        <button
+                          key={device.deviceId}
+                          onClick={() => { setSelectedAudioDevice(device.deviceId); setShowMicPicker(false); }}
+                          className={`w-full px-4 py-3 text-left text-sm flex items-center gap-3 transition-colors ${
+                            selectedAudioDevice === device.deviceId
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : 'text-white hover:bg-slate-700'
+                          }`}
+                          data-testid={`mic-option-${device.deviceId}`}
+                        >
+                          <Mic className={`w-4 h-4 flex-shrink-0 ${selectedAudioDevice === device.deviceId ? 'text-emerald-400' : 'text-slate-400'}`} />
+                          <span className="truncate">{device.label || 'Microphone'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {connectionError && (
