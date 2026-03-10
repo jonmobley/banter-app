@@ -2233,7 +2233,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   return (
     <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden">
-      <header className="relative flex items-end justify-between p-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0 min-h-[72px]">
+      <header className="relative flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
           {isAdmin && (
             <button
