@@ -14,7 +14,7 @@ const config: CapacitorConfig = {
   ios: {
     // Enable background audio for PTT
     backgroundColor: '#020617',
-    contentInset: 'automatic',
+    contentInset: 'never',
     // Info.plist entries will be added manually for PTT
   },
   
