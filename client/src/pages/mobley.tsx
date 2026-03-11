@@ -2812,35 +2812,44 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     <Lock className="w-3.5 h-3.5 absolute right-5 opacity-70" />
                   </button>
                 ) : talkMode === 'ptt' ? (
-                  <button
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      unlockAudio();
-                      startTalking();
-                    }}
-                    onPointerUp={stopTalking}
-                    onPointerLeave={stopTalking}
-                    onPointerCancel={stopTalking}
-                    className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all select-none touch-none relative ${
-                      isMuted 
-                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
-                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-                    }`}
-                    data-testid="button-ptt"
-                  >
-                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    {isMuted ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk') : 'Live'}
+                  <div className="w-full relative">
                     <button
-                      onClick={(e) => { e.stopPropagation(); toggleTalkLock(); }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onPointerUp={(e) => e.stopPropagation()}
-                      className="absolute right-3 w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                      onPointerDown={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.closest('[data-testid="button-lock-talk"]')) return;
+                        e.preventDefault();
+                        unlockAudio();
+                        startTalking();
+                      }}
+                      onPointerUp={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.closest('[data-testid="button-lock-talk"]')) return;
+                        stopTalking();
+                      }}
+                      onPointerLeave={stopTalking}
+                      onPointerCancel={stopTalking}
+                      className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all select-none touch-none ${
+                        isMuted 
+                          ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
+                          : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                      }`}
+                      data-testid="button-ptt"
+                    >
+                      {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                      {isMuted ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk') : 'Live'}
+                    </button>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onTouchStart={(e) => { e.stopPropagation(); }}
+                      onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); toggleTalkLock(); }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 transition-colors cursor-pointer z-10"
                       data-testid="button-lock-talk"
                       aria-label="Lock mic on"
                     >
-                      <Unlock className="w-3.5 h-3.5" />
-                    </button>
-                  </button>
+                      <Unlock className="w-3.5 h-3.5 text-slate-300" />
+                    </div>
+                  </div>
                 ) : talkMode === 'always' ? (
                   <button
                     onClick={toggleTalkLock}
