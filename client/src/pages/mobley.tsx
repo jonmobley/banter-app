@@ -2782,8 +2782,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400"
                     data-testid="button-end-call"
                   >
-                    <PhoneOff className="w-4 h-4" />
-                    End
+                    <LogOut className="w-4 h-4" />
+                    Leave
                   </button>
                 </div>
               )}
