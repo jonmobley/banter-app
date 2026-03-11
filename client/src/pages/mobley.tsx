@@ -1,12 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, PhoneOff, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw, Clock, Send, Lock, Unlock } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets } from "livekit-client";
+import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets, DataPacket_Kind } from "livekit-client";
 import { useToast } from "@/hooks/use-toast";
 import { formatPhone } from "@/lib/utils";
 
 type TalkMode = 'ptt' | 'auto' | 'always';
+
+interface ChatMessage {
+  id: string;
+  banterId: string | null;
+  senderIdentity: string;
+  senderName: string;
+  content: string;
+  createdAt: string;
+}
 
 interface Participant {
   identity: string;
@@ -225,8 +234,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   // Flic button state
   const [flicButtons, setFlicButtons] = useState<Array<{ uuid: string; name: string; connectionState?: string }>>([]);
   const [flicScanning, setFlicScanning] = useState(false);
-  const [flicScanStatus, setFlicScanStatus] = useState<string | null>(null);
-  const [flicScanError, setFlicScanError] = useState<string | null>(null);
 
   const [flicSupported, setFlicSupported] = useState<boolean | null>(null);
 
@@ -243,57 +250,43 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const scanForFlicButtons = useCallback(async () => {
     try {
       setFlicScanning(true);
-      setFlicScanStatus(null);
-      setFlicScanError(null);
       const { PushToTalk } = await import('capacitor-pushtotalk');
-      const handlers: Array<{ remove: () => void }> = [];
-
-      const cleanupHandlers = () => {
-        handlers.forEach(h => h.remove());
-        handlers.length = 0;
-      };
-
-      handlers.push(await PushToTalk.addListener('flicScanStatus', (data: { status: string }) => {
-        setFlicScanStatus(data.status);
-      }));
-
-      handlers.push(await PushToTalk.addListener('flicButtonFound', (data: { uuid: string; name: string }) => {
+      
+      const foundHandler = await PushToTalk.addListener('flicButtonFound', (data: { uuid: string; name: string }) => {
         setFlicButtons(prev => {
           if (prev.some(b => b.uuid === data.uuid)) return prev;
           return [...prev, { uuid: data.uuid, name: data.name, connectionState: 'connecting' }];
         });
-      }));
-
-      handlers.push(await PushToTalk.addListener('flicConnected', (data: { uuid: string; name: string }) => {
+      });
+      
+      const connectedHandler = await PushToTalk.addListener('flicConnected', (data: { uuid: string; name: string }) => {
         setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'connected' } : b));
-      }));
-
-      handlers.push(await PushToTalk.addListener('flicDisconnected', (data: { uuid: string }) => {
+      });
+      
+      const disconnectedHandler = await PushToTalk.addListener('flicDisconnected', (data: { uuid: string }) => {
         setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'disconnected' } : b));
-      }));
+      });
 
       try {
         await PushToTalk.scanForFlicButtons();
+      } catch {
         setFlicScanning(false);
-        setFlicScanStatus(null);
-        cleanupHandlers();
-      } catch (e: any) {
-        setFlicScanning(false);
-        setFlicScanError(e?.message || 'Scan failed');
-        setFlicScanStatus(null);
-        cleanupHandlers();
+        foundHandler.remove();
+        connectedHandler.remove();
+        disconnectedHandler.remove();
+        return;
       }
+
+      setTimeout(async () => {
+        setFlicScanning(false);
+        await PushToTalk.stopScanForFlicButtons().catch(() => {});
+        foundHandler.remove();
+        connectedHandler.remove();
+        disconnectedHandler.remove();
+      }, 30000);
     } catch {
       setFlicScanning(false);
     }
-  }, []);
-
-  const forgetFlicButton = useCallback(async (uuid: string) => {
-    try {
-      const { PushToTalk } = await import('capacitor-pushtotalk');
-      await PushToTalk.forgetFlicButton({ uuid });
-      setFlicButtons(prev => prev.filter(b => b.uuid !== uuid));
-    } catch {}
   }, []);
 
   const refreshFlicButtons = useCallback(async () => {
@@ -306,8 +299,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           name: b.name,
           connectionState: b.connectionState || 'disconnected'
         })));
-      } else {
-        setFlicButtons([]);
       }
     } catch {}
   }, []);
@@ -367,6 +358,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [profileEmail, setProfileEmail] = useState(() => {
     return localStorage.getItem('banter_user_email') || '';
   });
+  const [draftName, setDraftName] = useState('');
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
   const [loginStep, setLoginStep] = useState<'input' | 'code'>('input');
@@ -386,7 +378,29 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [newChannelNumber, setNewChannelNumber] = useState(1);
   const [newChannelName, setNewChannelName] = useState('');
   const [allCallActive, setAllCallActive] = useState(false);
+  const [chirpEnabled, setChirpEnabled] = useState(true);
+  const chirpEnabledRef = useRef(true);
+  const [muteAllActive, setMuteAllActive] = useState(false);
+  const [muteAllLoading, setMuteAllLoading] = useState(false);
   const [allCallLoading, setAllCallLoading] = useState(false);
+  const [awayUsers, setAwayUsers] = useState<Set<string>>(new Set());
+
+  const [talkLocked, setTalkLocked] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<'radio' | 'chat'>('radio');
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const activeTabRef = useRef<'radio' | 'chat'>('radio');
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+    if (activeTab === 'chat') setUnreadCount(0);
+  }, [activeTab]);
 
   // Broadcast state
   const [broadcastActive, setBroadcastActive] = useState(false);
@@ -426,6 +440,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             setSpeakingState(msg.data);
           } else if (msg.type === 'participant-event') {
             queryClient.invalidateQueries({ queryKey: ["/api/participants", banterIdRef.current] });
+            if (msg.data?.event === 'leave' && msg.data?.identity) {
+              setAwayUsers(prev => {
+                if (!prev.has(msg.data.identity)) return prev;
+                const next = new Set(prev);
+                next.delete(msg.data.identity);
+                return next;
+              });
+            }
           } else if (msg.type === 'all-call') {
             const msgBanterId = msg.banterId || null;
             if (msgBanterId === myBanterId) {
@@ -435,6 +457,47 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             const msgBanterId = msg.banterId || null;
             if (msgBanterId === myBanterId) {
               queryClient.invalidateQueries({ queryKey: ["/api/channels", myBanterId] });
+            }
+          } else if (msg.type === 'chat-message') {
+            const msgBanterId = msg.message?.banterId || msg.banterId || null;
+            if (msgBanterId === myBanterId && msg.message?.id) {
+              setChatMessages(prev => {
+                if (prev.some(m => m.id === msg.message.id)) return prev;
+                return [...prev, msg.message];
+              });
+              if (activeTabRef.current !== 'chat') {
+                setUnreadCount(c => c + 1);
+              }
+              setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+            }
+          } else if (msg.type === 'user-status') {
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              setAwayUsers(prev => {
+                const next = new Set(prev);
+                if (msg.status === 'away') {
+                  next.add(msg.identity);
+                } else {
+                  next.delete(msg.identity);
+                }
+                return next;
+              });
+            }
+          } else if (msg.type === 'away-users') {
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              setAwayUsers(new Set(msg.identities || []));
+            }
+          } else if (msg.type === 'mute-all') {
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              setMuteAllActive(msg.active);
+            }
+          } else if (msg.type === 'chirp-setting') {
+            const msgBanterId = msg.banterId || null;
+            if (msgBanterId === myBanterId) {
+              setChirpEnabled(msg.enabled);
+              chirpEnabledRef.current = msg.enabled;
             }
           } else if (msg.type === 'broadcast') {
             const msgBanterId = msg.banterId || null;
@@ -548,9 +611,39 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }, [selectedAudioDevice]);
 
   useEffect(() => {
-    // Refresh on page load to auto-select default mic
     refreshAudioDevices();
-  }, []);
+
+    const handleDeviceChange = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+        setAudioDevices(audioInputs);
+
+        const currentStillExists = audioInputs.some(d => d.deviceId === selectedAudioDevice);
+        if (!currentStillExists && audioInputs.length > 0) {
+          const defaultDevice = audioInputs[0].deviceId;
+          setSelectedAudioDevice(defaultDevice);
+
+          if (room?.localParticipant) {
+            const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+            if (micPub?.track) {
+              await room.localParticipant.setMicrophoneEnabled(false);
+              await room.localParticipant.setMicrophoneEnabled(true, {
+                deviceId: defaultDevice,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to handle device change:', err);
+      }
+    };
+
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
+  }, [selectedAudioDevice, room]);
 
   // Close profile menu when clicking outside
   useEffect(() => {
@@ -822,6 +915,20 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         audioElementsRef.current.clear();
       });
 
+      newRoom.on(RoomEvent.DataReceived, (payload, participant) => {
+        if (!participant) return;
+        try {
+          const decoder = new TextDecoder();
+          const data = JSON.parse(decoder.decode(payload));
+          if (data.type === 'chirp' && chirpAudioRef.current && chirpEnabledRef.current) {
+            const audio = chirpAudioRef.current.cloneNode() as HTMLAudioElement;
+            audio.volume = 0.5;
+            audio.currentTime = 0;
+            audio.play().catch(() => {});
+          }
+        } catch {}
+      });
+
       newRoom.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
         const activeSpeakers = new Set(speakers.map(s => s.identity));
         setSpeakingState(prev => {
@@ -894,18 +1001,27 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   useEffect(() => {
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible' && room && connectionState === ConnectionState.Connected && !wakeLockRef.current && 'wakeLock' in navigator) {
-        try {
-          wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-          wakeLockRef.current?.addEventListener('release', () => {
-            wakeLockRef.current = null;
-          });
-        } catch (e) {}
+      if (document.visibilityState === 'visible') {
+        if (room && connectionState === ConnectionState.Connected && !wakeLockRef.current && 'wakeLock' in navigator) {
+          try {
+            wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+            wakeLockRef.current?.addEventListener('release', () => {
+              wakeLockRef.current = null;
+            });
+          } catch (e) {}
+        }
+        if (localIdentity && wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'status-update', identity: localIdentity, status: 'active' }));
+        }
+      } else if (document.visibilityState === 'hidden') {
+        if (localIdentity && wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: 'status-update', identity: localIdentity, status: 'away' }));
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [room, connectionState]);
+  }, [room, connectionState, localIdentity]);
 
   // Auto-connect when authenticated and name is known
   useEffect(() => {
@@ -952,38 +1068,45 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }, [room, isMuted]);
 
   // PTT handlers with half-duplex logic
+  const broadcastChirp = useCallback((action: 'start' | 'end') => {
+    if (!room?.localParticipant) return;
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(JSON.stringify({ type: 'chirp', action }));
+      room.localParticipant.publishData(data, { reliable: false });
+    } catch {}
+  }, [room]);
+
   const startTalking = useCallback(async () => {
     if (isTalking || !room?.localParticipant) return;
     
-    // Instant visual feedback
     setIsTalking(true);
     setIsMuted(false);
     
-    // Mute incoming audio (half-duplex - prevents echo)
     setRemoteAudioMuted(true);
     
-    // Play chirp and enable mic in parallel
-    playChirp('start');
+    if (chirpEnabled) {
+      broadcastChirp('start');
+    }
     await room.localParticipant.setMicrophoneEnabled(true);
-  }, [room, isTalking, setRemoteAudioMuted, playChirp]);
+  }, [room, isTalking, setRemoteAudioMuted, broadcastChirp, chirpEnabled]);
 
   const stopTalking = useCallback(async () => {
     if (!isTalking || !room?.localParticipant || talkMode !== 'ptt') return;
     
     setIsTalking(false);
     
-    // Step 1: Disable microphone immediately
     await room.localParticipant.setMicrophoneEnabled(false);
     setIsMuted(true);
     
-    // Step 2: Play "talk end" chirp
-    playChirp('end');
+    if (chirpEnabled) {
+      broadcastChirp('end');
+    }
     
-    // Step 3: Unmute incoming audio after a brief delay (prevents hearing own echo tail)
     setTimeout(() => {
       setRemoteAudioMuted(false);
     }, 150);
-  }, [room, isTalking, talkMode, setRemoteAudioMuted, playChirp]);
+  }, [room, isTalking, talkMode, setRemoteAudioMuted, playChirp, broadcastChirp, chirpEnabled]);
 
   // Change talk mode
   const changeTalkMode = useCallback(async (mode: TalkMode) => {
@@ -1012,12 +1135,15 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
   }, [room, isMuted]);
 
-  // Update audio processing
   const updateAudioProcessing = useCallback(async (settings: {
     echoCancellation?: boolean;
     noiseSuppression?: boolean;
     autoGainControl?: boolean;
   }) => {
+    const newEcho = settings.echoCancellation ?? echoCancellation;
+    const newNoise = settings.noiseSuppression ?? noiseSuppression;
+    const newGain = settings.autoGainControl ?? autoGainControl;
+
     if (settings.echoCancellation !== undefined) {
       setEchoCancellation(settings.echoCancellation);
       localStorage.setItem('banter_echo_cancellation', String(settings.echoCancellation));
@@ -1030,7 +1156,25 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setAutoGainControl(settings.autoGainControl);
       localStorage.setItem('banter_auto_gain_control', String(settings.autoGainControl));
     }
-  }, []);
+
+    if (room && room.localParticipant) {
+      try {
+        const micPub = room.localParticipant.getTrackPublication('microphone' as any);
+        if (micPub?.track) {
+          const track = micPub.track as any;
+          if (track.mediaStreamTrack) {
+            await track.mediaStreamTrack.applyConstraints({
+              echoCancellation: newEcho,
+              noiseSuppression: newNoise,
+              autoGainControl: newGain,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Could not apply audio constraints live, will take effect on next connect');
+      }
+    }
+  }, [room, echoCancellation, noiseSuppression, autoGainControl]);
 
   // Check admin status when auth token changes
   useEffect(() => {
@@ -1251,6 +1395,94 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
   }, [authToken, allCallActive, toast, currentBanterId]);
 
+
+  const toggleTalkLock = useCallback(() => {
+    if (talkLocked) {
+      setTalkLocked(false);
+      changeTalkMode('ptt');
+      stopTalking();
+      if (room?.localParticipant) {
+        room.localParticipant.setMicrophoneEnabled(false);
+      }
+      setIsMuted(true);
+      setIsTalking(false);
+    } else {
+      setTalkLocked(true);
+      startTalking();
+      changeTalkMode('always');
+    }
+  }, [talkLocked, changeTalkMode, startTalking, stopTalking, room]);
+
+  const loadChatMessages = useCallback(async () => {
+    if (!authToken) return;
+    try {
+      const params = new URLSearchParams({ authToken, limit: '50' });
+      if (currentBanterId) params.set('banterId', currentBanterId);
+      const res = await fetch(`/api/messages?${params}`);
+      if (res.ok) {
+        const msgs = await res.json();
+        setChatMessages(msgs);
+        setHasMoreMessages(msgs.length >= 50);
+        setTimeout(() => chatEndRef.current?.scrollIntoView(), 100);
+      }
+    } catch {}
+  }, [authToken, currentBanterId]);
+
+  useEffect(() => {
+    if (authToken) loadChatMessages();
+  }, [authToken, currentBanterId, loadChatMessages]);
+
+  const sendChatMessage = useCallback(async () => {
+    if (!authToken || !chatInput.trim() || chatSending) return;
+    setChatSending(true);
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, content: chatInput.trim(), banterId: currentBanterId || undefined }),
+      });
+      if (res.ok) {
+        setChatInput('');
+      }
+    } catch {}
+    setChatSending(false);
+  }, [authToken, chatInput, chatSending, currentBanterId]);
+
+  const loadMoreMessages = useCallback(async () => {
+    if (!authToken || loadingMore || !hasMoreMessages || chatMessages.length === 0) return;
+    setLoadingMore(true);
+    try {
+      const oldest = chatMessages[0];
+      const params = new URLSearchParams({ authToken, limit: '50', before: oldest.id });
+      if (currentBanterId) params.set('banterId', currentBanterId);
+      const res = await fetch(`/api/messages?${params}`);
+      if (res.ok) {
+        const older = await res.json();
+        setHasMoreMessages(older.length >= 50);
+        setChatMessages(prev => [...older, ...prev]);
+      }
+    } catch {}
+    setLoadingMore(false);
+  }, [authToken, loadingMore, hasMoreMessages, chatMessages, currentBanterId]);
+
+  const toggleMuteAll = useCallback(async () => {
+    if (muteAllLoading) return;
+    setMuteAllLoading(true);
+    try {
+      const newState = !muteAllActive;
+      const res = await fetch('/api/admin/mute-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, muted: newState, banterId: currentBanterId || undefined }),
+      });
+      if (!res.ok) throw new Error('Failed');
+    } catch {
+      toast({ title: 'Failed to mute all', variant: 'destructive' });
+    } finally {
+      setMuteAllLoading(false);
+    }
+  }, [authToken, muteAllActive, muteAllLoading, toast, currentBanterId]);
+
   // When all-call changes from WS, reconnect to the correct room
   const prevAllCallRef = useRef(allCallActive);
   useEffect(() => {
@@ -1386,6 +1618,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [showAddExpectedModal, setShowAddExpectedModal] = useState(false);
   const [newExpectedName, setNewExpectedName] = useState("");
   const [newExpectedPhone, setNewExpectedPhone] = useState("");
+  const [newExpectedEmail, setNewExpectedEmail] = useState("");
   const [addParticipantSearch, setAddParticipantSearch] = useState("");
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -1401,6 +1634,38 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       return res.json();
     },
     enabled: showAddExpectedModal && isAdmin,
+  });
+
+  const { data: groupsData } = useQuery<{ id: string; name: string; memberIds: string[] }[]>({
+    queryKey: ["/api/groups"],
+    queryFn: async () => {
+      const token = localStorage.getItem('banter_auth_token') || '';
+      const res = await fetch("/api/groups", {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: showAddExpectedModal && isAdmin,
+  });
+
+  const addGroupToBanter = useMutation({
+    mutationFn: async (groupId: string) => {
+      const res = await fetch("/api/expected/add-group", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ authToken, groupId, banterId: currentBanterId || undefined }),
+      });
+      if (!res.ok) throw new Error("Failed to add group");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
+      toast({ title: `${data.added} participant${data.added !== 1 ? 's' : ''} added` });
+    },
+    onError: () => {
+      toast({ title: "Failed to add group", variant: "destructive" });
+    },
   });
 
   const addExpectedByUser = useMutation({
@@ -1427,7 +1692,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       const res = await fetch("/api/expected", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authToken, name: newExpectedName, phone: newExpectedPhone, banterId: currentBanterId || undefined }),
+        body: JSON.stringify({ authToken, name: newExpectedName, phone: newExpectedPhone || undefined, email: newExpectedEmail || undefined, banterId: currentBanterId || undefined }),
       });
       if (!res.ok) throw new Error("Failed to add");
       return res.json();
@@ -1437,6 +1702,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setShowManualAdd(false);
       setNewExpectedName("");
       setNewExpectedPhone("");
+      setNewExpectedEmail("");
       toast({ title: "Participant added" });
     },
     onError: () => {
@@ -1466,6 +1732,40 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
   };
 
+  const [actionDrawerParticipant, setActionDrawerParticipant] = useState<{
+    identity?: string;
+    name: string;
+    muted?: boolean;
+    isConnected: boolean;
+    expectedId?: string;
+    phone?: string;
+    email?: string | null;
+  } | null>(null);
+  const [remindLoading, setRemindLoading] = useState(false);
+
+  const handleRemindParticipant = async () => {
+    if (!actionDrawerParticipant?.expectedId) return;
+    setRemindLoading(true);
+    try {
+      const res = await fetch('/api/alert-crew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, participantIds: [actionDrawerParticipant.expectedId], banterId: currentBanterId || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: data.error || 'Failed to send reminder', variant: 'destructive' });
+      } else {
+        toast({ title: `Reminder sent to ${actionDrawerParticipant.name}` });
+      }
+    } catch {
+      toast({ title: 'Failed to send reminder', variant: 'destructive' });
+    } finally {
+      setRemindLoading(false);
+      setActionDrawerParticipant(null);
+    }
+  };
+
   // Profile drawer
   const [showProfileDrawer, setShowProfileDrawer] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState<ExpectedParticipant | null>(null);
@@ -1488,7 +1788,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       queryClient.invalidateQueries({ queryKey: ["/api/expected"] });
       setShowProfileDrawer(false);
       setEditingParticipant(null);
-      toast({ title: "Profile updated" });
     },
     onError: () => {
       toast({ title: "Failed to update profile", variant: "destructive" });
@@ -1644,10 +1943,26 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   const canShowControls = isAdmin || isUserHost();
 
+  const formatMessageTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    if (diff < 60000) return 'now';
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+    if (diff < 86400000) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  const isMyMessage = (msg: ChatMessage) => {
+    return msg.senderIdentity === localIdentity;
+  };
+
   const participants = [...realParticipants].sort((a, b) => {
     const roleA = getParticipantRole(a.identity) || 'participant';
     const roleB = getParticipantRole(b.identity) || 'participant';
-    return roleOrder[roleA] - roleOrder[roleB];
+    const roleDiff = roleOrder[roleA] - roleOrder[roleB];
+    if (roleDiff !== 0) return roleDiff;
+    return (a.joinedAt || 0) - (b.joinedAt || 0);
   });
 
   const hasActiveCall = conferenceActive || connectionState === ConnectionState.Connected;
@@ -1816,7 +2131,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   if (banterLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
+      <div className="h-full bg-slate-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden">
         <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4 animate-pulse">
           <Radio className="w-8 h-8 text-emerald-400" />
         </div>
@@ -1827,7 +2142,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   if (banterError) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
+      <div className="h-full bg-slate-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden">
         <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-4">
           <Radio className="w-8 h-8 text-red-400" />
         </div>
@@ -1838,17 +2153,17 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     );
   }
 
-  // Require authentication to access /mobley
+  // Require authentication to access /login
   if ((!verifiedPhone && !verifiedEmail) || !authToken) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6">
-        <div className="w-full max-w-sm space-y-6">
+      <div className="h-full bg-slate-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden">
+        <div className="w-full max-w-sm space-y-5">
           <div className="text-center">
-            <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
-              <Radio className="w-8 h-8 text-emerald-400" />
+            <div className="w-14 h-14 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+              <Radio className="w-7 h-7 text-emerald-400" />
             </div>
-            <h1 className="text-2xl font-bold mb-2">{banterInfo ? banterInfo.name : 'Banter'}</h1>
-            <p className="text-slate-400">{banterInfo ? 'Sign in to join this session' : 'Sign in to join'}</p>
+            <h1 className="text-xl font-bold mb-1">{banterInfo ? banterInfo.name : 'Banter'}</h1>
+            <p className="text-slate-400 text-sm">{banterInfo ? 'Sign in to join this session' : 'Sign in to join'}</p>
           </div>
 
           {loginStep === 'input' ? (
@@ -1937,58 +2252,43 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
-      <header className="relative flex items-center justify-between p-4 border-b border-slate-800">
-        <div className="flex items-center gap-2 z-10">
-          {isAdmin && (
-            <button
-              onClick={() => setShowAddExpectedModal(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-400 transition-colors text-white"
-              aria-label="Add participant"
-              data-testid="button-add-expected"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          )}
+    <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden">
+      <header className="relative flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0">
+        <div className="flex items-center gap-2">
         </div>
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="absolute left-0 right-0 bottom-2 flex justify-center pointer-events-none">
           <div className="text-center">
             <div className="flex items-center justify-center gap-2">
-              <h1 className="font-semibold truncate" data-testid="text-banter-title">{banterInfo ? banterInfo.name : (isConnected ? (userName || 'Connected') : 'Banter')}</h1>
+              <h1 className="font-semibold truncate" data-testid="text-banter-title">{banterInfo ? banterInfo.name : 'Banter'}</h1>
               {isConnected && currentChannel && (
                 <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full flex-shrink-0">
                   CH {currentChannel.number}
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-400">
-              {isConnected 
-                ? (broadcastActive
-                    ? `BROADCAST • ${formatDuration(callDuration)}`
-                    : allCallActive 
-                    ? `ALL CALL • ${formatDuration(callDuration)}`
-                    : `Connected${currentChannel ? ` • CH ${currentChannel.number}` : ''} • ${formatDuration(callDuration)}`)
-                : conferenceActive ? `${participantsData?.count || 0} online` : 'Ready to connect'}
-            </p>
+            {isConnected ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs font-medium rounded-full mt-0.5">
+                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                {broadcastActive
+                  ? `BROADCAST • ${participantsData?.count || 0}`
+                  : allCallActive 
+                  ? `ALL CALL • ${participantsData?.count || 0}`
+                  : `${participantsData?.count || 0} connected`}
+              </span>
+            ) : (
+              <p className="text-xs text-slate-400">
+                {conferenceActive ? `${participantsData?.count || 0} online` : 'Ready'}
+              </p>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2 z-10">
-          {isConnected && (
-            <button
-              onClick={() => setShowDisconnectConfirm(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-red-500 hover:bg-red-400 transition-colors text-white"
-              aria-label="Disconnect call"
-              data-testid="button-hangup-header"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          )}
+        <div className="flex items-center gap-2">
           {flicSupported !== false && (
             <button
               onClick={() => setShowFlicModal(true)}
               className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
                 flicButtons.some(b => b.connectionState === 'connected')
-                  ? 'bg-emerald-500 text-white hover:bg-emerald-400'
+                  ? 'bg-blue-500 text-white hover:bg-blue-400'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white'
               }`}
               data-testid="button-flic"
@@ -2013,6 +2313,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   </div>
                 )}
                 <button
+                  onClick={() => { window.location.reload(); }}
+                  className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3"
+                  data-testid="menu-refresh"
+                >
+                  <RefreshCw className="w-4 h-4 text-slate-400" />
+                  Refresh
+                </button>
+                <button
                   onClick={() => { setShowAudioSettings(true); setShowSettingsDropdown(false); }}
                   className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3"
                   data-testid="menu-audio-settings"
@@ -2028,6 +2336,24 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   >
                     <Radio className="w-4 h-4 text-amber-400" />
                     {canShowControls ? 'Manage Channels' : 'Switch Channel'}
+                  </button>
+                )}
+                {isAdmin && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await fetch('/api/chirp', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ authToken, enabled: !chirpEnabled, banterId: currentBanterId })
+                        });
+                      } catch {}
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm text-white hover:bg-slate-700 transition-colors flex items-center gap-3"
+                    data-testid="menu-toggle-chirp"
+                  >
+                    <Volume2 className="w-4 h-4 text-slate-400" />
+                    PTT Chirp {chirpEnabled ? 'On' : 'Off'}
                   </button>
                 )}
                 {isAdmin && isConnected && (
@@ -2092,8 +2418,22 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto px-4 pb-48">
+      <div className="flex-1 flex overflow-hidden">
+        {/* Radio tab / participant grid */}
+        <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} sm:flex flex-col flex-1 overflow-auto px-4 pb-96`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddExpectedModal(true)}
+              className="flex flex-col items-center justify-center rounded-xl p-4 border-2 border-dashed border-slate-700 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-colors cursor-pointer min-h-[120px]"
+              data-testid="button-add-participant-card"
+            >
+              <div className="w-14 h-14 rounded-full flex items-center justify-center bg-emerald-500/20">
+                <Plus className="w-6 h-6 text-emerald-400" />
+              </div>
+              <p className="font-medium text-sm mt-2 text-emerald-400">Add</p>
+            </button>
+          )}
           {participants.map((p, i) => {
             const isSpeaking = speakingState[p.identity] || false;
             const role = getParticipantRole(p.identity);
@@ -2122,20 +2462,26 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             return (
               <div 
                 key={p.identity} 
-                className={`group relative flex flex-col items-center rounded-xl p-4 transition-colors duration-200 ${getCardStyle()}`}
+                className={`group relative flex flex-col items-center rounded-xl p-4 transition-colors duration-200 ${getCardStyle()} ${canShowControls && !isMyParticipant(p.identity) ? 'cursor-pointer active:scale-95' : ''}`}
                 data-testid={`participant-${i}`}
+                onClick={() => {
+                  if (canShowControls && !isMyParticipant(p.identity)) {
+                    const ep = expectedParticipants.find(e => {
+                      const normalizedName = e.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+                      return normalizedName === p.identity || e.name === p.name;
+                    });
+                    setActionDrawerParticipant({
+                      identity: p.identity,
+                      name: p.name || p.identity,
+                      muted: p.muted,
+                      isConnected: true,
+                      expectedId: ep?.id,
+                      phone: ep?.phone,
+                      email: ep?.email,
+                    });
+                  }
+                }}
               >
-                {/* Kick button - top right corner */}
-                {canShowControls && !isMyParticipant(p.identity) && (
-                  <button
-                    onClick={() => kickParticipant.mutate(p.identity)}
-                    className="absolute top-2 right-2 p-1 rounded-md hover:bg-red-500/30 transition-all sm:opacity-0 sm:group-hover:opacity-100"
-                    title="Remove from call"
-                    data-testid={`button-kick-${i}`}
-                  >
-                    <X className="w-3.5 h-3.5 text-slate-500 hover:text-red-400" />
-                  </button>
-                )}
                 
                 {/* Avatar */}
                 <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors duration-200 ${getAvatarStyle()} ${isSpeaking ? 'animate-pulse' : ''}`}>
@@ -2172,7 +2518,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   <div className="mt-1">
                     {broadcastGrantedSpeakers.includes(p.identity) ? (
                       <button
-                        onClick={() => grantSpeaker(p.identity, false)}
+                        onClick={(e) => { e.stopPropagation(); grantSpeaker(p.identity, false); }}
                         className="text-[10px] bg-red-500/20 text-red-400 hover:bg-red-500/30 px-2 py-0.5 rounded-full transition-colors"
                         data-testid={`button-revoke-mic-${i}`}
                       >
@@ -2180,7 +2526,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       </button>
                     ) : raisedHands.includes(p.identity) ? (
                       <button
-                        onClick={() => grantSpeaker(p.identity, true)}
+                        onClick={(e) => { e.stopPropagation(); grantSpeaker(p.identity, true); }}
                         className="text-[10px] bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 px-2 py-0.5 rounded-full transition-colors animate-pulse"
                         data-testid={`button-grant-mic-${i}`}
                       >
@@ -2188,7 +2534,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       </button>
                     ) : (
                       <button
-                        onClick={() => grantSpeaker(p.identity, true)}
+                        onClick={(e) => { e.stopPropagation(); grantSpeaker(p.identity, true); }}
                         className="text-[10px] bg-slate-600/50 text-slate-400 hover:bg-slate-600 px-2 py-0.5 rounded-full transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                         data-testid={`button-grant-mic-${i}`}
                       >
@@ -2206,23 +2552,20 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                         <Radio className="w-3 h-3 text-emerald-400" />
                         <span className="text-xs text-emerald-400">Speaking</span>
                       </div>
+                    ) : !p.muted ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/20">
+                        <Mic className="w-3 h-3 text-emerald-400" />
+                        <span className="text-xs text-emerald-400">Live</span>
+                      </div>
+                    ) : awayUsers.has(p.identity) ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/20">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        <span className="text-xs text-amber-400">Away</span>
+                      </div>
                     ) : (
-                      <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${
-                        p.muted 
-                          ? 'bg-slate-600/50' 
-                          : 'bg-emerald-500/20'
-                      }`}>
-                        {p.muted ? (
-                          <>
-                            <MicOff className="w-3 h-3 text-slate-400" />
-                            <span className="text-xs text-slate-400">Muted</span>
-                          </>
-                        ) : (
-                          <>
-                            <Mic className="w-3 h-3 text-emerald-400" />
-                            <span className="text-xs text-emerald-400">Live</span>
-                          </>
-                        )}
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-600/50">
+                        <MicOff className="w-3 h-3 text-slate-400" />
+                        <span className="text-xs text-slate-400">Standby</span>
                       </div>
                     )}
                   </div>
@@ -2256,80 +2599,20 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               return (
                 <div 
                   key={ep.id} 
-                  className={`group relative flex flex-col items-center rounded-xl p-4 ${getExpectedCardStyle()}`}
+                  className={`group relative flex flex-col items-center rounded-xl p-4 ${getExpectedCardStyle()} ${canShowControls ? 'cursor-pointer active:scale-95' : ''}`}
                   data-testid={`expected-${i}`}
+                  onClick={() => {
+                    if (canShowControls) {
+                      setActionDrawerParticipant({
+                        name: ep.name,
+                        isConnected: false,
+                        expectedId: ep.id,
+                        phone: ep.phone,
+                        email: ep.email,
+                      });
+                    }
+                  }}
                 >
-                  {/* Menu button - top right corner */}
-                  {canShowControls && (
-                    <div className="absolute top-2 right-2" ref={openDropdown === ep.id ? dropdownRef : undefined}>
-                      <button
-                        onClick={(e) => handleOpenDropdown(ep.id, e)}
-                        className="p-1 rounded-md hover:bg-slate-600/50 transition-all sm:opacity-0 sm:group-hover:opacity-100"
-                        data-testid={`button-menu-${i}`}
-                      >
-                        <MoreVertical className="w-4 h-4 text-slate-400" />
-                      </button>
-                      {openDropdown === ep.id && (
-                        <div 
-                          style={dropdownStyle}
-                          className="fixed bg-slate-800 rounded-lg shadow-xl py-1 z-[100] min-w-[160px] overflow-y-auto"
-                        >
-                          <button
-                            onClick={() => {
-                              openProfileDrawer(ep);
-                              setOpenDropdown(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
-                            data-testid={`button-edit-${i}`}
-                          >
-                            <Pencil className="w-4 h-4" />
-                            Edit
-                          </button>
-                          <div className="border-t border-slate-700 my-1" />
-                          <button
-                            onClick={() => {
-                              updateRole.mutate({ id: ep.id, role: 'host' });
-                              setOpenDropdown(null);
-                            }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'host' ? 'text-amber-400' : 'text-slate-300'}`}
-                          >
-                            Host
-                          </button>
-                          <button
-                            onClick={() => {
-                              updateRole.mutate({ id: ep.id, role: 'participant' });
-                              setOpenDropdown(null);
-                            }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'participant' ? 'text-blue-400' : 'text-slate-300'}`}
-                          >
-                            Participant
-                          </button>
-                          <button
-                            onClick={() => {
-                              updateRole.mutate({ id: ep.id, role: 'listener' });
-                              setOpenDropdown(null);
-                            }}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-700 ${ep.role === 'listener' ? 'text-emerald-400' : 'text-slate-300'}`}
-                          >
-                            Listener
-                          </button>
-                          <div className="border-t border-slate-700 my-1" />
-                          <button
-                            onClick={() => {
-                              setConfirmDeleteId(ep.id);
-                              setOpenDropdown(null);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-slate-700"
-                            data-testid={`button-remove-${i}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Remove
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
                   {/* Avatar */}
                   <div className={`w-14 h-14 rounded-full flex items-center justify-center ${getExpectedAvatarStyle()}`}>
                     <span className={`text-xl font-medium ${getExpectedTextColor()}`}>
@@ -2350,91 +2633,245 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   {/* Status */}
                   <div className="mt-2">
                     <div className="flex items-center gap-1 px-2 py-1 bg-slate-600/30 rounded-full">
-                      <span className="text-xs text-slate-500">Not joined</span>
+                      <Bell className="w-3 h-3 text-slate-500" />
+                      <span className="text-xs text-slate-500">Invited</span>
                     </div>
                   </div>
                 </div>
               );
             })}
           
-          {isAdmin && (
-            <button
-              onClick={() => setShowAddExpectedModal(true)}
-              className="flex flex-col items-center justify-center rounded-xl p-4 border-2 border-dashed border-slate-700 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-colors cursor-pointer min-h-[120px]"
-              data-testid="button-add-participant-card"
-            >
-              <div className="w-14 h-14 rounded-full flex items-center justify-center bg-emerald-500/20">
-                <Plus className="w-6 h-6 text-emerald-400" />
+        </div>
+        </div>
+
+        {/* Chat panel - full screen on mobile, side panel on desktop */}
+        <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} sm:flex flex-col sm:w-80 sm:border-l sm:border-slate-800 bg-slate-950 ${activeTab === 'chat' ? 'w-full' : ''}`}>
+          <div className="hidden sm:flex items-center justify-between px-4 py-3 border-b border-slate-800">
+            <h3 className="font-semibold text-sm text-slate-300">Group Chat</h3>
+            <span className="text-xs text-slate-500">{chatMessages.length} messages</span>
+          </div>
+          <div ref={chatContainerRef} className="flex-1 overflow-auto px-3 py-2 space-y-1" data-testid="chat-messages">
+            {hasMoreMessages && chatMessages.length > 0 && (
+              <button
+                onClick={loadMoreMessages}
+                disabled={loadingMore}
+                className="w-full text-center py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                data-testid="button-load-more-messages"
+              >
+                {loadingMore ? 'Loading...' : 'Load earlier messages'}
+              </button>
+            )}
+            {chatMessages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                <MessageSquare className="w-10 h-10 text-slate-700 mb-3" />
+                <p className="text-slate-500 text-sm">No messages yet</p>
+                <p className="text-slate-600 text-xs mt-1">Send a message to the group</p>
               </div>
-              <p className="font-medium text-sm mt-2 text-emerald-400">Add</p>
-            </button>
+            )}
+            {chatMessages.map((msg, i) => {
+              const mine = isMyMessage(msg);
+              const showName = !mine && (i === 0 || chatMessages[i - 1].senderIdentity !== msg.senderIdentity);
+              return (
+                <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid={`chat-message-${i}`}>
+                  <div className={`max-w-[80%] ${mine ? 'items-end' : 'items-start'}`}>
+                    {showName && (
+                      <p className="text-[10px] text-slate-500 px-2 mb-0.5">{msg.senderName}</p>
+                    )}
+                    <div className={`px-3 py-1.5 rounded-2xl text-sm ${
+                      mine 
+                        ? 'bg-emerald-600 text-white rounded-br-md' 
+                        : 'bg-slate-800 text-slate-200 rounded-bl-md'
+                    }`}>
+                      {msg.content}
+                    </div>
+                    <p className={`text-[10px] text-slate-600 px-2 mt-0.5 ${mine ? 'text-right' : ''}`}>
+                      {formatMessageTime(msg.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={chatEndRef} />
+          </div>
+          {authToken && (
+            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-32' : ''} sm:pb-3`}>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+                  placeholder="Message..."
+                  maxLength={1000}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+                  data-testid="input-chat-message"
+                />
+                <button
+                  onClick={sendChatMessage}
+                  disabled={chatSending || !chatInput.trim()}
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white transition-colors flex-shrink-0"
+                  data-testid="button-send-chat"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
 
+      {/* Tab bar - mobile only */}
+      {authToken && (
+        <div className="sm:hidden flex border-t border-slate-800 bg-slate-950">
+          <button
+            onClick={() => setActiveTab('radio')}
+            className={`flex-1 flex flex-col items-center py-2 transition-colors ${
+              activeTab === 'radio' ? 'text-emerald-400' : 'text-slate-500'
+            }`}
+            data-testid="tab-radio"
+          >
+            <Radio className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5 font-medium">Radio</span>
+          </button>
+          <button
+            onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
+            className={`flex-1 flex flex-col items-center py-2 transition-colors relative ${
+              activeTab === 'chat' ? 'text-emerald-400' : 'text-slate-500'
+            }`}
+            data-testid="tab-chat"
+          >
+            <div className="relative">
+              <MessageSquare className="w-5 h-5" />
+              {unreadCount > 0 && activeTab !== 'chat' && (
+                <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] mt-0.5 font-medium">Chat</span>
+          </button>
+        </div>
+      )}
+
       {/* Bottom controls */}
       <div className={`fixed left-0 right-0 px-6 ${
         isConnected || isConnecting 
-          ? 'bottom-0 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent pt-8 pb-8' 
-          : 'bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 pb-8 sm:pb-0'
+          ? 'bottom-0 bg-slate-950 pt-8 pb-safe' 
+          : 'bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 pb-safe sm:pb-0 bg-slate-950'
       }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
             <div className="flex flex-col items-center gap-3">
+              {isAdmin && (
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={toggleMuteAll}
+                    disabled={muteAllLoading}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm ${
+                      muteAllActive
+                        ? 'bg-amber-500 hover:bg-amber-400 text-white animate-glow-pulse'
+                        : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400'
+                    }`}
+                    data-testid="button-mute-all"
+                  >
+                    <VolumeX className={`w-4 h-4 ${muteAllActive ? 'text-white' : 'text-amber-400'}`} />
+                    {muteAllActive ? 'Unmute All' : 'Mute All'}
+                  </button>
+                  <button
+                    onClick={() => setShowDisconnectConfirm(true)}
+                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400"
+                    data-testid="button-end-call"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Leave
+                  </button>
+                </div>
+              )}
               <div className="w-full">
                 {broadcastActive && !canSpeakInBroadcast ? (
                   <button
                     onClick={toggleRaiseHand}
-                    className={`w-full h-44 flex flex-col items-center justify-center rounded-3xl font-semibold transition-all ${
+                    className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all ${
                       handRaised
-                        ? 'bg-amber-500 text-white shadow-2xl shadow-amber-500/50 border-4 border-amber-400'
-                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600'
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
                     }`}
                     data-testid="button-raise-hand"
                   >
-                    <Hand className="w-14 h-14" />
-                    <span className="text-lg font-bold mt-2">{handRaised ? 'Hand Up' : 'Raise Hand'}</span>
+                    <Hand className="w-5 h-5" />
+                    {handRaised ? 'Hand Up' : 'Raise Hand'}
+                  </button>
+                ) : talkLocked ? (
+                  <button
+                    onClick={toggleTalkLock}
+                    className="w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 relative"
+                    data-testid="button-ptt-locked"
+                  >
+                    <Mic className="w-5 h-5" />
+                    Live
+                    <Lock className="w-3.5 h-3.5 absolute right-5 opacity-70" />
                   </button>
                 ) : talkMode === 'ptt' ? (
-                  <button
-                    onPointerDown={(e) => {
-                      e.preventDefault();
-                      unlockAudio();
-                      startTalking();
-                    }}
-                    onPointerUp={stopTalking}
-                    onPointerLeave={stopTalking}
-                    onPointerCancel={stopTalking}
-                    className={`w-full h-44 flex flex-col items-center justify-center rounded-3xl font-semibold transition-all select-none touch-none ${
-                      isMuted 
-                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600' 
-                        : 'bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 border-4 border-emerald-400'
-                    }`}
-                    data-testid="button-ptt"
-                  >
-                    {isMuted ? <MicOff className="w-14 h-14" /> : <Mic className="w-14 h-14" />}
-                    <span className="text-lg font-bold mt-2">{isMuted ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk') : 'Live'}</span>
-                  </button>
+                  <div className="w-full relative">
+                    <button
+                      onPointerDown={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.closest('[data-testid="button-lock-talk"]')) return;
+                        e.preventDefault();
+                        unlockAudio();
+                        startTalking();
+                      }}
+                      onPointerUp={(e) => {
+                        const target = e.target as HTMLElement;
+                        if (target.closest('[data-testid="button-lock-talk"]')) return;
+                        stopTalking();
+                      }}
+                      onPointerLeave={stopTalking}
+                      onPointerCancel={stopTalking}
+                      className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all select-none touch-none ${
+                        isMuted 
+                          ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
+                          : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                      }`}
+                      data-testid="button-ptt"
+                    >
+                      {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                      {isMuted ? ('ontouchstart' in window ? 'Hold to Talk' : 'Spacebar to Talk') : 'Live'}
+                    </button>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onTouchStart={(e) => { e.stopPropagation(); }}
+                      onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); toggleTalkLock(); }}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 transition-colors cursor-pointer z-10"
+                      data-testid="button-lock-talk"
+                      aria-label="Lock mic on"
+                    >
+                      <Unlock className="w-4 h-4 text-slate-300" />
+                    </div>
+                  </div>
                 ) : talkMode === 'always' ? (
-                  <div
-                    className="w-full h-44 flex flex-col items-center justify-center rounded-3xl font-semibold bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 border-4 border-emerald-400"
+                  <button
+                    onClick={toggleTalkLock}
+                    className="w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 relative"
                     data-testid="status-always-on"
                   >
-                    <Radio className="w-14 h-14" />
-                    <span className="text-lg font-bold mt-2">Always On</span>
-                  </div>
+                    <Radio className="w-5 h-5" />
+                    Always On
+                    <Lock className="w-3.5 h-3.5 absolute right-5 opacity-70" />
+                  </button>
                 ) : (
                   <button
                     onClick={toggleMute}
-                    className={`w-full h-44 flex flex-col items-center justify-center rounded-3xl font-semibold transition-all ${
+                    className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-all ${
                       isMuted 
-                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300 border-4 border-slate-600' 
-                        : 'bg-emerald-500 text-white shadow-2xl shadow-emerald-500/50 border-4 border-emerald-400'
+                        ? 'bg-slate-700 hover:bg-slate-600 text-slate-300' 
+                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
                     }`}
                     data-testid="button-toggle-mute"
                   >
-                    {isMuted ? <MicOff className="w-14 h-14" /> : <Mic className="w-14 h-14" />}
-                    <span className="text-lg font-bold mt-2">{isMuted ? ('ontouchstart' in window ? 'Tap to Talk' : 'Spacebar to Talk') : 'Live'}</span>
+                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    {isMuted ? ('ontouchstart' in window ? 'Tap to Talk' : 'Spacebar to Talk') : 'Live'}
                   </button>
                 )}
               </div>
@@ -2444,7 +2881,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   disabled={allCallLoading}
                   className={`w-full flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all ${
                     allCallActive
-                      ? 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/30 animate-pulse'
+                      ? 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/30 animate-glow-pulse'
                       : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
                   }`}
                   data-testid="button-all-call"
@@ -2470,45 +2907,36 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   <label className="text-xs text-slate-400 mb-1 block">Your name</label>
                   <input
                     type="text"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
                     placeholder="Enter your name"
                     className="w-full bg-transparent border-b border-slate-600 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors text-center text-lg"
                     data-testid="input-user-name"
                   />
                 </div>
               )}
-              {(() => {
-                const otherParticipants = realParticipants.filter(p => {
-                  const normalizedName = userName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
-                  return p.identity !== normalizedName && p.name !== userName;
-                });
-                return otherParticipants.length > 0 ? (
-                <div className="bg-slate-800/50 rounded-2xl p-4" data-testid="prejoin-participant-list">
-                  <p className="text-xs text-slate-400 mb-3 text-center">{otherParticipants.length} {otherParticipants.length === 1 ? 'person' : 'people'} on now</p>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {otherParticipants.map((p) => (
-                      <div
-                        key={p.identity}
-                        className="flex items-center gap-1.5 bg-slate-700/50 px-3 py-1.5 rounded-full"
-                        data-testid={`prejoin-participant-${p.identity}`}
-                      >
-                        <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                          <User className="w-3 h-3 text-emerald-400" />
-                        </div>
-                        <span className="text-sm text-white">{p.name || p.identity}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null;
-              })()}
               <button
                 onClick={() => {
+                  if (!userName && draftName.trim()) {
+                    setUserName(draftName.trim());
+                    localStorage.setItem('banter_user_name', draftName.trim());
+                    if (authToken) {
+                      fetch('/api/user/profile', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ authToken, name: draftName.trim() })
+                      }).catch(() => {});
+                    }
+                  }
                   unlockAudio();
                   connectToRoom();
                 }}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold py-4 px-6 rounded-full transition-colors"
+                disabled={!userName && !draftName.trim()}
+                className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-colors ${
+                  !userName && !draftName.trim()
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-emerald-500 hover:bg-emerald-400 text-white'
+                }`}
                 data-testid="button-connect"
               >
                 Connect
@@ -2714,31 +3142,12 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       </span>
                       <span className="text-xs text-slate-500 capitalize">{button.connectionState || 'unknown'}</span>
                     </div>
-                    <button
-                      onClick={() => forgetFlicButton(button.uuid)}
-                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
-                      data-testid={`flic-forget-${button.uuid}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 ))
               ) : (
                 <p className="text-slate-500 text-sm text-center py-4">No Flic buttons paired</p>
               )}
             </div>
-            {flicScanError && (
-              <p className="text-red-400 text-xs text-center mb-3">{flicScanError}</p>
-            )}
-            {flicScanning && flicScanStatus && (
-              <p className="text-amber-400 text-xs text-center mb-3 capitalize">
-                {flicScanStatus === 'discovered' ? 'Button found, connecting...' :
-                 flicScanStatus === 'connected' ? 'Connected, verifying...' :
-                 flicScanStatus === 'verified' ? 'Verified!' :
-                 flicScanStatus === 'verificationFailed' ? 'Verification failed' :
-                 flicScanStatus}
-              </p>
-            )}
             <button
               onClick={scanForFlicButtons}
               disabled={flicScanning}
@@ -2753,7 +3162,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               {flicScanning ? 'Scanning...' : 'Scan for Flic Button'}
             </button>
             <button
-              onClick={() => { setShowFlicModal(false); setFlicScanError(null); }}
+              onClick={() => setShowFlicModal(false)}
               className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
               data-testid="button-close-flic"
             >
@@ -2927,9 +3336,18 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       )}
 
+      {muteAllActive && isConnected && !isAdmin && (
+        <div className="fixed top-16 left-0 right-0 z-40 flex justify-center px-4">
+          <div className="bg-red-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg" data-testid="banner-mute-all">
+            <VolumeX className="w-4 h-4" />
+            <span className="font-semibold text-sm">ALL MUTED BY ADMIN</span>
+          </div>
+        </div>
+      )}
+
       {allCallActive && isConnected && (
         <div className="fixed top-16 left-0 right-0 z-40 flex justify-center px-4">
-          <div className="bg-red-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-pulse" data-testid="banner-all-call">
+          <div className="bg-red-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-glow-pulse" data-testid="banner-all-call">
             <PhoneCall className="w-4 h-4" />
             <span className="font-semibold text-sm">ALL CALL ACTIVE</span>
           </div>
@@ -2938,7 +3356,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
       {broadcastActive && isConnected && (
         <div className="fixed top-16 left-0 right-0 z-40 flex justify-center px-4">
-          <div className="bg-purple-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-pulse" data-testid="banner-broadcast">
+          <div className="bg-purple-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-glow-pulse" data-testid="banner-broadcast">
             <Megaphone className="w-4 h-4" />
             <span className="font-semibold text-sm">
               {isBroadcaster ? 'BROADCASTING' : canSpeakInBroadcast ? 'BROADCAST — MIC GRANTED' : 'BROADCAST — LISTEN ONLY'}
@@ -3066,27 +3484,30 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   data-testid="input-profile-name"
                 />
               </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Phone</label>
-                <input
-                  type="tel"
-                  value={verifiedPhone || ''}
-                  disabled
-                  className="w-full px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700 text-slate-500"
-                  data-testid="input-profile-phone"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Email (optional)</label>
-                <input
-                  type="email"
-                  placeholder="your@email.com"
-                  value={profileEmail}
-                  onChange={(e) => setProfileEmail(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none"
-                  data-testid="input-profile-email"
-                />
-              </div>
+              {verifiedPhone && (
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Phone</label>
+                  <input
+                    type="tel"
+                    value={verifiedPhone}
+                    disabled
+                    className="w-full px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700 text-slate-500"
+                    data-testid="input-profile-phone"
+                  />
+                </div>
+              )}
+              {verifiedEmail && (
+                <div>
+                  <label className="text-xs text-slate-400 mb-1 block">Email</label>
+                  <input
+                    type="email"
+                    value={verifiedEmail}
+                    disabled
+                    className="w-full px-4 py-3 rounded-xl bg-slate-800/50 border border-slate-700 text-slate-500"
+                    data-testid="input-profile-email"
+                  />
+                </div>
+              )}
             </div>
             <div className="flex gap-3">
               <button
@@ -3100,11 +3521,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 onClick={() => {
                   setUserName(profileName);
                   localStorage.setItem('banter_user_name', profileName);
-                  if (profileEmail) {
-                    localStorage.setItem('banter_user_email', profileEmail);
-                  } else {
-                    localStorage.removeItem('banter_user_email');
-                  }
                   if (authToken && profileName.trim()) {
                     fetch('/api/user/profile', {
                       method: 'POST',
@@ -3115,7 +3531,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     });
                   }
                   setShowMyProfile(false);
-                  toast({ title: "Profile updated" });
+                  
                 }}
                 className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
                 data-testid="button-save-profile"
@@ -3146,6 +3562,27 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             </div>
 
             <div className="flex-1 overflow-y-auto min-h-0 mb-4 -mx-1 px-1">
+              {groupsData && groupsData.length > 0 && !addParticipantSearch && (
+                <div className="mb-3">
+                  <p className="text-xs text-slate-500 uppercase tracking-wide mb-2 px-1">Groups</p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {groupsData.map(g => (
+                      <button
+                        key={g.id}
+                        onClick={() => addGroupToBanter.mutate(g.id)}
+                        className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm transition-colors"
+                        data-testid={`button-add-group-${g.id}`}
+                      >
+                        <Users className="w-3.5 h-3.5 text-emerald-400" />
+                        <span className="text-white">{g.name}</span>
+                        <span className="text-slate-500">({g.memberIds.length})</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-slate-800 mb-3" />
+                  <p className="text-xs text-slate-500 uppercase tracking-wide mb-2 px-1">People</p>
+                </div>
+              )}
               {(() => {
                 const alreadyAdded = new Set(
                   (expectedData || []).map(ep => ep.name.toLowerCase())
@@ -3208,9 +3645,17 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none text-sm"
                   data-testid="input-expected-phone"
                 />
+                <input
+                  type="email"
+                  placeholder="Email (optional if phone provided)"
+                  value={newExpectedEmail}
+                  onChange={(e) => setNewExpectedEmail(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-800 border border-slate-700 focus:border-emerald-500 outline-none text-sm"
+                  data-testid="input-expected-email"
+                />
                 <div className="flex gap-3">
                   <button
-                    onClick={() => { setShowManualAdd(false); setNewExpectedName(""); setNewExpectedPhone(""); }}
+                    onClick={() => { setShowManualAdd(false); setNewExpectedName(""); setNewExpectedPhone(""); setNewExpectedEmail(""); }}
                     className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 rounded-full transition-colors text-sm"
                     data-testid="button-cancel-manual-add"
                   >
@@ -3218,7 +3663,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   </button>
                   <button
                     onClick={() => addExpected.mutate()}
-                    disabled={!newExpectedName || !newExpectedPhone}
+                    disabled={!newExpectedName || (!newExpectedPhone && !newExpectedEmail)}
                     className="flex-1 bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-white font-medium py-3 rounded-full transition-colors text-sm"
                     data-testid="button-save-expected"
                   >
@@ -3326,6 +3771,103 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 data-testid="button-alert-crew-confirm"
               >
                 {alertCrewLoading ? 'Sending...' : 'Notify'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {actionDrawerParticipant && (
+        <div 
+          className="fixed inset-0 bg-black/70 flex items-end z-50" 
+          onClick={(e) => { if (e.target === e.currentTarget) setActionDrawerParticipant(null); }}
+          data-testid="drawer-participant-actions"
+        >
+          <div className="bg-slate-900 rounded-t-2xl w-full pb-safe animate-in slide-in-from-bottom duration-200">
+            <div className="w-10 h-1 bg-slate-600 rounded-full mx-auto mt-3 mb-4" />
+            <div className="flex items-center gap-3 px-6 mb-4">
+              <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center">
+                <span className="text-lg font-medium text-white">
+                  {actionDrawerParticipant.name.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div>
+                <p className="font-semibold text-white">{actionDrawerParticipant.name}</p>
+                <p className="text-xs text-slate-400">
+                  {actionDrawerParticipant.isConnected ? 'Connected' : 'Invited'}
+                </p>
+              </div>
+            </div>
+            <div className="px-4 space-y-1 mb-2">
+              {actionDrawerParticipant.isConnected && actionDrawerParticipant.identity && (
+                <button
+                  onClick={() => {
+                    toggleParticipantMute.mutate({ 
+                      identity: actionDrawerParticipant.identity!, 
+                      muted: !actionDrawerParticipant.muted 
+                    });
+                    setActionDrawerParticipant(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left hover:bg-slate-800 transition-colors"
+                  data-testid="drawer-action-mute"
+                >
+                  {actionDrawerParticipant.muted ? (
+                    <Mic className="w-5 h-5 text-emerald-400" />
+                  ) : (
+                    <MicOff className="w-5 h-5 text-slate-400" />
+                  )}
+                  <span className="text-white font-medium">
+                    {actionDrawerParticipant.muted ? 'Unmute' : 'Mute'}
+                  </span>
+                </button>
+              )}
+              {(actionDrawerParticipant.phone || actionDrawerParticipant.email) && (
+                <button
+                  onClick={handleRemindParticipant}
+                  disabled={remindLoading}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left hover:bg-slate-800 transition-colors disabled:opacity-50"
+                  data-testid="drawer-action-remind"
+                >
+                  <Bell className="w-5 h-5 text-amber-400" />
+                  <span className="text-white font-medium">
+                    {remindLoading ? 'Sending...' : 'Remind'}
+                  </span>
+                </button>
+              )}
+              {actionDrawerParticipant.isConnected && actionDrawerParticipant.identity && (
+                <button
+                  onClick={() => {
+                    kickParticipant.mutate(actionDrawerParticipant.identity!);
+                    setActionDrawerParticipant(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left hover:bg-slate-800 transition-colors"
+                  data-testid="drawer-action-kick"
+                >
+                  <PhoneOff className="w-5 h-5 text-red-400" />
+                  <span className="text-red-400 font-medium">Remove from Call</span>
+                </button>
+              )}
+              {!actionDrawerParticipant.isConnected && actionDrawerParticipant.expectedId && (
+                <button
+                  onClick={() => {
+                    setConfirmDeleteId(actionDrawerParticipant.expectedId!);
+                    setActionDrawerParticipant(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left hover:bg-slate-800 transition-colors"
+                  data-testid="drawer-action-remove"
+                >
+                  <Trash2 className="w-5 h-5 text-red-400" />
+                  <span className="text-red-400 font-medium">Remove</span>
+                </button>
+              )}
+            </div>
+            <div className="px-4 pb-4">
+              <button
+                onClick={() => setActionDrawerParticipant(null)}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3.5 rounded-xl transition-colors"
+                data-testid="drawer-action-done"
+              >
+                Done
               </button>
             </div>
           </div>
