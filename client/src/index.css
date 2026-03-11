@@ -405,7 +405,7 @@
   }
   
   .pt-safe {
-    padding-top: max(1rem, env(safe-area-inset-top, 1rem));
+    padding-top: env(safe-area-inset-top, 0px);
   }
 }
 
