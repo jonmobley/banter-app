@@ -440,3 +440,11 @@ html, body {
   height: 100%;
   overflow: hidden;
 }
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px 2px currentColor; }
+  50% { box-shadow: 0 0 16px 6px currentColor; }
+}
+.animate-glow-pulse {
+  animation: glow-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

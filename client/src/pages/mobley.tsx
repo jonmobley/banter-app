@@ -2769,7 +2769,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     disabled={muteAllLoading}
                     className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm ${
                       muteAllActive
-                        ? 'bg-amber-500 hover:bg-amber-400 text-white animate-pulse'
+                        ? 'bg-amber-500 hover:bg-amber-400 text-white animate-glow-pulse'
                         : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400'
                     }`}
                     data-testid="button-mute-all"
@@ -2872,7 +2872,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   disabled={allCallLoading}
                   className={`w-full flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all ${
                     allCallActive
-                      ? 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/30 animate-pulse'
+                      ? 'bg-red-500 hover:bg-red-400 text-white shadow-lg shadow-red-500/30 animate-glow-pulse'
                       : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
                   }`}
                   data-testid="button-all-call"
@@ -3338,7 +3338,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
       {allCallActive && isConnected && (
         <div className="fixed top-16 left-0 right-0 z-40 flex justify-center px-4">
-          <div className="bg-red-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-pulse" data-testid="banner-all-call">
+          <div className="bg-red-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-glow-pulse" data-testid="banner-all-call">
             <PhoneCall className="w-4 h-4" />
             <span className="font-semibold text-sm">ALL CALL ACTIVE</span>
           </div>
@@ -3347,7 +3347,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
       {broadcastActive && isConnected && (
         <div className="fixed top-16 left-0 right-0 z-40 flex justify-center px-4">
-          <div className="bg-purple-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-pulse" data-testid="banner-broadcast">
+          <div className="bg-purple-500/90 backdrop-blur-sm text-white px-6 py-2 rounded-full flex items-center gap-2 shadow-lg animate-glow-pulse" data-testid="banner-broadcast">
             <Megaphone className="w-4 h-4" />
             <span className="font-semibold text-sm">
               {isBroadcaster ? 'BROADCASTING' : canSpeakInBroadcast ? 'BROADCAST — MIC GRANTED' : 'BROADCAST — LISTEN ONLY'}
