@@ -343,24 +343,27 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
 
 extension PushToTalkPlugin: FLICButtonDelegate {
     public func buttonDidConnect(_ button: FLICButton) {
+        print("[Flic] buttonDidConnect: \(button.name) (\(button.uuid))")
         notifyListeners("flicConnected", data: ["uuid": button.uuid, "name": button.name])
     }
 
     public func buttonIsReady(_ button: FLICButton) {
-        print("PushToTalk: Flic button ready — \(button.name)")
+        print("[Flic] buttonIsReady: \(button.name) — triggerMode=\(button.triggerMode.rawValue)")
         notifyListeners("flicReady", data: ["uuid": button.uuid, "name": button.name])
     }
 
     public func button(_ button: FLICButton, didDisconnectWithError error: (any Error)?) {
+        print("[Flic] didDisconnect: \(button.name), error=\(error?.localizedDescription ?? "none"), unpaired=\(button.isUnpaired)")
         notifyListeners("flicDisconnected", data: ["uuid": button.uuid])
         if !button.isUnpaired {
+            print("[Flic] Auto-reconnecting \(button.name)")
             button.connect()
         }
     }
 
     public func button(_ button: FLICButton, didFailToConnectWithError error: (any Error)?) {
         let message = error?.localizedDescription ?? "unknown"
-        print("PushToTalk: Flic button failed to connect — \(message)")
+        print("[Flic] didFailToConnect: \(button.name) — \(message)")
         notifyListeners("flicConnectionFailed", data: [
             "uuid": button.uuid,
             "error": message
@@ -368,46 +371,56 @@ extension PushToTalkPlugin: FLICButtonDelegate {
     }
 
     public func button(_ button: FLICButton, didReceiveButtonDown queued: Bool, age: Int) {
+        print("[Flic] buttonDown: queued=\(queued), age=\(age), pttEnabled=\(hardwarePTTEnabled), transmitting=\(isTransmitting)")
         guard hardwarePTTEnabled, !queued else { return }
         if !isTransmitting {
             isTransmitting = true
+            print("[Flic] → hardwarePTTPressed")
             notifyListeners("hardwarePTTPressed", data: [:])
         }
     }
 
     public func button(_ button: FLICButton, didReceiveButtonUp queued: Bool, age: Int) {
+        print("[Flic] buttonUp: queued=\(queued), age=\(age), pttEnabled=\(hardwarePTTEnabled), transmitting=\(isTransmitting)")
         guard hardwarePTTEnabled, !queued else { return }
         if isTransmitting {
             isTransmitting = false
+            print("[Flic] → hardwarePTTReleased")
             notifyListeners("hardwarePTTReleased", data: [:])
         }
     }
 
     public func button(_ button: FLICButton, didReceiveButtonClick queued: Bool, age: Int) {
-        // Not used — PTT relies on raw down/up events only
+        print("[Flic] buttonClick: queued=\(queued), age=\(age) (ignored — PTT uses raw down/up)")
     }
 
     public func button(_ button: FLICButton, didReceiveButtonDoubleClick queued: Bool, age: Int) {
+        print("[Flic] buttonDoubleClick: queued=\(queued), age=\(age)")
         guard !queued else { return }
+        print("[Flic] → flicDoubleClick")
         notifyListeners("flicDoubleClick", data: ["uuid": button.uuid])
     }
 
     public func button(_ button: FLICButton, didReceiveButtonHold queued: Bool, age: Int) {
-        // Intentionally not mapped — avoids accidental triggers during long PTT holds
+        print("[Flic] buttonHold: queued=\(queued), age=\(age) (ignored — avoids accidental triggers)")
     }
 
     public func button(_ button: FLICButton, didUnpairWithError error: (any Error)?) {
-        print("PushToTalk: Flic button unpaired — \(button.name)")
+        print("[Flic] didUnpair: \(button.name), error=\(error?.localizedDescription ?? "none")")
         notifyListeners("flicUnpaired", data: ["uuid": button.uuid])
     }
 }
 
 extension PushToTalkPlugin: FLICManagerDelegate {
     public func managerDidRestoreState(_ manager: FLICManager) {
-        for button in manager.buttons() {
+        let buttons = manager.buttons()
+        print("[Flic] managerDidRestoreState: \(buttons.count) button(s)")
+        for button in buttons {
             button.delegate = self
             button.triggerMode = .clickAndDoubleClick
+            print("[Flic]   \(button.name) — state=\(button.state.rawValue), unpaired=\(button.isUnpaired)")
             if button.state == .disconnected && !button.isUnpaired {
+                print("[Flic]   → connecting \(button.name)")
                 button.connect()
             }
         }
@@ -424,6 +437,7 @@ extension PushToTalkPlugin: FLICManagerDelegate {
         case .resetting: stateStr = "resetting"
         default: break
         }
+        print("[Flic] managerDidUpdateState: \(stateStr)")
         notifyListeners("flicBluetoothState", data: ["state": stateStr])
     }
 }

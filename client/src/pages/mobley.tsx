@@ -2109,45 +2109,62 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     let pttPressedHandle: any = null;
     let pttReleasedHandle: any = null;
     let flicDoubleClickHandle: any = null;
+    let flicConnectionFailedHandle: any = null;
+    let flicUnpairedHandle: any = null;
     let active = true;
     const setupHardwarePTT = async () => {
       try {
         const { PushToTalk } = await import('capacitor-pushtotalk');
+        console.log('[Flic] Enabling hardware PTT');
         await PushToTalk.enableHardwarePTT();
         if (!active) return;
         pttPressedHandle = await PushToTalk.addListener('hardwarePTTPressed', () => {
+          console.log('[Flic] PTT PRESSED — talkMode:', talkMode);
           if (talkMode === 'ptt') startTalking();
           else if (talkMode === 'auto') toggleMute();
         });
         pttReleasedHandle = await PushToTalk.addListener('hardwarePTTReleased', () => {
+          console.log('[Flic] PTT RELEASED — talkMode:', talkMode);
           if (talkMode === 'ptt') stopTalking();
         });
         flicDoubleClickHandle = await PushToTalk.addListener('flicDoubleClick', () => {
+          console.log('[Flic] DOUBLE CLICK — talkMode:', talkMode, '→', talkMode === 'always' ? 'ptt' : 'always');
           if (talkMode === 'always') {
             changeTalkMode('ptt');
           } else {
             changeTalkMode('always');
           }
         });
-      } catch {
-        // Plugin not available (running in browser without Capacitor)
+        flicConnectionFailedHandle = await PushToTalk.addListener('flicConnectionFailed', (data: { uuid: string; error: string }) => {
+          console.log('[Flic] CONNECTION FAILED:', data.uuid, data.error);
+        });
+        flicUnpairedHandle = await PushToTalk.addListener('flicUnpaired', (data: { uuid: string }) => {
+          console.log('[Flic] UNPAIRED:', data.uuid);
+          refreshFlicButtons();
+        });
+        console.log('[Flic] Hardware PTT listeners registered');
+      } catch (e) {
+        console.log('[Flic] Hardware PTT setup failed (not on native?):', e);
       }
     };
     setupHardwarePTT();
     return () => {
       active = false;
       const cleanup = async () => {
+        console.log('[Flic] Cleaning up hardware PTT listeners');
         try {
           if (pttPressedHandle) await pttPressedHandle.remove();
           if (pttReleasedHandle) await pttReleasedHandle.remove();
           if (flicDoubleClickHandle) await flicDoubleClickHandle.remove();
+          if (flicConnectionFailedHandle) await flicConnectionFailedHandle.remove();
+          if (flicUnpairedHandle) await flicUnpairedHandle.remove();
           const { PushToTalk } = await import('capacitor-pushtotalk');
           await PushToTalk.disableHardwarePTT();
         } catch {}
       };
       cleanup();
     };
-  }, [connectionState, talkMode, startTalking, stopTalking, toggleMute, changeTalkMode]);
+  }, [connectionState, talkMode, startTalking, stopTalking, toggleMute, changeTalkMode, refreshFlicButtons]);
 
   // Audio interruption recovery (phone calls, Siri, alarms)
   useEffect(() => {
