@@ -1,12 +1,12 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.banter.app',
+  appId: 'com.mobleypro.banter',
   appName: 'Banter',
   webDir: 'dist/public',
   
   server: {
-    url: process.env.BANTER_SERVER_URL || undefined,
+    url: 'https://bantergroup.replit.app',
     cleartext: true,
   },
   

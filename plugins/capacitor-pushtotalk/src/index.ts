@@ -2,9 +2,7 @@ import { registerPlugin } from '@capacitor/core';
 
 import type { PushToTalkPlugin } from './definitions';
 
-const PushToTalk = registerPlugin<PushToTalkPlugin>('PushToTalk', {
-  web: () => import('./web').then((m) => new m.PushToTalkWeb()),
-});
+const PushToTalk = registerPlugin<PushToTalkPlugin>('PushToTalk');
 
 export * from './definitions';
 export { PushToTalk };
