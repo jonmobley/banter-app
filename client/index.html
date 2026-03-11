@@ -27,7 +27,16 @@
     <style>
       .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
       .pb-safe { padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 1.5rem)); }
+      #root { opacity: 0; transition: opacity 0.15s ease-in; }
+      #root.ready { opacity: 1; }
     </style>
+    <script>
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          document.getElementById('root').classList.add('ready');
+        });
+      });
+    </script>
   </head>
   <body style="background-color: #020617;">
     <div id="root"></div>
