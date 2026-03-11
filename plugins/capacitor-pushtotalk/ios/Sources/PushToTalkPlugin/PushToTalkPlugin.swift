@@ -150,7 +150,9 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func scanForFlicButtons(_ call: CAPPluginCall) {
+        print("[Flic] scanForFlicButtons called, managerInitialized=\(flicManagerInitialized), btState=\(flicManagerState.rawValue)")
         guard flicManagerInitialized else {
+            print("[Flic] REJECTED: manager not initialized")
             call.reject("Flic manager not initialized")
             return
         }
@@ -162,9 +164,11 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
             case .unsupported: reason = "Bluetooth LE not supported"
             default: reason = "Bluetooth not ready"
             }
+            print("[Flic] REJECTED: \(reason)")
             call.reject(reason)
             return
         }
+        print("[Flic] Starting native scan...")
         FLICManager.shared()?.scanForButtons(stateChangeHandler: { state in
             var status = ""
             switch state {
@@ -179,9 +183,11 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
             @unknown default:
                 status = "unknown"
             }
+            print("[Flic] Scan state: \(status)")
             self.notifyListeners("flicScanStatus", data: ["status": status])
         }, completion: { button, error in
             if let button = button {
+                print("[Flic] Scan complete — paired: \(button.name) (\(button.uuid))")
                 button.delegate = self
                 button.triggerMode = .clickAndDoubleClick
                 button.connect()
@@ -192,33 +198,39 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
                 ])
                 call.resolve(["uuid": button.uuid, "name": button.name])
             } else if let error = error {
+                print("[Flic] Scan complete — error: \(error.localizedDescription)")
                 call.reject("Flic scan failed: \(error.localizedDescription)")
             }
         })
     }
 
     @objc func stopScanForFlicButtons(_ call: CAPPluginCall) {
+        print("[Flic] stopScanForFlicButtons called, isScanning=\(FLICManager.shared()?.isScanning ?? false)")
         FLICManager.shared()?.stopScan()
         call.resolve()
     }
 
     @objc func getFlicButtons(_ call: CAPPluginCall) {
         guard let buttons = FLICManager.shared()?.buttons() else {
+            print("[Flic] getFlicButtons: no manager")
             call.resolve(["buttons": []])
             return
         }
         let buttonList = buttons.map { button -> [String: Any] in
+            let connState = button.state == .connected ? "connected" :
+                           button.state == .connecting ? "connecting" : "disconnected"
+            print("[Flic] getFlicButtons: \(button.name) — \(connState), ready=\(button.isReady), unpaired=\(button.isUnpaired), battery=\(button.batteryVoltage)V")
             return [
                 "uuid": button.uuid,
                 "name": button.name,
                 "serialNumber": button.serialNumber,
-                "connectionState": button.state == .connected ? "connected" :
-                                  button.state == .connecting ? "connecting" : "disconnected",
+                "connectionState": connState,
                 "batteryVoltage": button.batteryVoltage,
                 "isReady": button.isReady,
                 "isUnpaired": button.isUnpaired
             ]
         }
+        print("[Flic] getFlicButtons: returning \(buttonList.count) button(s)")
         call.resolve(["buttons": buttonList])
     }
 
@@ -227,19 +239,23 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Missing uuid parameter")
             return
         }
+        print("[Flic] forgetFlicButton: \(uuid)")
         guard let manager = FLICManager.shared() else {
             call.reject("Flic manager not available")
             return
         }
         guard let button = manager.buttons().first(where: { $0.uuid == uuid }) else {
+            print("[Flic] forgetFlicButton: button not found")
             call.reject("Button not found")
             return
         }
         button.disconnect()
         manager.forgetButton(button) { removedUuid, error in
             if let error = error {
+                print("[Flic] forgetFlicButton failed: \(error.localizedDescription)")
                 call.reject("Failed to forget button: \(error.localizedDescription)")
             } else {
+                print("[Flic] forgetFlicButton success: \(uuid)")
                 self.notifyListeners("flicButtonForgotten", data: ["uuid": uuid])
                 call.resolve(["uuid": removedUuid.uuidString])
             }

@@ -243,72 +243,40 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     try {
       const { PushToTalk } = await import('capacitor-pushtotalk');
       const result = await PushToTalk.getFlicButtons();
-      setFlicSupported(result !== undefined);
-    } catch {
+      const supported = result !== undefined;
+      console.log('[Flic] Support check:', supported, 'buttons:', result?.buttons?.length ?? 0);
+      setFlicSupported(supported);
+    } catch (e) {
+      console.log('[Flic] Support check failed (not on native?):', e);
       setFlicSupported(false);
     }
   }, []);
 
-  const scanForFlicButtons = useCallback(async () => {
+  const flicScanCleanupRef = useRef<(() => void) | null>(null);
+
+  const stopFlicScan = useCallback(async () => {
+    console.log('[Flic] stopFlicScan called');
+    if (flicScanCleanupRef.current) {
+      flicScanCleanupRef.current();
+      flicScanCleanupRef.current = null;
+    }
+    setFlicScanning(false);
+    setFlicScanStatus(null);
     try {
-      setFlicScanning(true);
-      setFlicScanStatus(null);
-      setFlicScanError(null);
       const { PushToTalk } = await import('capacitor-pushtotalk');
-      const handlers: Array<{ remove: () => void }> = [];
-
-      const cleanupHandlers = () => {
-        handlers.forEach(h => h.remove());
-        handlers.length = 0;
-      };
-
-      handlers.push(await PushToTalk.addListener('flicScanStatus', (data: { status: string }) => {
-        setFlicScanStatus(data.status);
-      }));
-
-      handlers.push(await PushToTalk.addListener('flicButtonFound', (data: { uuid: string; name: string }) => {
-        setFlicButtons(prev => {
-          if (prev.some(b => b.uuid === data.uuid)) return prev;
-          return [...prev, { uuid: data.uuid, name: data.name, connectionState: 'connecting' }];
-        });
-      }));
-
-      handlers.push(await PushToTalk.addListener('flicConnected', (data: { uuid: string; name: string }) => {
-        setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'connected' } : b));
-      }));
-
-      handlers.push(await PushToTalk.addListener('flicDisconnected', (data: { uuid: string }) => {
-        setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'disconnected' } : b));
-      }));
-
-      try {
-        await PushToTalk.scanForFlicButtons();
-        setFlicScanning(false);
-        setFlicScanStatus(null);
-        cleanupHandlers();
-      } catch (e: any) {
-        setFlicScanning(false);
-        setFlicScanError(e?.message || 'Scan failed');
-        setFlicScanStatus(null);
-        cleanupHandlers();
-      }
-    } catch {
-      setFlicScanning(false);
+      await PushToTalk.stopScanForFlicButtons();
+      console.log('[Flic] Native scan stopped');
+    } catch (e) {
+      console.log('[Flic] stopScanForFlicButtons error (may be expected):', e);
     }
   }, []);
 
-  const forgetFlicButton = useCallback(async (uuid: string) => {
-    try {
-      const { PushToTalk } = await import('capacitor-pushtotalk');
-      await PushToTalk.forgetFlicButton({ uuid });
-      setFlicButtons(prev => prev.filter(b => b.uuid !== uuid));
-    } catch {}
-  }, []);
-
   const refreshFlicButtons = useCallback(async () => {
+    console.log('[Flic] Refreshing button list');
     try {
       const { PushToTalk } = await import('capacitor-pushtotalk');
       const result = await PushToTalk.getFlicButtons();
+      console.log('[Flic] getFlicButtons result:', JSON.stringify(result));
       if (result.buttons && result.buttons.length > 0) {
         setFlicButtons(result.buttons.map(b => ({
           uuid: b.uuid,
@@ -318,7 +286,100 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       } else {
         setFlicButtons([]);
       }
-    } catch {}
+    } catch (e) {
+      console.log('[Flic] refreshFlicButtons error:', e);
+    }
+  }, []);
+
+  const scanForFlicButtons = useCallback(async () => {
+    console.log('[Flic] scanForFlicButtons starting');
+    try {
+      setFlicScanning(true);
+      setFlicScanStatus(null);
+      setFlicScanError(null);
+      const { PushToTalk } = await import('capacitor-pushtotalk');
+      const handlers: Array<{ remove: () => void }> = [];
+      let scanTimeout: ReturnType<typeof setTimeout> | null = null;
+      let scanDone = false;
+
+      const cleanupHandlers = () => {
+        if (scanDone) return;
+        scanDone = true;
+        console.log('[Flic] Cleaning up scan handlers');
+        if (scanTimeout) clearTimeout(scanTimeout);
+        handlers.forEach(h => h.remove());
+        handlers.length = 0;
+        flicScanCleanupRef.current = null;
+      };
+
+      flicScanCleanupRef.current = cleanupHandlers;
+
+      handlers.push(await PushToTalk.addListener('flicScanStatus', (data: { status: string }) => {
+        console.log('[Flic] Scan status:', data.status);
+        setFlicScanStatus(data.status);
+      }));
+
+      handlers.push(await PushToTalk.addListener('flicButtonFound', (data: { uuid: string; name: string }) => {
+        console.log('[Flic] Button found:', data.name, data.uuid);
+        setFlicButtons(prev => {
+          if (prev.some(b => b.uuid === data.uuid)) return prev;
+          return [...prev, { uuid: data.uuid, name: data.name, connectionState: 'connecting' }];
+        });
+      }));
+
+      handlers.push(await PushToTalk.addListener('flicConnected', (data: { uuid: string; name: string }) => {
+        console.log('[Flic] Connected:', data.name, data.uuid);
+        setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'connected' } : b));
+      }));
+
+      handlers.push(await PushToTalk.addListener('flicDisconnected', (data: { uuid: string }) => {
+        console.log('[Flic] Disconnected:', data.uuid);
+        setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'disconnected' } : b));
+      }));
+
+      scanTimeout = setTimeout(async () => {
+        if (scanDone) return;
+        console.log('[Flic] Scan timed out after 30s');
+        cleanupHandlers();
+        setFlicScanning(false);
+        setFlicScanStatus(null);
+        setFlicScanError('No Flic button found. Make sure your Flic is in pairing mode.');
+        try {
+          await PushToTalk.stopScanForFlicButtons();
+        } catch {}
+      }, 30000);
+
+      try {
+        console.log('[Flic] Calling native scanForFlicButtons');
+        const result = await PushToTalk.scanForFlicButtons();
+        console.log('[Flic] Scan completed successfully:', result);
+        cleanupHandlers();
+        setFlicScanning(false);
+        setFlicScanStatus(null);
+        refreshFlicButtons();
+      } catch (e: any) {
+        console.log('[Flic] Scan failed:', e?.message || e);
+        cleanupHandlers();
+        setFlicScanning(false);
+        setFlicScanError(e?.message || 'Scan failed');
+        setFlicScanStatus(null);
+      }
+    } catch (e) {
+      console.log('[Flic] scanForFlicButtons outer error:', e);
+      setFlicScanning(false);
+    }
+  }, [refreshFlicButtons]);
+
+  const forgetFlicButton = useCallback(async (uuid: string) => {
+    console.log('[Flic] Forgetting button:', uuid);
+    try {
+      const { PushToTalk } = await import('capacitor-pushtotalk');
+      await PushToTalk.forgetFlicButton({ uuid });
+      console.log('[Flic] Button forgotten successfully:', uuid);
+      setFlicButtons(prev => prev.filter(b => b.uuid !== uuid));
+    } catch (e) {
+      console.log('[Flic] forgetFlicButton error:', e);
+    }
   }, []);
 
   useEffect(() => {
@@ -3133,7 +3194,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {showFlicModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) setShowFlicModal(false); }}>
+        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) { stopFlicScan(); setShowFlicModal(false); } }}>
           <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
             <h2 className="text-xl font-bold text-center mb-6">Flic PTT Button</h2>
             <div className="space-y-2 mb-6">
@@ -3199,7 +3260,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               {flicScanning ? 'Scanning...' : 'Scan for Flic Button'}
             </button>
             <button
-              onClick={() => { setShowFlicModal(false); setFlicScanError(null); }}
+              onClick={() => { stopFlicScan(); setShowFlicModal(false); setFlicScanError(null); }}
               className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
               data-testid="button-close-flic"
             >
