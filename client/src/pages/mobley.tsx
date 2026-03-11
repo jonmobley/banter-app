@@ -2843,11 +2843,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       tabIndex={0}
                       onTouchStart={(e) => { e.stopPropagation(); }}
                       onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); toggleTalkLock(); }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 transition-colors cursor-pointer z-10"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 active:bg-white/30 transition-colors cursor-pointer z-10"
                       data-testid="button-lock-talk"
                       aria-label="Lock mic on"
                     >
-                      <Unlock className="w-3.5 h-3.5 text-slate-300" />
+                      <Unlock className="w-4 h-4 text-slate-300" />
                     </div>
                   </div>
                 ) : talkMode === 'always' ? (
