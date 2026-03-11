@@ -6,6 +6,8 @@ export interface FlicButton {
   serialNumber?: string;
   connectionState?: 'connected' | 'connecting' | 'disconnected';
   batteryVoltage?: number;
+  isReady?: boolean;
+  isUnpaired?: boolean;
 }
 
 export interface PushToTalkPlugin {
@@ -32,6 +34,7 @@ export interface PushToTalkPlugin {
   scanForFlicButtons(): Promise<{ uuid: string; name: string }>;
   stopScanForFlicButtons(): Promise<void>;
   getFlicButtons(): Promise<{ buttons: FlicButton[] }>;
+  forgetFlicButton(options: { uuid: string }): Promise<{ uuid: string }>;
 
   addListener(
     eventName: 'transmissionStarted',
@@ -74,8 +77,18 @@ export interface PushToTalkPlugin {
   ): Promise<PluginListenerHandle>;
 
   addListener(
+    eventName: 'flicReady',
+    listenerFunc: (data: { uuid: string; name: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
     eventName: 'flicDisconnected',
     listenerFunc: (data: { uuid: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'flicConnectionFailed',
+    listenerFunc: (data: { uuid: string; error: string }) => void
   ): Promise<PluginListenerHandle>;
 
   addListener(
@@ -86,6 +99,26 @@ export interface PushToTalkPlugin {
   addListener(
     eventName: 'flicHold',
     listenerFunc: (data: { uuid: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'flicUnpaired',
+    listenerFunc: (data: { uuid: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'flicButtonForgotten',
+    listenerFunc: (data: { uuid: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'flicScanStatus',
+    listenerFunc: (data: { status: string }) => void
+  ): Promise<PluginListenerHandle>;
+
+  addListener(
+    eventName: 'flicBluetoothState',
+    listenerFunc: (data: { state: string }) => void
   ): Promise<PluginListenerHandle>;
 
   addListener(
