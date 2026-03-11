@@ -1401,12 +1401,17 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setTalkLocked(false);
       changeTalkMode('ptt');
       stopTalking();
+      if (room?.localParticipant) {
+        room.localParticipant.setMicrophoneEnabled(false);
+      }
+      setIsMuted(true);
+      setIsTalking(false);
     } else {
       setTalkLocked(true);
       startTalking();
       changeTalkMode('always');
     }
-  }, [talkLocked, changeTalkMode, startTalking, stopTalking]);
+  }, [talkLocked, changeTalkMode, startTalking, stopTalking, room]);
 
   const loadChatMessages = useCallback(async () => {
     if (!authToken) return;
