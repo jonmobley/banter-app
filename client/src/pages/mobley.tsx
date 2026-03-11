@@ -354,9 +354,13 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         const result = await PushToTalk.scanForFlicButtons();
         console.log('[Flic] Scan completed successfully:', result);
         cleanupHandlers();
-        setFlicScanning(false);
-        setFlicScanStatus(null);
-        refreshFlicButtons();
+        setFlicScanStatus('verified');
+        await refreshFlicButtons();
+        setTimeout(() => {
+          setFlicScanning(false);
+          setFlicScanStatus(null);
+          setShowFlicModal(false);
+        }, 1200);
       } catch (e: any) {
         console.log('[Flic] Scan failed:', e?.message || e);
         cleanupHandlers();

@@ -33,6 +33,7 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
 
     override public func load() {
         super.load()
+        print("[Flic] ===== PushToTalkPlugin load() =====")
         observeAudioInterruptions()
         initializeFlicManager()
     }
@@ -189,7 +190,7 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
             if let button = button {
                 print("[Flic] Scan complete — paired: \(button.name) (\(button.uuid))")
                 button.delegate = self
-                button.triggerMode = .clickAndDoubleClick
+                button.triggerMode = .clickAndDoubleClickAndHold
                 button.connect()
                 self.notifyListeners("flicButtonFound", data: [
                     "uuid": button.uuid,
@@ -265,41 +266,50 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - Hardware PTT via Remote Control Events
 
     @objc func enableHardwarePTT(_ call: CAPPluginCall) {
+        print("[Flic] enableHardwarePTT called")
         DispatchQueue.main.async {
             UIApplication.shared.beginReceivingRemoteControlEvents()
             self.bridge?.webView?.becomeFirstResponder()
             self.hardwarePTTEnabled = true
+            print("[Flic] hardwarePTTEnabled = true")
             call.resolve()
         }
     }
 
     @objc func disableHardwarePTT(_ call: CAPPluginCall) {
+        print("[Flic] disableHardwarePTT called")
         DispatchQueue.main.async {
             UIApplication.shared.endReceivingRemoteControlEvents()
             self.hardwarePTTEnabled = false
             self.isTransmitting = false
+            print("[Flic] hardwarePTTEnabled = false")
             call.resolve()
         }
     }
 
     @objc public func handleRemoteControlEvent(_ event: UIEvent) {
+        print("[Flic] handleRemoteControlEvent: type=\(event.type.rawValue), subtype=\(event.subtype.rawValue), pttEnabled=\(hardwarePTTEnabled)")
         guard hardwarePTTEnabled, event.type == .remoteControl else { return }
 
         switch event.subtype {
         case .remoteControlPlay, .remoteControlTogglePlayPause:
             if !isTransmitting {
                 isTransmitting = true
+                print("[Flic] → remoteControl hardwarePTTPressed")
                 notifyListeners("hardwarePTTPressed", data: [:])
             } else {
                 isTransmitting = false
+                print("[Flic] → remoteControl hardwarePTTReleased")
                 notifyListeners("hardwarePTTReleased", data: [:])
             }
         case .remoteControlPause, .remoteControlStop:
             if isTransmitting {
                 isTransmitting = false
+                print("[Flic] → remoteControl hardwarePTTReleased (pause/stop)")
                 notifyListeners("hardwarePTTReleased", data: [:])
             }
         default:
+            print("[Flic] → remoteControl unhandled subtype: \(event.subtype.rawValue)")
             break
         }
     }
@@ -307,13 +317,16 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - Plugin Methods
 
     @objc func isAvailable(_ call: CAPPluginCall) {
+        print("[Flic] isAvailable called → true")
         call.resolve(["available": true])
     }
 
     @objc func requestPermission(_ call: CAPPluginCall) {
+        print("[Flic] requestPermission called")
         configureAudioSession()
         
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
+            print("[Flic] requestPermission result: granted=\(granted)")
             call.resolve(["granted": granted])
         }
     }
@@ -372,21 +385,39 @@ extension PushToTalkPlugin: FLICButtonDelegate {
 
     public func button(_ button: FLICButton, didReceiveButtonDown queued: Bool, age: Int) {
         print("[Flic] buttonDown: queued=\(queued), age=\(age), pttEnabled=\(hardwarePTTEnabled), transmitting=\(isTransmitting)")
-        guard hardwarePTTEnabled, !queued else { return }
+        guard hardwarePTTEnabled else {
+            print("[Flic] ⚠️ buttonDown IGNORED — hardwarePTTEnabled is false")
+            return
+        }
+        guard !queued else {
+            print("[Flic] ⚠️ buttonDown IGNORED — queued event")
+            return
+        }
         if !isTransmitting {
             isTransmitting = true
-            print("[Flic] → hardwarePTTPressed")
+            print("[Flic] → EMIT hardwarePTTPressed")
             notifyListeners("hardwarePTTPressed", data: [:])
+        } else {
+            print("[Flic] → buttonDown skipped — already transmitting")
         }
     }
 
     public func button(_ button: FLICButton, didReceiveButtonUp queued: Bool, age: Int) {
         print("[Flic] buttonUp: queued=\(queued), age=\(age), pttEnabled=\(hardwarePTTEnabled), transmitting=\(isTransmitting)")
-        guard hardwarePTTEnabled, !queued else { return }
+        guard hardwarePTTEnabled else {
+            print("[Flic] ⚠️ buttonUp IGNORED — hardwarePTTEnabled is false")
+            return
+        }
+        guard !queued else {
+            print("[Flic] ⚠️ buttonUp IGNORED — queued event")
+            return
+        }
         if isTransmitting {
             isTransmitting = false
-            print("[Flic] → hardwarePTTReleased")
+            print("[Flic] → EMIT hardwarePTTReleased")
             notifyListeners("hardwarePTTReleased", data: [:])
+        } else {
+            print("[Flic] → buttonUp skipped — not transmitting")
         }
     }
 
@@ -417,7 +448,7 @@ extension PushToTalkPlugin: FLICManagerDelegate {
         print("[Flic] managerDidRestoreState: \(buttons.count) button(s)")
         for button in buttons {
             button.delegate = self
-            button.triggerMode = .clickAndDoubleClick
+            button.triggerMode = .clickAndDoubleClickAndHold
             print("[Flic]   \(button.name) — state=\(button.state.rawValue), unpaired=\(button.isUnpaired)")
             if button.state == .disconnected && !button.isUnpaired {
                 print("[Flic]   → connecting \(button.name)")

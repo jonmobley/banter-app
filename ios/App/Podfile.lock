@@ -1,0 +1,28 @@
+PODS:
+  - Capacitor (8.0.1):
+    - CapacitorCordova
+  - CapacitorCordova (8.0.1)
+  - CapacitorPushtotalk (0.0.1):
+    - Capacitor
+
+DEPENDENCIES:
+  - "Capacitor (from `../../node_modules/@capacitor/ios`)"
+  - "CapacitorCordova (from `../../node_modules/@capacitor/ios`)"
+  - CapacitorPushtotalk (from `../../plugins/capacitor-pushtotalk`)
+
+EXTERNAL SOURCES:
+  Capacitor:
+    :path: "../../node_modules/@capacitor/ios"
+  CapacitorCordova:
+    :path: "../../node_modules/@capacitor/ios"
+  CapacitorPushtotalk:
+    :path: "../../plugins/capacitor-pushtotalk"
+
+SPEC CHECKSUMS:
+  Capacitor: ff35b0f66370b84aa238251b35b91886a3207c16
+  CapacitorCordova: 0d65b9bb74e995dcecb9463f34f1af2aba6f955c
+  CapacitorPushtotalk: ee5994a1c7a775f48763cf9a556be819701d42ea
+
+PODFILE CHECKSUM: 48f1b3d21881762357e48eec30b23da0c307b6bd
+
+COCOAPODS: 1.16.2
