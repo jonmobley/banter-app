@@ -2812,9 +2812,9 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         {/* Three-pane layout: desktop side-by-side, mobile sliding */}
         <div className="flex flex-1 min-h-0 overflow-hidden relative" onTouchStart={handleSwipeStart} onTouchMove={handleSwipeMove} onTouchEnd={handleSwipeEnd}>
 
-        {/* Mobile sliding container */}
+        {/* Sliding pane wrapper: slides on mobile, static flex on desktop */}
         <div
-          className="md:hidden absolute inset-0 flex"
+          className="mobile-slide-wrapper flex absolute inset-0 md:relative md:inset-auto md:flex-1"
           style={{
             transform: isSwiping
               ? `translateX(calc(${activeTab === 'talk' ? '0%' : '-50%'} + ${swipeOffset}px))`
@@ -2823,61 +2823,9 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             width: '200%',
           }}
         >
-          <div className="w-1/2 flex flex-col overflow-auto px-4 pb-24">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
-          {isAdmin && (
-            <button
-              onClick={() => setShowAddExpectedModal(true)}
-              className="flex flex-col items-center justify-center rounded-xl p-4 border-2 border-dashed border-slate-700 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-colors cursor-pointer min-h-[120px]"
-              data-testid="button-add-participant-card-mobile"
-            >
-              <div className="w-14 h-14 rounded-full flex items-center justify-center bg-emerald-500/20">
-                <Plus className="w-6 h-6 text-emerald-400" />
-              </div>
-              <p className="font-medium text-sm mt-2 text-emerald-400">Add</p>
-            </button>
-          )}
-          {allParticipantCards.map(card => renderParticipantCard(card))}
-        </div>
-          </div>
-          <div className="w-1/2 flex flex-col overflow-hidden">
-            <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-1" ref={chatContainerRef}>
-              {chatMessages.length === 0 && (
-                <div className="flex flex-col items-center justify-center flex-1 text-center">
-                  <MessageSquare className="w-8 h-8 text-slate-700 mb-2" />
-                  <p className="text-slate-600 text-xs mt-1">Send a message to the group</p>
-                </div>
-              )}
-              {chatMessages.map((msg, i) => {
-                const mine = isMyMessage(msg);
-                const showName = !mine && (i === 0 || chatMessages[i - 1].senderIdentity !== msg.senderIdentity);
-                return (
-                  <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid={`chat-message-mobile-${i}`}>
-                    <div className={`max-w-[80%] flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
-                      {showName && (
-                        <p className="text-[10px] text-slate-500 px-2 mb-0.5">{msg.senderName}</p>
-                      )}
-                      <div className={`px-3 py-1.5 rounded-2xl text-sm ${
-                        mine 
-                          ? 'bg-emerald-600 text-white rounded-br-md' 
-                          : 'bg-slate-800 text-slate-200 rounded-bl-md'
-                      }`}>
-                        {msg.content}
-                      </div>
-                      <p className={`text-[10px] text-slate-600 px-2 mt-0.5 ${mine ? 'text-right' : ''}`}>
-                        {formatMessageTime(msg.createdAt)}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-              <div ref={chatEndRef} />
-            </div>
-          </div>
-        </div>
 
-        {/* Desktop: Talk panel (participant grid) */}
-        <div className="hidden md:flex flex-col flex-1 overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800">
+        {/* Talk panel (participant grid) */}
+        <div className="w-1/2 md:w-auto md:flex-1 flex flex-col overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
           {isAdmin && (
             <button
@@ -3111,7 +3059,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
 
         {/* Chat panel */}
-        <div className="hidden md:flex flex-col bg-slate-950 w-full md:w-80 md:flex-shrink-0 md:border-r md:border-slate-800">
+        <div className="w-1/2 md:w-80 flex flex-col bg-slate-950 md:flex-shrink-0 md:border-r md:border-slate-800">
           <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-emerald-400" />
@@ -3297,6 +3245,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               </div>
             </div>
           )}
+        </div>
         </div>
 
         {/* Note panel */}

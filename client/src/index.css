@@ -441,6 +441,14 @@ html, body {
   overflow: hidden;
 }
 
+@media (min-width: 768px) {
+  .mobile-slide-wrapper {
+    transform: none !important;
+    width: auto !important;
+    transition: none !important;
+  }
+}
+
 @keyframes glow-pulse {
   0%, 100% { box-shadow: 0 0 8px 2px currentColor; }
   50% { box-shadow: 0 0 16px 6px currentColor; }
