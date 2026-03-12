@@ -818,21 +818,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         if (matchingParticipant) {
           setUserName(matchingParticipant.name);
           localStorage.setItem('banter_user_name', matchingParticipant.name);
-          return;
-        }
-      }
-      
-      if (contactsData) {
-        const matchingContact = contactsData.find((c: any) =>
-          c.email && c.email.toLowerCase().trim() === normalizedVerifiedEmail
-        );
-        if (matchingContact) {
-          setUserName(matchingContact.name);
-          localStorage.setItem('banter_user_name', matchingContact.name);
         }
       }
     }
-  }, [verifiedEmail, expectedData, contactsData, userName]);
+  }, [verifiedEmail, expectedData, userName]);
 
   // Track if we've already auto-connected this session
   const hasAutoConnected = useRef(false);
@@ -904,17 +893,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           if (matchingParticipant) {
             identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
             displayName = matchingParticipant.name;
-            found = true;
-          }
-        }
-        
-        if (!found && contactsData) {
-          const matchingContact = contactsData.find((c: any) =>
-            c.email && c.email.toLowerCase().trim() === normalizedVerifiedEmail
-          );
-          if (matchingContact) {
-            identity = matchingContact.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
-            displayName = matchingContact.name;
             found = true;
           }
         }
