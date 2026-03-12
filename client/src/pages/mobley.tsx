@@ -2952,16 +2952,16 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     <VolumeX className={`w-4 h-4 ${muteAllActive ? 'text-white' : 'text-amber-400'}`} />
                     {muteAllActive ? 'Unmute All' : 'Mute All'}
                   </button>
-                  <button
-                    onClick={() => setShowDisconnectConfirm(true)}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400"
-                    data-testid="button-end-call"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Leave
-                  </button>
                 </div>
               )}
+              <button
+                onClick={() => setShowDisconnectConfirm(true)}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400"
+                data-testid="button-end-call"
+              >
+                <LogOut className="w-4 h-4" />
+                Leave
+              </button>
               <div className="w-full">
                 {broadcastActive && !canSpeakInBroadcast ? (
                   <button
