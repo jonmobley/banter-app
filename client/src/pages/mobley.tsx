@@ -2638,7 +2638,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               disabled={muteAllLoading}
               className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${
                 muteAllActive
-                  ? 'bg-amber-500 text-white animate-glow-pulse'
+                  ? 'bg-amber-500 text-white'
                   : 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
               }`}
               data-testid="button-mute-all-header"
@@ -2658,16 +2658,23 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               )}
             </div>
             {isConnected ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs font-medium rounded-full mt-0.5">
-                <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                {broadcastActive
-                  ? `BROADCAST • ${participantsData?.count || 0}`
-                  : allCallActive 
-                  ? `ALL CALL • ${participantsData?.count || 0}`
-                  : participantsData?.count === 1
-                  ? 'Just you'
-                  : `${Math.max((participantsData?.count || 0) - 1, 0)} connected`}
-              </span>
+              muteAllActive ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs font-medium rounded-full mt-0.5">
+                  <VolumeX className="w-3 h-3" />
+                  {`${participantsData?.count || 0} Muted`}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs font-medium rounded-full mt-0.5">
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                  {broadcastActive
+                    ? `BROADCAST • ${participantsData?.count || 0}`
+                    : allCallActive 
+                    ? `ALL CALL • ${participantsData?.count || 0}`
+                    : participantsData?.count === 1
+                    ? 'Just you'
+                    : `${Math.max((participantsData?.count || 0) - 1, 0)} connected`}
+                </span>
+              )
             ) : (
               <p className="text-xs text-slate-400">
                 {conferenceActive ? `${participantsData?.count || 0} online` : 'Ready'}
