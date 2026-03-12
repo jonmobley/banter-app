@@ -1174,6 +1174,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }, [room, connectionState, localIdentity]);
 
   // Auto-connect when authenticated and name is known
+  const connectToRoomRef = useRef(connectToRoom);
+  connectToRoomRef.current = connectToRoom;
   useEffect(() => {
     if (
       (verifiedPhone || verifiedEmail) && 
@@ -1185,11 +1187,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     ) {
       hasAutoConnected.current = true;
       const timer = setTimeout(() => {
-        connectToRoom();
-      }, 500);
+        connectToRoomRef.current();
+      }, 300);
       return () => clearTimeout(timer);
     }
-  }, [verifiedPhone, verifiedEmail, authToken, userName, connectionState, connectionError, connectToRoom]);
+  }, [verifiedPhone, verifiedEmail, authToken, userName, connectionState, connectionError]);
 
   // Disconnect from room
   const disconnectFromRoom = useCallback(async () => {
