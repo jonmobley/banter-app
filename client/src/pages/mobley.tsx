@@ -477,7 +477,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   const [talkLocked, setTalkLocked] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'radio' | 'chat'>('chat');
+  const [activeTab, setActiveTab] = useState<'radio' | 'chat'>('radio');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
@@ -486,25 +486,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const activeTabRef = useRef<'radio' | 'chat'>('chat');
+  const activeTabRef = useRef<'radio' | 'chat'>('radio');
   useEffect(() => {
     activeTabRef.current = activeTab;
     if (activeTab === 'chat') setUnreadCount(0);
-  }, [activeTab]);
-
-  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
-  }, []);
-  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-    if (!touchStartRef.current) return;
-    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
-    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
-    const dt = Date.now() - touchStartRef.current.time;
-    touchStartRef.current = null;
-    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx) || dt > 500) return;
-    if (dx > 0 && activeTab === 'radio') { setActiveTab('chat'); setUnreadCount(0); }
-    else if (dx < 0 && activeTab === 'chat') { setActiveTab('radio'); }
   }, [activeTab]);
 
   // Broadcast state
@@ -2546,8 +2531,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }
 
   return (
-    <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden max-w-lg mx-auto w-full"
-      onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden max-w-lg mx-auto w-full">
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
       <header className="relative flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -2738,27 +2722,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           </div>
         </div>
       </header>
-
-      {/* Page indicator dots */}
-      {authToken && (
-        <div className="flex justify-center items-center gap-3 py-1.5 flex-shrink-0">
-          <button
-            onClick={() => setActiveTab('radio')}
-            className={`w-2 h-2 rounded-full transition-colors ${activeTab === 'radio' ? 'bg-emerald-400' : 'bg-slate-600 hover:bg-slate-500'}`}
-            data-testid="dot-radio"
-          />
-          <button
-            onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
-            className="relative"
-            data-testid="dot-chat"
-          >
-            <div className={`w-2 h-2 rounded-full transition-colors ${activeTab === 'chat' ? 'bg-emerald-400' : 'bg-slate-600 hover:bg-slate-500'}`} />
-            {unreadCount > 0 && activeTab !== 'chat' && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-            )}
-          </button>
-        </div>
-      )}
 
         {/* Radio tab / participant grid */}
         <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} flex-col flex-1 overflow-auto px-4 pb-96`}>
@@ -3045,7 +3008,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <div ref={chatEndRef} />
           </div>
           {authToken && (
-            <div className="px-3 pb-3 pt-2 border-t border-slate-800 pb-safe">
+            <div className="px-3 pb-3 pt-2 border-t border-slate-800">
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -3071,76 +3034,44 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
 
 
-      {/* Floating talk button - mobile chat view only */}
-      {isConnected && activeTab === 'chat' && (
-        <div className="fixed bottom-16 z-50" style={{ right: 'max(1rem, calc((100vw - 32rem) / 2 + 1rem))' }}>
-          {broadcastActive && !canSpeakInBroadcast ? (
-            <button
-              onClick={toggleRaiseHand}
-              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
-                handRaised ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'
-              }`}
-              data-testid="button-raise-hand-float"
-            >
-              <Hand className="w-6 h-6" />
-            </button>
-          ) : talkMode === 'ptt' ? (
-            <button
-              onPointerDown={(e) => { e.preventDefault(); unlockAudio(); startTalking(); }}
-              onPointerUp={stopTalking}
-              onPointerLeave={stopTalking}
-              onPointerCancel={stopTalking}
-              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg select-none touch-none transition-all ${
-                isMuted ? 'bg-slate-700 text-slate-300' : 'bg-emerald-500 text-white shadow-emerald-500/30'
-              }`}
-              data-testid="button-ptt-float"
-            >
-              {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-            </button>
-          ) : talkMode === 'always' ? (
-            <button
-              onPointerDown={(e) => {
-                e.preventDefault();
-                const now = Date.now();
-                if (now - alwaysOnLastTapRef.current <= 300) {
-                  alwaysOnDoubleTapRef.current = true;
-                  alwaysOnLastTapRef.current = 0;
-                  changeTalkMode('auto');
-                  return;
-                }
-                alwaysOnLastTapRef.current = now;
-                alwaysOnDoubleTapRef.current = false;
-                startHoldMute();
-              }}
-              onPointerUp={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
-              onPointerLeave={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
-              onPointerCancel={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
-              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg select-none touch-none transition-all ${
-                isHoldMuted ? 'bg-amber-500 text-white shadow-amber-500/30' : 'bg-emerald-500 text-white shadow-emerald-500/30'
-              }`}
-              data-testid="button-always-on-float"
-            >
-              {isHoldMuted ? <MicOff className="w-6 h-6" /> : <Radio className="w-6 h-6" />}
-            </button>
-          ) : (
-            <button
-              onClick={toggleMute}
-              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
-                isMuted ? 'bg-slate-700 text-slate-300' : 'bg-emerald-500 text-white shadow-emerald-500/30'
-              }`}
-              data-testid="button-toggle-mute-float"
-            >
-              {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-            </button>
-          )}
+      {/* Footer nav bar */}
+      {authToken && (
+        <div className="flex border-t border-slate-800 bg-slate-950 pb-safe flex-shrink-0 z-50">
+          <button
+            onClick={() => setActiveTab('radio')}
+            className={`flex-1 flex flex-col items-center py-2 transition-colors ${
+              activeTab === 'radio' ? 'text-emerald-400' : 'text-slate-500'
+            }`}
+            data-testid="tab-audio"
+          >
+            <Radio className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5 font-medium">Audio</span>
+          </button>
+          <button
+            onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
+            className={`flex-1 flex flex-col items-center py-2 transition-colors relative ${
+              activeTab === 'chat' ? 'text-emerald-400' : 'text-slate-500'
+            }`}
+            data-testid="tab-chat"
+          >
+            <div className="relative">
+              <MessageSquare className="w-5 h-5" />
+              {unreadCount > 0 && activeTab !== 'chat' && (
+                <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px] mt-0.5 font-medium">Chat</span>
+          </button>
         </div>
       )}
 
       {/* Bottom controls */}
       <div className={`fixed left-0 right-0 px-6 z-40 ${activeTab === 'chat' ? 'hidden' : ''} ${
         isConnected || isConnecting 
-          ? 'bottom-0 bg-slate-950 pt-8 pb-safe' 
-          : 'bottom-0 pb-safe bg-slate-950'
+          ? 'bottom-12 bg-slate-950 pt-8 pb-safe' 
+          : 'bottom-12 pb-safe bg-slate-950'
       }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
