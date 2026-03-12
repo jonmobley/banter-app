@@ -2488,11 +2488,23 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const isConnected = connectionState === ConnectionState.Connected;
   const isConnecting = connectionState === ConnectionState.Connecting;
 
+  const splashDismissedRef = useRef(false);
+  const splashMinTimeRef = useRef(Date.now());
+
   useEffect(() => {
-    const splash = document.getElementById('splash-screen');
-    if (splash && !banterLoading) {
-      splash.classList.add('fade-out');
-      setTimeout(() => splash.remove(), 500);
+    if (!banterLoading && !splashDismissedRef.current) {
+      splashDismissedRef.current = true;
+      const elapsed = Date.now() - splashMinTimeRef.current;
+      const minDelay = Math.max(0, 1200 - elapsed);
+      setTimeout(() => {
+        requestAnimationFrame(() => {
+          const splash = document.getElementById('splash-screen');
+          if (splash) {
+            splash.classList.add('fade-out');
+            setTimeout(() => splash.remove(), 500);
+          }
+        });
+      }, minDelay);
     }
   }, [banterLoading]);
 
