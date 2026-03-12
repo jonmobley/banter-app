@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { UserPlus, Plus, X, ArrowLeft, Users, Pencil, Trash2, Check, Search } from "lucide-react";
+import { UserPlus, Plus, X, ArrowLeft, Users, Pencil, Trash2, Check, Search, Mail } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -9,6 +9,7 @@ interface Contact {
   id: string;
   name: string;
   phone: string;
+  email?: string;
 }
 
 interface ExpectedParticipant {
@@ -48,6 +49,7 @@ export default function Contacts() {
   const [showAddContact, setShowAddContact] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -119,11 +121,13 @@ export default function Contacts() {
   });
 
   const addContact = useMutation({
-    mutationFn: async ({ name, phone }: { name: string; phone: string }) => {
+    mutationFn: async ({ name, phone, email }: { name: string; phone: string; email?: string }) => {
+      const body: Record<string, string> = { authToken, name, phone };
+      if (email) body.email = email;
       const res = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ authToken, name, phone }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -135,6 +139,7 @@ export default function Contacts() {
       queryClient.invalidateQueries({ queryKey: ["/api/contacts"] });
       setNewName("");
       setNewPhone("");
+      setNewEmail("");
       setShowAddContact(false);
       toast({ title: "Contact added", description: "New contact has been saved." });
     },
@@ -269,7 +274,7 @@ export default function Contacts() {
   const handleAddContact = (e: React.FormEvent) => {
     e.preventDefault();
     if (newName && newPhone) {
-      addContact.mutate({ name: newName, phone: newPhone });
+      addContact.mutate({ name: newName, phone: newPhone, email: newEmail || undefined });
     }
   };
 
@@ -295,7 +300,7 @@ export default function Contacts() {
   const filteredContacts = contacts.filter((c) => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
-    return c.name.toLowerCase().includes(query) || c.phone.toLowerCase().includes(query);
+    return c.name.toLowerCase().includes(query) || c.phone.toLowerCase().includes(query) || (c.email && c.email.toLowerCase().includes(query));
   });
 
   return (
@@ -380,6 +385,18 @@ export default function Contacts() {
                       <p className="text-red-400 text-xs mt-1">{phoneError}</p>
                     )}
                   </div>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoCorrect="off"
+                    placeholder="Email (optional)"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full bg-slate-900 rounded-xl px-4 py-3.5 outline-none focus:ring-2 ring-emerald-500"
+                    style={{ fontSize: '16px' }}
+                    data-testid="input-contact-email"
+                  />
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -442,6 +459,12 @@ export default function Contacts() {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{c.name}</p>
                         <p className="text-sm text-slate-500 truncate">{formatPhone(c.phone)}</p>
+                        {c.email && (
+                          <p className="text-sm text-slate-500 truncate flex items-center gap-1" data-testid={`text-email-${c.id}`}>
+                            <Mail className="w-3 h-3" />
+                            {c.email}
+                          </p>
+                        )}
                       </div>
                       <button
                         onClick={() => setConfirmDeleteId(c.id)}
