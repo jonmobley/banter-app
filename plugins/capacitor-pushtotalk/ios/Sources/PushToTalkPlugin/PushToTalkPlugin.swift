@@ -28,7 +28,6 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
     private var isTransmitting = false
     private var flicManagerInitialized = false
     private var flicManagerState: FLICManagerState = .unknown
-
     private var wasTransmittingBeforeInterruption = false
 
     override public func load() {
@@ -37,7 +36,7 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
         observeAudioInterruptions()
         initializeFlicManager()
     }
-    
+
     deinit {
         NotificationCenter.default.removeObserver(self)
         FLICManager.shared()?.stopScan()
@@ -53,23 +52,20 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
             )
             try audioSession.setActive(true)
         } catch {
-            print("PushToTalk: Failed to configure audio session: \(error)")
+            print("[Flic] Failed to configure audio session: \(error)")
         }
     }
 
-    // MARK: - Audio Session Interruption Handling (phone calls, Siri, alarms)
+    // MARK: - Audio Session Interruption Handling
 
     private func observeAudioInterruptions() {
         NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAudioInterruption),
+            self, selector: #selector(handleAudioInterruption),
             name: AVAudioSession.interruptionNotification,
             object: AVAudioSession.sharedInstance()
         )
-
         NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleAudioRouteChange),
+            self, selector: #selector(handleAudioRouteChange),
             name: AVAudioSession.routeChangeNotification,
             object: AVAudioSession.sharedInstance()
         )
@@ -78,82 +74,56 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc private func handleAudioInterruption(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
               let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
-              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
-            return
-        }
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
 
         switch type {
         case .began:
-            print("PushToTalk: Audio interrupted (phone call, Siri, etc.)")
+            print("[Flic] Audio interrupted")
             wasTransmittingBeforeInterruption = isTransmitting
             if isTransmitting {
                 isTransmitting = false
                 notifyListeners("hardwarePTTReleased", data: [:])
             }
             notifyListeners("audioInterrupted", data: ["reason": "began"])
-
         case .ended:
-            print("PushToTalk: Audio interruption ended")
+            print("[Flic] Audio interruption ended")
             let options = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
             let shouldResume = AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume)
-
             if shouldResume {
-                do {
-                    try AVAudioSession.sharedInstance().setActive(true)
-                    print("PushToTalk: Audio session reactivated after interruption")
-                } catch {
-                    print("PushToTalk: Failed to reactivate audio session: \(error)")
+                do { try AVAudioSession.sharedInstance().setActive(true) } catch {
+                    print("[Flic] Failed to reactivate audio session: \(error)")
                 }
             }
             notifyListeners("audioResumed", data: ["shouldResume": shouldResume])
-
-        @unknown default:
-            break
+        @unknown default: break
         }
     }
 
     @objc private func handleAudioRouteChange(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
               let reasonValue = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
-              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else {
-            return
-        }
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonValue) else { return }
 
         switch reason {
         case .oldDeviceUnavailable:
-            print("PushToTalk: Audio device disconnected (headphones unplugged, etc.)")
             notifyListeners("audioRouteChanged", data: ["reason": "deviceUnavailable"])
         case .newDeviceAvailable:
-            print("PushToTalk: New audio device connected")
             notifyListeners("audioRouteChanged", data: ["reason": "newDevice"])
-        default:
-            break
+        default: break
         }
     }
 
     // MARK: - Flic 2 Integration
-    //
-    // The Flic 2 SDK (flic2lib) must be manually added to the Xcode project:
-    // 1. Download flic2lib.xcframework from https://github.com/50ButtonsEach/flic2lib-ios
-    // 2. Drag it into Frameworks, Libraries, and Embedded Content (Embed & Sign)
-    // 3. In Build Settings, set "Allow Non-modular includes in Framework Modules" to Yes
-    // 4. Enable "Uses Bluetooth LE accessories" in Background Modes (Signing & Capabilities)
-    //
-    // No developer portal registration needed — the SDK is free and open.
-    // Once flic2lib is available, uncomment the Flic integration code below.
-    // Button events feed into the same hardwarePTTPressed/hardwarePTTReleased
-    // pipeline that wired PTT accessories use.
 
     private func initializeFlicManager() {
         FLICManager.configure(with: self, buttonDelegate: self, background: true)
         flicManagerInitialized = true
-        print("PushToTalk: Flic manager initialized")
+        print("[Flic] Flic manager initialized")
     }
 
     @objc func scanForFlicButtons(_ call: CAPPluginCall) {
-        print("[Flic] scanForFlicButtons called, managerInitialized=\(flicManagerInitialized), btState=\(flicManagerState.rawValue)")
+        print("[Flic] scanForFlicButtons called, managerInit=\(flicManagerInitialized), btState=\(flicManagerState.rawValue)")
         guard flicManagerInitialized else {
-            print("[Flic] REJECTED: manager not initialized")
             call.reject("Flic manager not initialized")
             return
         }
@@ -165,7 +135,6 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
             case .unsupported: reason = "Bluetooth LE not supported"
             default: reason = "Bluetooth not ready"
             }
-            print("[Flic] REJECTED: \(reason)")
             call.reject(reason)
             return
         }
@@ -173,65 +142,57 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
         FLICManager.shared()?.scanForButtons(stateChangeHandler: { state in
             var status = ""
             switch state {
-            case .discovered:
-                status = "discovered"
-            case .connected:
-                status = "connected"
-            case .verified:
-                status = "verified"
-            case .verificationFailed:
-                status = "verificationFailed"
-            @unknown default:
-                status = "unknown"
+            case .discovered: status = "discovered"
+            case .connected: status = "connected"
+            case .verified: status = "verified"
+            case .verificationFailed: status = "verificationFailed"
+            @unknown default: status = "unknown"
             }
             print("[Flic] Scan state: \(status)")
             self.notifyListeners("flicScanStatus", data: ["status": status])
         }, completion: { button, error in
             if let button = button {
-                print("[Flic] Scan complete — paired: \(button.name) (\(button.uuid))")
+                let name = button.name ?? "unknown"
+                print("[Flic] Scan complete — paired: \(name) (\(button.uuid))")
                 button.delegate = self
                 button.triggerMode = .clickAndDoubleClickAndHold
                 button.connect()
                 self.notifyListeners("flicButtonFound", data: [
                     "uuid": button.uuid,
-                    "name": button.name,
+                    "name": name,
                     "serialNumber": button.serialNumber
                 ])
-                call.resolve(["uuid": button.uuid, "name": button.name])
+                call.resolve(["uuid": button.uuid, "name": name])
             } else if let error = error {
-                print("[Flic] Scan complete — error: \(error.localizedDescription)")
+                print("[Flic] Scan error: \(error.localizedDescription)")
                 call.reject("Flic scan failed: \(error.localizedDescription)")
             }
         })
     }
 
     @objc func stopScanForFlicButtons(_ call: CAPPluginCall) {
-        print("[Flic] stopScanForFlicButtons called, isScanning=\(FLICManager.shared()?.isScanning ?? false)")
         FLICManager.shared()?.stopScan()
         call.resolve()
     }
 
     @objc func getFlicButtons(_ call: CAPPluginCall) {
         guard let buttons = FLICManager.shared()?.buttons() else {
-            print("[Flic] getFlicButtons: no manager")
             call.resolve(["buttons": []])
             return
         }
         let buttonList = buttons.map { button -> [String: Any] in
             let connState = button.state == .connected ? "connected" :
                            button.state == .connecting ? "connecting" : "disconnected"
-            print("[Flic] getFlicButtons: \(button.name) — \(connState), ready=\(button.isReady), unpaired=\(button.isUnpaired), battery=\(button.batteryVoltage)V")
+            let name = button.name ?? "unknown"
+            print("[Flic] getFlicButtons: \(name) — \(connState), ready=\(button.isReady)")
             return [
-                "uuid": button.uuid,
-                "name": button.name,
+                "uuid": button.uuid, "name": name,
                 "serialNumber": button.serialNumber,
                 "connectionState": connState,
                 "batteryVoltage": button.batteryVoltage,
-                "isReady": button.isReady,
-                "isUnpaired": button.isUnpaired
+                "isReady": button.isReady, "isUnpaired": button.isUnpaired
             ]
         }
-        print("[Flic] getFlicButtons: returning \(buttonList.count) button(s)")
         call.resolve(["buttons": buttonList])
     }
 
@@ -240,23 +201,19 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Missing uuid parameter")
             return
         }
-        print("[Flic] forgetFlicButton: \(uuid)")
         guard let manager = FLICManager.shared() else {
             call.reject("Flic manager not available")
             return
         }
         guard let button = manager.buttons().first(where: { $0.uuid == uuid }) else {
-            print("[Flic] forgetFlicButton: button not found")
             call.reject("Button not found")
             return
         }
         button.disconnect()
         manager.forgetButton(button) { removedUuid, error in
             if let error = error {
-                print("[Flic] forgetFlicButton failed: \(error.localizedDescription)")
                 call.reject("Failed to forget button: \(error.localizedDescription)")
             } else {
-                print("[Flic] forgetFlicButton success: \(uuid)")
                 self.notifyListeners("flicButtonForgotten", data: ["uuid": uuid])
                 call.resolve(["uuid": removedUuid.uuidString])
             }
@@ -288,174 +245,155 @@ public class PushToTalkPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc public func handleRemoteControlEvent(_ event: UIEvent) {
-        print("[Flic] handleRemoteControlEvent: type=\(event.type.rawValue), subtype=\(event.subtype.rawValue), pttEnabled=\(hardwarePTTEnabled)")
         guard hardwarePTTEnabled, event.type == .remoteControl else { return }
-
         switch event.subtype {
         case .remoteControlPlay, .remoteControlTogglePlayPause:
             if !isTransmitting {
                 isTransmitting = true
-                print("[Flic] → remoteControl hardwarePTTPressed")
                 notifyListeners("hardwarePTTPressed", data: [:])
             } else {
                 isTransmitting = false
-                print("[Flic] → remoteControl hardwarePTTReleased")
                 notifyListeners("hardwarePTTReleased", data: [:])
             }
         case .remoteControlPause, .remoteControlStop:
             if isTransmitting {
                 isTransmitting = false
-                print("[Flic] → remoteControl hardwarePTTReleased (pause/stop)")
                 notifyListeners("hardwarePTTReleased", data: [:])
             }
-        default:
-            print("[Flic] → remoteControl unhandled subtype: \(event.subtype.rawValue)")
-            break
+        default: break
         }
     }
 
     // MARK: - Plugin Methods
 
     @objc func isAvailable(_ call: CAPPluginCall) {
-        print("[Flic] isAvailable called → true")
         call.resolve(["available": true])
     }
 
     @objc func requestPermission(_ call: CAPPluginCall) {
-        print("[Flic] requestPermission called")
         configureAudioSession()
-        
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            print("[Flic] requestPermission result: granted=\(granted)")
             call.resolve(["granted": granted])
         }
     }
 
-    @objc func joinChannel(_ call: CAPPluginCall) {
-        call.resolve()
-    }
-
-    @objc func leaveChannel(_ call: CAPPluginCall) {
-        call.resolve()
-    }
-
-    @objc func requestBeginTransmitting(_ call: CAPPluginCall) {
-        call.resolve()
-    }
-
-    @objc func stopTransmitting(_ call: CAPPluginCall) {
-        call.resolve()
-    }
-
-    @objc func setActiveRemoteParticipant(_ call: CAPPluginCall) {
-        call.resolve()
-    }
+    @objc func joinChannel(_ call: CAPPluginCall) { call.resolve() }
+    @objc func leaveChannel(_ call: CAPPluginCall) { call.resolve() }
+    @objc func requestBeginTransmitting(_ call: CAPPluginCall) { call.resolve() }
+    @objc func stopTransmitting(_ call: CAPPluginCall) { call.resolve() }
+    @objc func setActiveRemoteParticipant(_ call: CAPPluginCall) { call.resolve() }
 }
 
-// MARK: - Flic 2 Button Delegate Extensions
+// MARK: - Flic 2 Button Delegate
 
 extension PushToTalkPlugin: FLICButtonDelegate {
     public func buttonDidConnect(_ button: FLICButton) {
-        print("[Flic] buttonDidConnect: \(button.name) (\(button.uuid))")
-        notifyListeners("flicConnected", data: ["uuid": button.uuid, "name": button.name])
+        let name = button.name ?? "unknown"
+        print("[Flic] buttonDidConnect: \(name) (\(button.uuid))")
+        button.delegate = self
+        button.triggerMode = .clickAndDoubleClickAndHold
+        notifyListeners("flicConnected", data: ["uuid": button.uuid, "name": name])
     }
 
     public func buttonIsReady(_ button: FLICButton) {
-        print("[Flic] buttonIsReady: \(button.name) — triggerMode=\(button.triggerMode.rawValue) (want 4)")
-        if button.triggerMode != .clickAndDoubleClickAndHold {
-            button.triggerMode = .clickAndDoubleClickAndHold
-            print("[Flic] → corrected triggerMode to clickAndDoubleClickAndHold (4)")
-        }
-        notifyListeners("flicReady", data: ["uuid": button.uuid, "name": button.name])
+        let name = button.name ?? "unknown"
+        print("[Flic] buttonIsReady: \(name), triggerMode=\(button.triggerMode.rawValue)")
+        button.delegate = self
+        button.triggerMode = .clickAndDoubleClickAndHold
+        print("[Flic] → enforced triggerMode=\(button.triggerMode.rawValue)")
+        notifyListeners("flicReady", data: ["uuid": button.uuid, "name": name])
     }
 
     public func button(_ button: FLICButton, didDisconnectWithError error: (any Error)?) {
-        print("[Flic] didDisconnect: \(button.name), error=\(error?.localizedDescription ?? "none"), unpaired=\(button.isUnpaired)")
+        let name = button.name ?? "unknown"
+        print("[Flic] didDisconnect: \(name), error=\(error?.localizedDescription ?? "none")")
         notifyListeners("flicDisconnected", data: ["uuid": button.uuid])
         if !button.isUnpaired {
-            print("[Flic] Auto-reconnecting \(button.name)")
+            print("[Flic] Auto-reconnecting \(name)")
             button.connect()
         }
     }
 
     public func button(_ button: FLICButton, didFailToConnectWithError error: (any Error)?) {
-        let message = error?.localizedDescription ?? "unknown"
-        print("[Flic] didFailToConnect: \(button.name) — \(message)")
+        print("[Flic] didFailToConnect: \(button.name ?? "unknown") — \(error?.localizedDescription ?? "unknown")")
         notifyListeners("flicConnectionFailed", data: [
-            "uuid": button.uuid,
-            "error": message
+            "uuid": button.uuid, "error": error?.localizedDescription ?? "unknown"
         ])
     }
 
-    public func button(_ button: FLICButton, didReceiveButtonDown queued: Bool, age: Int) {
-        print("[Flic] buttonDown: queued=\(queued), age=\(age), pttEnabled=\(hardwarePTTEnabled), transmitting=\(isTransmitting)")
-        guard hardwarePTTEnabled else {
-            print("[Flic] ⚠️ buttonDown IGNORED — hardwarePTTEnabled is false")
-            return
-        }
-        guard !queued else {
-            print("[Flic] ⚠️ buttonDown IGNORED — queued event")
-            return
-        }
-        if !isTransmitting {
-            isTransmitting = true
-            print("[Flic] → EMIT hardwarePTTPressed")
-            notifyListeners("hardwarePTTPressed", data: [:])
-        } else {
-            print("[Flic] → buttonDown skipped — already transmitting")
-        }
-    }
+    public func button(_ button: FLICButton, didReceive event: FLICButtonEvent) {
+        print("[Flic] ★ EVENT: class=\(event.eventClass.rawValue) type=\(event.type.rawValue) queued=\(event.wasQueued) age=\(event.age) pttEnabled=\(hardwarePTTEnabled) transmitting=\(isTransmitting)")
 
-    public func button(_ button: FLICButton, didReceiveButtonUp queued: Bool, age: Int) {
-        print("[Flic] buttonUp: queued=\(queued), age=\(age), pttEnabled=\(hardwarePTTEnabled), transmitting=\(isTransmitting)")
-        guard hardwarePTTEnabled else {
-            print("[Flic] ⚠️ buttonUp IGNORED — hardwarePTTEnabled is false")
-            return
+        event.isButtonDown { _ in
+            print("[Flic] ★ buttonDown")
+            guard self.hardwarePTTEnabled else {
+                print("[Flic] ⚠️ IGNORED — ptt disabled")
+                return
+            }
+            guard !event.wasQueued else {
+                print("[Flic] ⚠️ IGNORED — queued")
+                return
+            }
+            if !self.isTransmitting {
+                self.isTransmitting = true
+                print("[Flic] → EMIT hardwarePTTPressed")
+                self.notifyListeners("hardwarePTTPressed", data: [:])
+            }
         }
-        guard !queued else {
-            print("[Flic] ⚠️ buttonUp IGNORED — queued event")
-            return
+
+        event.isButtonUp { _ in
+            print("[Flic] ★ buttonUp")
+            guard self.hardwarePTTEnabled else {
+                print("[Flic] ⚠️ IGNORED — ptt disabled")
+                return
+            }
+            guard !event.wasQueued else {
+                print("[Flic] ⚠️ IGNORED — queued")
+                return
+            }
+            if self.isTransmitting {
+                self.isTransmitting = false
+                print("[Flic] → EMIT hardwarePTTReleased")
+                self.notifyListeners("hardwarePTTReleased", data: [:])
+            }
         }
-        if isTransmitting {
-            isTransmitting = false
-            print("[Flic] → EMIT hardwarePTTReleased")
-            notifyListeners("hardwarePTTReleased", data: [:])
-        } else {
-            print("[Flic] → buttonUp skipped — not transmitting")
+
+        event.isSingleOrDoubleClickOrHold { eventType, _ in
+            switch eventType {
+            case .doubleClick:
+                print("[Flic] ★ doubleClick")
+                guard !event.wasQueued else { return }
+                print("[Flic] → EMIT flicDoubleClick")
+                self.notifyListeners("flicDoubleClick", data: ["uuid": button.uuid])
+            case .hold:
+                print("[Flic] ★ hold — ignored")
+            case .singleClick:
+                print("[Flic] ★ singleClick — ignored")
+            default:
+                print("[Flic] ★ other: \(eventType.rawValue)")
+            }
         }
-    }
-
-    public func button(_ button: FLICButton, didReceiveButtonClick queued: Bool, age: Int) {
-        print("[Flic] buttonClick: queued=\(queued), age=\(age) (ignored — PTT uses raw down/up)")
-    }
-
-    public func button(_ button: FLICButton, didReceiveButtonDoubleClick queued: Bool, age: Int) {
-        print("[Flic] buttonDoubleClick: queued=\(queued), age=\(age)")
-        guard !queued else { return }
-        print("[Flic] → flicDoubleClick")
-        notifyListeners("flicDoubleClick", data: ["uuid": button.uuid])
-    }
-
-    public func button(_ button: FLICButton, didReceiveButtonHold queued: Bool, age: Int) {
-        print("[Flic] buttonHold: queued=\(queued), age=\(age) (ignored — avoids accidental triggers)")
     }
 
     public func button(_ button: FLICButton, didUnpairWithError error: (any Error)?) {
-        print("[Flic] didUnpair: \(button.name), error=\(error?.localizedDescription ?? "none")")
+        print("[Flic] didUnpair: \(button.name ?? "unknown")")
         notifyListeners("flicUnpaired", data: ["uuid": button.uuid])
     }
 }
+
+// MARK: - Flic Manager Delegate
 
 extension PushToTalkPlugin: FLICManagerDelegate {
     public func managerDidRestoreState(_ manager: FLICManager) {
         let buttons = manager.buttons()
         print("[Flic] managerDidRestoreState: \(buttons.count) button(s)")
         for button in buttons {
+            let name = button.name ?? "unknown"
             button.delegate = self
             button.triggerMode = .clickAndDoubleClickAndHold
-            print("[Flic]   \(button.name) — state=\(button.state.rawValue), unpaired=\(button.isUnpaired)")
+            print("[Flic]   \(name) — state=\(button.state.rawValue), unpaired=\(button.isUnpaired)")
             if button.state == .disconnected && !button.isUnpaired {
-                print("[Flic]   → connecting \(button.name)")
+                print("[Flic]   → connecting \(name)")
                 button.connect()
             }
         }
