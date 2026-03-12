@@ -2961,7 +2961,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <h3 className="font-semibold text-sm text-slate-300">Group Chat</h3>
             <span className="text-xs text-slate-500">{chatMessages.length} messages</span>
           </div>
-          <div ref={chatContainerRef} className="flex-1 overflow-auto px-3 py-2 space-y-1" data-testid="chat-messages">
+          <div ref={chatContainerRef} className="flex-1 overflow-auto px-3 py-2 space-y-1 flex flex-col justify-end" data-testid="chat-messages">
             {hasMoreMessages && chatMessages.length > 0 && (
               <button
                 onClick={loadMoreMessages}
