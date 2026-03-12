@@ -2704,10 +2704,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             return (
               <div 
                 key={p.identity} 
-                className={`group relative flex flex-col items-center rounded-xl p-4 transition-colors duration-200 ${getCardStyle()} ${canShowControls && !isMyParticipant(p.identity) ? 'cursor-pointer active:scale-95' : ''}`}
+                className={`group relative flex flex-col items-center rounded-xl p-4 transition-colors duration-200 ${getCardStyle()} ${(canShowControls && !isMyParticipant(p.identity)) || isMyParticipant(p.identity) ? 'cursor-pointer active:scale-95' : ''}`}
                 data-testid={`participant-${i}`}
                 onClick={() => {
-                  if (canShowControls && !isMyParticipant(p.identity)) {
+                  if (isMyParticipant(p.identity)) {
+                    setProfileName(userName);
+                    setProfileEmail(localStorage.getItem('banter_user_email') || '');
+                    setShowMyProfile(true);
+                  } else if (canShowControls) {
                     const ep = expectedParticipants.find(e => {
                       const normalizedName = e.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
                       return normalizedName === p.identity || e.name === p.name;
