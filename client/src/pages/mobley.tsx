@@ -477,7 +477,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   const [talkLocked, setTalkLocked] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'radio' | 'chat' | 'note'>('radio');
+  const [activeTab, setActiveTab] = useState<'talk' | 'chat' | 'note'>('talk');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
@@ -486,7 +486,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const activeTabRef = useRef<'radio' | 'chat' | 'note'>('radio');
+  const activeTabRef = useRef<'talk' | 'chat' | 'note'>('talk');
   useEffect(() => {
     activeTabRef.current = activeTab;
     if (activeTab === 'chat') setUnreadCount(0);
@@ -2768,7 +2768,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* Talk panel (participant grid) */}
-        <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-auto px-4 pb-96 md:border-r md:border-slate-800`}>
+        <div className={`${activeTab === 'talk' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-auto px-4 pb-96 md:border-r md:border-slate-800`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
           {isAdmin && (
             <button
@@ -3146,9 +3146,9 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       {authToken && (
         <div className="flex md:hidden border-t border-slate-800 bg-slate-950 pb-safe flex-shrink-0 z-50">
           <button
-            onClick={() => setActiveTab('radio')}
+            onClick={() => setActiveTab('talk')}
             className={`flex-1 flex flex-col items-center py-2 transition-colors ${
-              activeTab === 'radio' ? 'text-emerald-400' : 'text-slate-500'
+              activeTab === 'talk' ? 'text-emerald-400' : 'text-slate-500'
             }`}
             data-testid="tab-talk"
           >
@@ -3191,7 +3191,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         @media (min-width: 768px) { .bottom-controls-position { bottom: 0; } }
       `}</style>
       <div
-        className={`fixed left-0 right-0 px-6 z-40 bottom-controls-position ${activeTab !== 'radio' ? 'hidden md:block' : ''} ${
+        className={`fixed left-0 right-0 px-6 z-40 bottom-controls-position ${activeTab !== 'talk' ? 'hidden md:block' : ''} ${
           isConnected || isConnecting ? 'bg-slate-950 pt-8 pb-4 md:pb-safe' : 'pb-4 md:pb-safe bg-slate-950'
         }`}
       >
