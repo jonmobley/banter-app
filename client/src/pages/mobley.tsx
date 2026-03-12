@@ -2631,10 +2631,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowAudioSettings(true)}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-800 hover:bg-slate-700 transition-colors text-slate-400 hover:text-white md:hidden"
-            data-testid="button-settings-header-mobile"
+            className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors md:hidden ${
+              flicButtons.some(b => b.connectionState === 'connected')
+                ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white'
+            }`}
+            data-testid="button-flic-header-mobile"
           >
-            <MoreVertical className="w-5 h-5" />
+            <Bluetooth className="w-5 h-5" />
           </button>
           <div className="relative" ref={settingsDropdownRef}>
             <button
