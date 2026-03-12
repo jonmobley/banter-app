@@ -7,11 +7,13 @@ export const contacts = pgTable("contacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   phone: text("phone").notNull().unique(),
+  email: text("email"),
 });
 
 export const insertContactSchema = createInsertSchema(contacts).pick({
   name: true,
   phone: true,
+  email: true,
 });
 
 export type InsertContact = z.infer<typeof insertContactSchema>;

@@ -653,7 +653,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     refetchInterval: 5000,
   });
 
-  const { data: contactsData } = useQuery<{ id: string; name: string; phone: string }[]>({
+  const { data: contactsData } = useQuery<{ id: string; name: string; phone: string; email?: string | null }[]>({
     queryKey: ["/api/contacts"],
     queryFn: async () => {
       const res = await fetch("/api/contacts");
@@ -818,10 +818,21 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         if (matchingParticipant) {
           setUserName(matchingParticipant.name);
           localStorage.setItem('banter_user_name', matchingParticipant.name);
+          return;
+        }
+      }
+      
+      if (contactsData) {
+        const matchingContact = contactsData.find(c =>
+          c.email && c.email.toLowerCase().trim() === normalizedVerifiedEmail
+        );
+        if (matchingContact) {
+          setUserName(matchingContact.name);
+          localStorage.setItem('banter_user_name', matchingContact.name);
         }
       }
     }
-  }, [verifiedEmail, expectedData, userName]);
+  }, [verifiedEmail, expectedData, contactsData, userName]);
 
   // Track if we've already auto-connected this session
   const hasAutoConnected = useRef(false);
@@ -893,6 +904,17 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           if (matchingParticipant) {
             identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
             displayName = matchingParticipant.name;
+            found = true;
+          }
+        }
+        
+        if (!found && contactsData) {
+          const matchingContact = contactsData.find(c =>
+            c.email && c.email.toLowerCase().trim() === normalizedVerifiedEmail
+          );
+          if (matchingContact) {
+            identity = matchingContact.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+            displayName = matchingContact.name;
             found = true;
           }
         }

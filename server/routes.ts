@@ -750,7 +750,7 @@ export async function registerRoutes(
    */
   app.post("/api/contacts", async (req, res) => {
     try {
-      const { authToken, name, phone } = req.body;
+      const { authToken, name, phone, email } = req.body;
       if (!verifyAdminAuth(authToken)) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -761,7 +761,7 @@ export async function registerRoutes(
       if (existing) {
         return res.status(409).json({ error: "A contact with this phone number already exists" });
       }
-      const contact = await storage.createContact({ name, phone });
+      const contact = await storage.createContact({ name, phone, email: email || null });
       res.json(contact);
     } catch (error: any) {
       if (error.code === '23505') {
