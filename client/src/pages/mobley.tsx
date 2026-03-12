@@ -478,11 +478,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [talkLocked, setTalkLocked] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'talk' | 'chat' | 'note'>('talk');
-  const [swipeOffset, setSwipeOffset] = useState(0);
-  const [isSwiping, setIsSwiping] = useState(false);
   const swipeStartRef = useRef<{ x: number; y: number; locked: boolean; direction: 'h' | 'v' | null } | null>(null);
   const activeTabRef2 = useRef(activeTab);
   activeTabRef2.current = activeTab;
+  const slideRef = useRef<HTMLDivElement>(null);
   const handleSwipeStart = useCallback((e: React.TouchEvent) => {
     swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, locked: false, direction: null };
   }, []);
@@ -497,14 +496,15 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       return;
     }
     if (swipeStartRef.current.direction === 'v') return;
-    setIsSwiping(true);
+    const el = slideRef.current;
+    if (!el) return;
     const tab = activeTabRef2.current;
     let offset = dx;
     const isOverscroll = (tab === 'talk' && dx > 0) || (tab === 'chat' && dx < 0);
-    if (isOverscroll) {
-      offset = dx * 0.15;
-    }
-    setSwipeOffset(offset);
+    if (isOverscroll) offset = dx * 0.15;
+    const base = tab === 'talk' ? 0 : -window.innerWidth;
+    el.style.transition = 'none';
+    el.style.transform = `translateX(${base + offset}px)`;
   }, []);
   const handleSwipeEnd = useCallback((e: React.TouchEvent) => {
     if (!swipeStartRef.current || swipeStartRef.current.direction !== 'h') {
@@ -513,14 +513,20 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
     const dx = e.changedTouches[0].clientX - swipeStartRef.current.x;
     swipeStartRef.current = null;
-    setIsSwiping(false);
-    setSwipeOffset(0);
+    const el = slideRef.current;
+    if (el) {
+      el.style.transition = 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1)';
+    }
     if (Math.abs(dx) > 80) {
       if (dx < 0 && activeTabRef2.current === 'talk') {
         setActiveTab('chat');
       } else if (dx > 0 && activeTabRef2.current === 'chat') {
         setActiveTab('talk');
+      } else if (el) {
+        el.style.transform = `translateX(${activeTabRef2.current === 'talk' ? '0' : '-100vw'})`;
       }
+    } else if (el) {
+      el.style.transform = `translateX(${activeTabRef2.current === 'talk' ? '0' : '-100vw'})`;
     }
   }, []);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -535,6 +541,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   useEffect(() => {
     activeTabRef.current = activeTab;
     if (activeTab === 'chat') setUnreadCount(0);
+    const el = slideRef.current;
+    if (el) {
+      el.style.transition = 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1)';
+      el.style.transform = `translateX(${activeTab === 'talk' ? '0' : '-100vw'})`;
+    }
   }, [activeTab]);
 
   const [noteContent, setNoteContent] = useState('');
@@ -2834,12 +2845,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
         {/* Sliding pane wrapper: slides on mobile, static flex on desktop */}
         <div
+          ref={slideRef}
           className="mobile-slide-wrapper flex absolute top-0 left-0 bottom-0 md:relative md:top-auto md:left-auto md:bottom-auto md:flex-1"
           style={{
-            transform: isSwiping
-              ? `translateX(calc(${activeTab === 'talk' ? '0' : '-100vw'} + ${swipeOffset}px))`
-              : `translateX(${activeTab === 'talk' ? '0' : '-100vw'})`,
-            transition: isSwiping ? 'none' : 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1)',
+            transform: `translateX(${activeTab === 'talk' ? '0' : '-100vw'})`,
+            transition: 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1)',
             width: '200vw',
           }}
         >
