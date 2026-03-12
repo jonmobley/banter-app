@@ -3131,7 +3131,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
       {/* Footer nav bar - mobile only */}
       {authToken && (
-        <div className="flex md:hidden items-end border-t border-slate-800 bg-slate-950 pb-safe flex-shrink-0 z-50 relative">
+        <div className="flex md:hidden items-center border-t border-slate-800 bg-slate-950 pb-safe flex-shrink-0 z-50 relative">
           <button
             onClick={() => setActiveTab('talk')}
             className={`flex-1 flex flex-col items-center py-2 transition-colors ${
@@ -3154,12 +3154,12 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           </button>
 
           {/* Center talk button */}
-          <div className="flex flex-col items-center px-4" style={{ marginTop: '0.25rem' }}>
+          <div className="flex flex-col items-center px-4">
             {isConnected ? (
               broadcastActive && !canSpeakInBroadcast ? (
                 <button
                   onClick={toggleRaiseHand}
-                  className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                  className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all ${
                     handRaised
                       ? 'bg-amber-500 text-white shadow-amber-500/30'
                       : 'bg-slate-700 text-slate-300'
@@ -3178,7 +3178,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   onPointerUp={stopTalking}
                   onPointerLeave={stopTalking}
                   onPointerCancel={stopTalking}
-                  className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all select-none touch-none ${
+                  className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all select-none touch-none ${
                     isMuted
                       ? 'bg-slate-700 text-slate-300'
                       : 'bg-emerald-500 text-white shadow-emerald-500/30'
@@ -3205,7 +3205,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   onPointerUp={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
                   onPointerLeave={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
                   onPointerCancel={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
-                  className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg select-none touch-none transition-all ${
+                  className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg select-none touch-none transition-all ${
                     isHoldMuted
                       ? 'bg-amber-500 text-white shadow-amber-500/30'
                       : 'bg-emerald-500 text-white shadow-emerald-500/30'
@@ -3217,7 +3217,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               ) : (
                 <button
                   onClick={toggleMute}
-                  className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                  className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all ${
                     isMuted
                       ? 'bg-slate-700 text-slate-300'
                       : 'bg-emerald-500 text-white shadow-emerald-500/30'
@@ -3229,7 +3229,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               )
             ) : isConnecting ? (
               <div
-                className="w-16 h-16 rounded-full flex items-center justify-center bg-slate-600 text-white shadow-lg"
+                className="w-11 h-11 rounded-full flex items-center justify-center bg-slate-600 text-white shadow-lg"
                 data-testid="button-connecting-footer"
               >
                 <Mic className="w-7 h-7 animate-pulse" />
@@ -3253,7 +3253,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   connectToRoom(nameToUse || undefined);
                 }}
                 disabled={!userName && !draftName.trim()}
-                className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg transition-all ${
                   !userName && !draftName.trim()
                     ? 'bg-slate-700 text-slate-400'
                     : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
