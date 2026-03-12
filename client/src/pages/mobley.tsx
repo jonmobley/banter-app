@@ -392,11 +392,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }, []);
 
   useEffect(() => {
-    if (showAudioSettings || showFlicModal) {
+    if (showAudioSettings) {
       checkFlicSupport();
       refreshFlicButtons();
     }
-  }, [showAudioSettings, showFlicModal, checkFlicSupport, refreshFlicButtons]);
+  }, [showAudioSettings, checkFlicSupport, refreshFlicButtons]);
 
   // Talk mode: PTT (push-to-talk), Auto (toggle), or Always On
   const [talkMode, setTalkMode] = useState<TalkMode>(() => {
@@ -2629,19 +2629,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {flicSupported !== false && (
-            <button
-              onClick={() => setShowFlicModal(true)}
-              className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
-                flicButtons.some(b => b.connectionState === 'connected')
-                  ? 'bg-blue-500 text-white hover:bg-blue-400'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white'
-              }`}
-              data-testid="button-flic"
-            >
-              <Bluetooth className="w-5 h-5" />
-            </button>
-          )}
           <div className="relative" ref={settingsDropdownRef}>
             <button
               onClick={() => setShowSettingsDropdown(!showSettingsDropdown)}
@@ -3154,6 +3141,17 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           >
             <User className="w-5 h-5" />
           </button>
+          <button
+            onClick={() => setShowAudioSettings(true)}
+            className={`flex-1 flex flex-col items-center py-2 transition-colors ${
+              flicButtons.some(b => b.connectionState === 'connected')
+                ? 'text-blue-400'
+                : 'text-slate-500'
+            }`}
+            data-testid="tab-settings-footer"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
 
           {/* Center talk button */}
           <div className="flex flex-col items-center" style={{ marginTop: '-1.5rem' }}>
@@ -3649,87 +3647,78 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               </div>
             </div>
             
+            {flicSupported !== false && (
+              <div className="mb-6">
+                <p className="text-sm text-slate-400 mb-3">Flic PTT Button</p>
+                <div className="space-y-2 mb-3">
+                  {flicButtons.length > 0 ? (
+                    flicButtons.map((button) => (
+                      <div
+                        key={button.uuid}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${
+                          button.connectionState === 'connected'
+                            ? 'bg-emerald-500/20 border-2 border-emerald-500'
+                            : 'bg-slate-800 border-2 border-transparent'
+                        }`}
+                        data-testid={`flic-button-${button.uuid}`}
+                      >
+                        <Bluetooth className={`w-5 h-5 ${
+                          button.connectionState === 'connected' ? 'text-emerald-400' : 
+                          button.connectionState === 'connecting' ? 'text-amber-400 animate-pulse' : 'text-slate-400'
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <span className={`text-sm truncate block ${
+                            button.connectionState === 'connected' ? 'text-emerald-400' : 'text-white'
+                          }`}>
+                            {button.name}
+                          </span>
+                          <span className="text-xs text-slate-500 capitalize">{button.connectionState || 'unknown'}</span>
+                        </div>
+                        <button
+                          onClick={() => forgetFlicButton(button.uuid)}
+                          className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                          data-testid={`flic-forget-${button.uuid}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-500 text-sm text-center py-4">No Flic buttons paired</p>
+                  )}
+                </div>
+                {flicScanError && (
+                  <p className="text-red-400 text-xs text-center mb-3">{flicScanError}</p>
+                )}
+                {flicScanning && flicScanStatus && (
+                  <p className="text-amber-400 text-xs text-center mb-3 capitalize">
+                    {flicScanStatus === 'discovered' ? 'Button found, connecting...' :
+                     flicScanStatus === 'connected' ? 'Connected, verifying...' :
+                     flicScanStatus === 'verified' ? 'Verified!' :
+                     flicScanStatus === 'verificationFailed' ? 'Verification failed' :
+                     flicScanStatus}
+                  </p>
+                )}
+                <button
+                  onClick={scanForFlicButtons}
+                  disabled={flicScanning}
+                  className="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white font-medium py-3 rounded-full transition-colors"
+                  data-testid="button-scan-flic"
+                >
+                  {flicScanning ? (
+                    <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                  ) : (
+                    <Bluetooth className="w-4 h-4" />
+                  )}
+                  {flicScanning ? 'Scanning...' : 'Scan for Flic Button'}
+                </button>
+              </div>
+            )}
+
             <button
-              onClick={() => setShowAudioSettings(false)}
+              onClick={() => { stopFlicScan(); setShowAudioSettings(false); }}
               className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
               data-testid="button-close-audio-settings"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showFlicModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50 px-0 sm:px-6" onClick={(e) => { if (e.target === e.currentTarget) { stopFlicScan(); setShowFlicModal(false); } }}>
-          <div className="bg-slate-900 rounded-t-2xl sm:rounded-2xl p-6 pb-safe w-full sm:max-w-xs">
-            <h2 className="text-xl font-bold text-center mb-6">Flic PTT Button</h2>
-            <div className="space-y-2 mb-6">
-              {flicButtons.length > 0 ? (
-                flicButtons.map((button) => (
-                  <div
-                    key={button.uuid}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${
-                      button.connectionState === 'connected'
-                        ? 'bg-emerald-500/20 border-2 border-emerald-500'
-                        : 'bg-slate-800 border-2 border-transparent'
-                    }`}
-                    data-testid={`flic-button-${button.uuid}`}
-                  >
-                    <Bluetooth className={`w-5 h-5 ${
-                      button.connectionState === 'connected' ? 'text-emerald-400' : 
-                      button.connectionState === 'connecting' ? 'text-amber-400 animate-pulse' : 'text-slate-400'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <span className={`text-sm truncate block ${
-                        button.connectionState === 'connected' ? 'text-emerald-400' : 'text-white'
-                      }`}>
-                        {button.name}
-                      </span>
-                      <span className="text-xs text-slate-500 capitalize">{button.connectionState || 'unknown'}</span>
-                    </div>
-                    <button
-                      onClick={() => forgetFlicButton(button.uuid)}
-                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
-                      data-testid={`flic-forget-${button.uuid}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="text-slate-500 text-sm text-center py-4">No Flic buttons paired</p>
-              )}
-            </div>
-            {flicScanError && (
-              <p className="text-red-400 text-xs text-center mb-3">{flicScanError}</p>
-            )}
-            {flicScanning && flicScanStatus && (
-              <p className="text-amber-400 text-xs text-center mb-3 capitalize">
-                {flicScanStatus === 'discovered' ? 'Button found, connecting...' :
-                 flicScanStatus === 'connected' ? 'Connected, verifying...' :
-                 flicScanStatus === 'verified' ? 'Verified!' :
-                 flicScanStatus === 'verificationFailed' ? 'Verification failed' :
-                 flicScanStatus}
-              </p>
-            )}
-            <button
-              onClick={scanForFlicButtons}
-              disabled={flicScanning}
-              className="w-full flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white font-medium py-3 rounded-full transition-colors mb-3"
-              data-testid="button-scan-flic"
-            >
-              {flicScanning ? (
-                <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
-              ) : (
-                <Bluetooth className="w-4 h-4" />
-              )}
-              {flicScanning ? 'Scanning...' : 'Scan for Flic Button'}
-            </button>
-            <button
-              onClick={() => { stopFlicScan(); setShowFlicModal(false); setFlicScanError(null); }}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 text-white font-medium py-3 rounded-full transition-colors"
-              data-testid="button-close-flic"
             >
               Done
             </button>
