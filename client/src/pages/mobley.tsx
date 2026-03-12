@@ -2488,15 +2488,16 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const isConnected = connectionState === ConnectionState.Connected;
   const isConnecting = connectionState === ConnectionState.Connecting;
 
+  useEffect(() => {
+    const splash = document.getElementById('splash-screen');
+    if (splash && !banterLoading) {
+      splash.classList.add('fade-out');
+      setTimeout(() => splash.remove(), 500);
+    }
+  }, [banterLoading]);
+
   if (banterLoading) {
-    return (
-      <div className="h-full bg-slate-950 text-white flex flex-col items-center justify-center p-6 overflow-hidden">
-        <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4 animate-pulse">
-          <Radio className="w-8 h-8 text-emerald-400" />
-        </div>
-        <p className="text-slate-400" data-testid="text-loading">Loading banter...</p>
-      </div>
-    );
+    return null;
   }
 
   if (banterError) {

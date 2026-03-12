@@ -27,18 +27,89 @@
     <style>
       .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
       .pb-safe { padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 1.5rem)); }
-      #root { opacity: 0; transition: opacity 0.15s ease-in; }
-      #root.ready { opacity: 1; }
+
+      #splash-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #020617;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        transition: opacity 0.4s ease-out;
+      }
+      #splash-screen.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #splash-logo {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: rgba(16, 185, 129, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+      }
+      #splash-logo svg {
+        width: 36px;
+        height: 36px;
+        color: #34d399;
+      }
+      #splash-title {
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 28px;
+        font-weight: 700;
+        color: #f1f5f9;
+        letter-spacing: -0.02em;
+        margin: 0 0 8px 0;
+      }
+      #splash-subtitle {
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 13px;
+        color: #64748b;
+        margin: 0;
+      }
+      #splash-dots {
+        display: flex;
+        gap: 6px;
+        margin-top: 32px;
+      }
+      #splash-dots span {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #34d399;
+        opacity: 0.3;
+        animation: splash-dot 1.2s ease-in-out infinite;
+      }
+      #splash-dots span:nth-child(2) { animation-delay: 0.2s; }
+      #splash-dots span:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes splash-dot {
+        0%, 80%, 100% { opacity: 0.3; transform: scale(1); }
+        40% { opacity: 1; transform: scale(1.3); }
+      }
     </style>
-    <script>
-      requestAnimationFrame(function() {
-        requestAnimationFrame(function() {
-          document.getElementById('root').classList.add('ready');
-        });
-      });
-    </script>
   </head>
   <body style="background-color: #020617;">
+    <div id="splash-screen">
+      <div id="splash-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" x2="12" y1="19" y2="22"/>
+        </svg>
+      </div>
+      <p id="splash-title">Banter</p>
+      <p id="splash-subtitle">Connecting...</p>
+      <div id="splash-dots">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
