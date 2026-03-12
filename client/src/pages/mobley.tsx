@@ -401,7 +401,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   // Talk mode: PTT (push-to-talk), Auto (toggle), or Always On
   const [talkMode, setTalkMode] = useState<TalkMode>(() => {
     const saved = localStorage.getItem('banter_talk_mode');
-    return (saved === 'auto' || saved === 'ptt' || saved === 'always') ? saved : 'ptt';
+    return (saved === 'auto' || saved === 'ptt' || saved === 'always') ? saved : 'auto';
   });
 
   const isTokenExpired = (() => {
