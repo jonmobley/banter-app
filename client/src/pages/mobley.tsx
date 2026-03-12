@@ -3370,7 +3370,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                       <span className="text-sm font-medium text-white">{label}</span>
                       <span className="text-xs text-slate-500">{desc}</span>
                     </div>
-                    <div className={`w-10 h-6 rounded-full transition-colors ${value ? 'bg-green-500' : 'bg-slate-600'} relative`}>
+                    <div className={`w-10 h-6 rounded-full transition-colors ${value ? 'bg-emerald-500' : 'bg-slate-600'} relative`}>
                       <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${value ? 'right-1' : 'left-1'}`} />
                     </div>
                   </button>
