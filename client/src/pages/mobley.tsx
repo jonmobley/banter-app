@@ -477,7 +477,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   const [talkLocked, setTalkLocked] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'radio' | 'chat'>('radio');
+  const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
+  const [activeTab, setActiveTab] = useState<'radio' | 'chat'>(isMobileView ? 'chat' : 'radio');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
@@ -486,10 +487,25 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const activeTabRef = useRef<'radio' | 'chat'>('radio');
+  const activeTabRef = useRef<'radio' | 'chat'>(isMobileView ? 'chat' : 'radio');
   useEffect(() => {
     activeTabRef.current = activeTab;
     if (activeTab === 'chat') setUnreadCount(0);
+  }, [activeTab]);
+
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+  }, []);
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
+    const dt = Date.now() - touchStartRef.current.time;
+    touchStartRef.current = null;
+    if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx) || dt > 500) return;
+    if (dx > 0 && activeTab === 'radio') { setActiveTab('chat'); setUnreadCount(0); }
+    else if (dx < 0 && activeTab === 'chat') { setActiveTab('radio'); }
   }, [activeTab]);
 
   // Broadcast state
@@ -2531,7 +2547,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }
 
   return (
-    <div className="h-full bg-slate-950 text-white flex md:flex-row flex-col overflow-hidden">
+    <div className="h-full bg-slate-950 text-white flex md:flex-row flex-col overflow-hidden"
+      onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
       <header className="relative flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -3008,7 +3025,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <div ref={chatEndRef} />
           </div>
           {authToken && (
-            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-52' : ''} md:pb-3`}>
+            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-40' : ''} md:pb-3`}>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -3033,44 +3050,24 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           )}
         </div>
 
-      {/* Tab bar - mobile only */}
+      {/* Page indicator dots - mobile only */}
       {authToken && (
-        <div className="flex md:hidden border-t border-slate-800 bg-slate-950 fixed bottom-0 left-0 right-0 z-50">
-          <button
-            onClick={() => setActiveTab('radio')}
-            className={`flex-1 flex flex-col items-center py-2 transition-colors ${
-              activeTab === 'radio' ? 'text-emerald-400' : 'text-slate-500'
-            }`}
-            data-testid="tab-radio"
-          >
-            <Radio className="w-5 h-5" />
-            <span className="text-[10px] mt-0.5 font-medium">Radio</span>
-          </button>
-          <button
-            onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
-            className={`flex-1 flex flex-col items-center py-2 transition-colors relative ${
-              activeTab === 'chat' ? 'text-emerald-400' : 'text-slate-500'
-            }`}
-            data-testid="tab-chat"
-          >
-            <div className="relative">
-              <MessageSquare className="w-5 h-5" />
-              {unreadCount > 0 && activeTab !== 'chat' && (
-                <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[10px] mt-0.5 font-medium">Chat</span>
-          </button>
+        <div className="flex md:hidden justify-center items-center gap-1.5 py-1.5 fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
+          <div className={`w-1.5 h-1.5 rounded-full transition-colors ${activeTab === 'radio' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+          <div className="relative">
+            <div className={`w-1.5 h-1.5 rounded-full transition-colors ${activeTab === 'chat' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+            {unreadCount > 0 && activeTab !== 'chat' && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+            )}
+          </div>
         </div>
       )}
 
       {/* Bottom controls */}
       <div className={`fixed left-0 right-0 md:right-80 px-6 z-40 ${
         isConnected || isConnecting 
-          ? `${authToken ? 'bottom-12 md:bottom-0' : 'bottom-0'} bg-slate-950 pt-8 pb-safe` 
-          : `${authToken ? 'bottom-12 md:bottom-0' : 'bottom-0'} md:bottom-auto md:top-1/2 md:-translate-y-1/2 pb-safe md:pb-0 bg-slate-950`
+          ? 'bottom-0 bg-slate-950 pt-8 pb-safe' 
+          : 'bottom-0 md:bottom-auto md:top-1/2 md:-translate-y-1/2 pb-safe md:pb-0 bg-slate-950'
       }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
