@@ -2574,7 +2574,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   return (
     <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden w-full">
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-      <header className="fixed top-0 left-0 right-0 flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 bg-slate-950 z-50">
+      <header className="sticky top-0 left-0 right-0 flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 bg-slate-950 z-50">
         <div className="flex items-center gap-2">
           {isConnected && (
             <button
@@ -2761,7 +2761,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           </div>
         </div>
       </header>
-        <div className="pt-16" />
 
         {/* Three-pane layout: desktop side-by-side, mobile tabbed */}
         <div className="flex flex-1 min-h-0 overflow-hidden">
