@@ -477,7 +477,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   const [talkLocked, setTalkLocked] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'talk' | 'chat' | 'note'>('chat');
+  const [activeTab, setActiveTab] = useState<'talk' | 'chat' | 'note'>('talk');
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const handleSwipeStart = useCallback((e: React.TouchEvent) => {
     swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
