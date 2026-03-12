@@ -548,6 +548,21 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    const el = slideRef.current;
+    if (el) {
+      el.style.transition = 'none';
+      el.style.transform = 'translateX(0)';
+    }
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    const parent = el?.parentElement;
+    if (parent) {
+      parent.scrollLeft = 0;
+    }
+  }, []);
+
   const [noteContent, setNoteContent] = useState('');
   const [noteEditing, setNoteEditing] = useState(false);
   const [noteDraft, setNoteDraft] = useState('');
@@ -2841,16 +2856,17 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       </header>
 
         {/* Three-pane layout: desktop side-by-side, mobile sliding */}
-        <div className="flex flex-1 min-h-0 overflow-hidden relative" onTouchStart={handleSwipeStart} onTouchMove={handleSwipeMove} onTouchEnd={handleSwipeEnd}>
+        <div className="flex flex-1 min-h-0 overflow-hidden relative" style={{ overflowX: 'hidden' }} onTouchStart={handleSwipeStart} onTouchMove={handleSwipeMove} onTouchEnd={handleSwipeEnd}>
 
         {/* Sliding pane wrapper: slides on mobile, static flex on desktop */}
         <div
           ref={slideRef}
           className="mobile-slide-wrapper flex absolute top-0 left-0 bottom-0 md:relative md:top-auto md:left-auto md:bottom-auto md:flex-1"
           style={{
-            transform: `translateX(${activeTab === 'talk' ? '0' : '-100vw'})`,
-            transition: 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1)',
+            transform: 'translateX(0)',
+            transition: 'none',
             width: '200vw',
+            willChange: 'transform',
           }}
         >
 
