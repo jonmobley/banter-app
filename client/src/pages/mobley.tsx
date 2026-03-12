@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets, DataPacket_Kind } from "livekit-client";
 import { useToast } from "@/hooks/use-toast";
 import { formatPhone } from "@/lib/utils";
+import { Capacitor } from "@capacitor/core";
 
 type TalkMode = 'ptt' | 'auto' | 'always';
 
@@ -1155,7 +1156,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           wsRef.current.send(JSON.stringify({ type: 'status-update', identity: localIdentity, status: 'active' }));
         }
       } else if (document.visibilityState === 'hidden') {
-        if (localIdentity && wsRef.current?.readyState === WebSocket.OPEN) {
+        if (localIdentity && wsRef.current?.readyState === WebSocket.OPEN && Capacitor.isNativePlatform()) {
           wsRef.current.send(JSON.stringify({ type: 'status-update', identity: localIdentity, status: 'away' }));
         }
       }
