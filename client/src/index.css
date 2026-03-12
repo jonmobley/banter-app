@@ -444,9 +444,9 @@ html, body {
 @media (min-width: 768px) {
   .mobile-slide-wrapper {
     transform: none !important;
-    width: auto !important;
+    width: 100% !important;
     transition: none !important;
-    position: relative !important;
+    will-change: auto !important;
   }
   .mobile-slide-wrapper > div {
     width: auto !important;
