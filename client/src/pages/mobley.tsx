@@ -454,6 +454,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginCode, setLoginCode] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [verifiedEmail, setVerifiedEmail] = useState<string | null>(() => {
     return isTokenExpired ? null : localStorage.getItem('banter_verified_email');
@@ -2012,6 +2013,33 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
   };
 
+  const resendCode = async () => {
+    setResendLoading(true);
+    setLoginError(null);
+    try {
+      if (loginMethod === 'phone') {
+        const res = await fetch('/api/auth/send-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: loginPhone })
+        });
+        if (!res.ok) throw new Error('Failed to send code');
+      } else {
+        const res = await fetch('/api/auth/send-email-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: loginEmail })
+        });
+        if (!res.ok) throw new Error('Failed to send code');
+      }
+      setLoginCode('');
+    } catch {
+      setLoginError('Failed to resend verification code');
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   const verifyLoginCode = async (codeOverride?: string) => {
     const codeToVerify = codeOverride || loginCode;
     if (!codeToVerify || codeToVerify.length !== 6) return;
@@ -2072,6 +2100,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     setLoginEmail('');
     setLoginCode('');
     setLoginError(null);
+    setResendLoading(false);
   };
   
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail);
@@ -2473,6 +2502,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               />
               {loginError && <p className="text-red-400 text-sm text-center">{loginError}</p>}
               {loginLoading && <p className="text-emerald-400 text-sm text-center">Verifying...</p>}
+              <button
+                onClick={resendCode}
+                disabled={resendLoading || loginLoading}
+                className="w-full py-2 text-emerald-400 hover:text-emerald-300 text-sm transition-colors disabled:opacity-50"
+                data-testid="button-resend-code"
+              >
+                {resendLoading ? 'Sending...' : 'Request another code'}
+              </button>
               <button
                 onClick={() => { setLoginStep('input'); setLoginCode(''); setLoginError(null); }}
                 className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors"
@@ -3750,9 +3787,19 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               </button>
               
               {loginStep === 'code' && (
-                <button onClick={() => setLoginStep('input')} className="w-full text-slate-400 hover:text-white text-sm transition-colors" data-testid="button-modal-back-to-input">
-                  Use a different {loginMethod === 'phone' ? 'number' : 'email'}
-                </button>
+                <>
+                  <button
+                    onClick={resendCode}
+                    disabled={resendLoading || loginLoading}
+                    className="w-full text-emerald-400 hover:text-emerald-300 text-sm transition-colors disabled:opacity-50"
+                    data-testid="button-modal-resend-code"
+                  >
+                    {resendLoading ? 'Sending...' : 'Request another code'}
+                  </button>
+                  <button onClick={() => setLoginStep('input')} className="w-full text-slate-400 hover:text-white text-sm transition-colors" data-testid="button-modal-back-to-input">
+                    Use a different {loginMethod === 'phone' ? 'number' : 'email'}
+                  </button>
+                </>
               )}
               
               <button
