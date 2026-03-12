@@ -1249,10 +1249,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     setTalkMode(mode);
     localStorage.setItem('banter_talk_mode', mode);
     
-    if ((mode === 'auto' || mode === 'always') && room?.localParticipant) {
+    if (mode === 'always' && room?.localParticipant) {
       await room.localParticipant.setMicrophoneEnabled(true);
       setIsMuted(false);
-    } else if (mode === 'ptt' && room?.localParticipant) {
+    } else if ((mode === 'ptt' || mode === 'auto') && room?.localParticipant) {
       await room.localParticipant.setMicrophoneEnabled(false);
       setIsMuted(true);
       setIsTalking(false);
