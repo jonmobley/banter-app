@@ -2448,7 +2448,9 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   ? `BROADCAST • ${participantsData?.count || 0}`
                   : allCallActive 
                   ? `ALL CALL • ${participantsData?.count || 0}`
-                  : `${participantsData?.count || 0} connected`}
+                  : participantsData?.count === 1
+                  ? 'Just you'
+                  : `${Math.max((participantsData?.count || 0) - 1, 0)} connected`}
               </span>
             ) : (
               <p className="text-xs text-slate-400">
