@@ -50,3 +50,7 @@ ADMIN_PIN = "1234"
 ADMIN_PHONE = "+13179891958"
 ADMIN_NAME = "Jon Mobley"
 ADMIN_EMAIL = "jonmobley@gmail.com"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
