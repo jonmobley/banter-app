@@ -2814,7 +2814,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
         {/* Sliding pane wrapper: slides on mobile, static flex on desktop */}
         <div
-          className="mobile-slide-wrapper flex absolute inset-0 md:relative md:inset-auto md:flex-1"
+          className="mobile-slide-wrapper flex absolute top-0 left-0 bottom-0 md:relative md:top-auto md:left-auto md:bottom-auto md:flex-1"
           style={{
             transform: isSwiping
               ? `translateX(calc(${activeTab === 'talk' ? '0%' : '-50%'} + ${swipeOffset}px))`
@@ -3059,7 +3059,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
 
         {/* Chat panel */}
-        <div className="w-1/2 md:w-80 flex flex-col bg-slate-950 md:flex-shrink-0 md:border-r md:border-slate-800">
+        <div className="w-1/2 md:w-80 flex flex-col bg-slate-950 md:flex-shrink-0 md:border-r md:border-slate-800 pb-20 md:pb-0">
           <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-emerald-400" />
@@ -3111,7 +3111,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <div ref={chatEndRef} />
           </div>
           {authToken && (
-            <div className="px-3 pb-3 md:pb-3 pb-safe pt-2 border-t border-slate-800">
+            <div className="hidden md:block px-3 pb-3 pt-2 border-t border-slate-800">
               <div className="flex gap-2 items-center">
                 {/* Talk button - mobile only, inline with chat */}
                 <div className="w-10 h-10 flex-shrink-0 md:hidden">
