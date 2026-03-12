@@ -2107,7 +2107,21 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     };
   }, [connectionState, talkMode, startTalking, stopTalking, toggleMute]);
 
-  // Hardware PTT via Capacitor plugin (native + web fallback for media keys)
+  // Stable refs for hardware PTT callbacks (avoids effect re-runs on every render)
+  const talkModeRef = useRef(talkMode);
+  talkModeRef.current = talkMode;
+  const startTalkingRef = useRef(startTalking);
+  startTalkingRef.current = startTalking;
+  const stopTalkingRef = useRef(stopTalking);
+  stopTalkingRef.current = stopTalking;
+  const toggleMuteRef = useRef(toggleMute);
+  toggleMuteRef.current = toggleMute;
+  const changeTalkModeRef = useRef(changeTalkMode);
+  changeTalkModeRef.current = changeTalkMode;
+  const refreshFlicButtonsRef = useRef(refreshFlicButtons);
+  refreshFlicButtonsRef.current = refreshFlicButtons;
+
+  // Hardware PTT via Capacitor plugin — only re-runs when connectionState changes
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected) return;
     let pttPressedHandle: any = null;
@@ -2123,20 +2137,23 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         await PushToTalk.enableHardwarePTT();
         if (!active) return;
         pttPressedHandle = await PushToTalk.addListener('hardwarePTTPressed', () => {
-          console.log('[Flic] PTT PRESSED — talkMode:', talkMode);
-          if (talkMode === 'ptt') startTalking();
-          else if (talkMode === 'auto') toggleMute();
+          const mode = talkModeRef.current;
+          console.log('[Flic] PTT PRESSED — talkMode:', mode);
+          if (mode === 'ptt') startTalkingRef.current();
+          else if (mode === 'auto') toggleMuteRef.current();
         });
         pttReleasedHandle = await PushToTalk.addListener('hardwarePTTReleased', () => {
-          console.log('[Flic] PTT RELEASED — talkMode:', talkMode);
-          if (talkMode === 'ptt') stopTalking();
+          const mode = talkModeRef.current;
+          console.log('[Flic] PTT RELEASED — talkMode:', mode);
+          if (mode === 'ptt') stopTalkingRef.current();
         });
         flicDoubleClickHandle = await PushToTalk.addListener('flicDoubleClick', () => {
-          console.log('[Flic] DOUBLE CLICK — talkMode:', talkMode, '→', talkMode === 'always' ? 'ptt' : 'always');
-          if (talkMode === 'always') {
-            changeTalkMode('ptt');
+          const mode = talkModeRef.current;
+          console.log('[Flic] DOUBLE CLICK — talkMode:', mode, '→', mode === 'always' ? 'ptt' : 'always');
+          if (mode === 'always') {
+            changeTalkModeRef.current('ptt');
           } else {
-            changeTalkMode('always');
+            changeTalkModeRef.current('always');
           }
         });
         flicConnectionFailedHandle = await PushToTalk.addListener('flicConnectionFailed', (data: { uuid: string; error: string }) => {
@@ -2144,7 +2161,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         });
         flicUnpairedHandle = await PushToTalk.addListener('flicUnpaired', (data: { uuid: string }) => {
           console.log('[Flic] UNPAIRED:', data.uuid);
-          refreshFlicButtons();
+          refreshFlicButtonsRef.current();
         });
         console.log('[Flic] Hardware PTT listeners registered');
       } catch (e) {
@@ -2168,7 +2185,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       };
       cleanup();
     };
-  }, [connectionState, talkMode, startTalking, stopTalking, toggleMute, changeTalkMode, refreshFlicButtons]);
+  }, [connectionState]);
 
   // Audio interruption recovery (phone calls, Siri, alarms)
   useEffect(() => {

@@ -361,7 +361,11 @@ extension PushToTalkPlugin: FLICButtonDelegate {
     }
 
     public func buttonIsReady(_ button: FLICButton) {
-        print("[Flic] buttonIsReady: \(button.name) — triggerMode=\(button.triggerMode.rawValue)")
+        print("[Flic] buttonIsReady: \(button.name) — triggerMode=\(button.triggerMode.rawValue) (want 4)")
+        if button.triggerMode != .clickAndDoubleClickAndHold {
+            button.triggerMode = .clickAndDoubleClickAndHold
+            print("[Flic] → corrected triggerMode to clickAndDoubleClickAndHold (4)")
+        }
         notifyListeners("flicReady", data: ["uuid": button.uuid, "name": button.name])
     }
 
