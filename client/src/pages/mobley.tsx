@@ -477,8 +477,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   const [talkLocked, setTalkLocked] = useState(false);
 
-  const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
-  const [activeTab, setActiveTab] = useState<'radio' | 'chat'>(isMobileView ? 'chat' : 'radio');
+  const [activeTab, setActiveTab] = useState<'radio' | 'chat'>('chat');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
@@ -487,7 +486,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const activeTabRef = useRef<'radio' | 'chat'>(isMobileView ? 'chat' : 'radio');
+  const activeTabRef = useRef<'radio' | 'chat'>('chat');
   useEffect(() => {
     activeTabRef.current = activeTab;
     if (activeTab === 'chat') setUnreadCount(0);
@@ -2547,7 +2546,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }
 
   return (
-    <div className="h-full bg-slate-950 text-white flex md:flex-row flex-col overflow-hidden"
+    <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden max-w-lg mx-auto w-full"
       onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
       <header className="relative flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0">
@@ -2741,7 +2740,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       </header>
 
         {/* Radio tab / participant grid */}
-        <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-auto px-4 pb-96`}>
+        <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} flex-col flex-1 overflow-auto px-4 pb-96`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
           {isAdmin && (
             <button
@@ -2976,8 +2975,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       </div>
 
         {/* Chat panel - full screen on mobile, side panel on desktop */}
-        <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} md:flex flex-col md:w-80 md:border-l md:border-slate-800 bg-slate-950 ${activeTab === 'chat' ? 'w-full' : ''}`}>
-          <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-slate-800">
+        <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} flex-col bg-slate-950 w-full`}>
+          <div className="hidden">
             <h3 className="font-semibold text-sm text-slate-300">Group Chat</h3>
             <span className="text-xs text-slate-500">{chatMessages.length} messages</span>
           </div>
@@ -3025,7 +3024,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <div ref={chatEndRef} />
           </div>
           {authToken && (
-            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-40' : ''} md:pb-3`}>
+            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-40' : ''}`}>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -3052,20 +3051,28 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
       {/* Page indicator dots - mobile only */}
       {authToken && (
-        <div className="flex md:hidden justify-center items-center gap-1.5 py-1.5 fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
-          <div className={`w-1.5 h-1.5 rounded-full transition-colors ${activeTab === 'radio' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-          <div className="relative">
-            <div className={`w-1.5 h-1.5 rounded-full transition-colors ${activeTab === 'chat' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+        <div className="flex justify-center items-center gap-3 py-2 fixed bottom-0 left-0 right-0 z-50">
+          <button
+            onClick={() => setActiveTab('radio')}
+            className={`w-2 h-2 rounded-full transition-colors ${activeTab === 'radio' ? 'bg-emerald-400' : 'bg-slate-600 hover:bg-slate-500'}`}
+            data-testid="dot-radio"
+          />
+          <button
+            onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
+            className="relative"
+            data-testid="dot-chat"
+          >
+            <div className={`w-2 h-2 rounded-full transition-colors ${activeTab === 'chat' ? 'bg-emerald-400' : 'bg-slate-600 hover:bg-slate-500'}`} />
             {unreadCount > 0 && activeTab !== 'chat' && (
               <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
             )}
-          </div>
+          </button>
         </div>
       )}
 
       {/* Floating talk button - mobile chat view only */}
       {isConnected && activeTab === 'chat' && (
-        <div className="md:hidden fixed right-4 bottom-16 z-50">
+        <div className="fixed bottom-16 z-50" style={{ right: 'max(1rem, calc((100vw - 32rem) / 2 + 1rem))' }}>
           {broadcastActive && !canSpeakInBroadcast ? (
             <button
               onClick={toggleRaiseHand}
@@ -3129,10 +3136,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {/* Bottom controls */}
-      <div className={`fixed left-0 right-0 md:right-80 px-6 z-40 ${activeTab === 'chat' ? 'hidden md:block' : ''} ${
+      <div className={`fixed left-0 right-0 px-6 z-40 ${activeTab === 'chat' ? 'hidden' : ''} ${
         isConnected || isConnecting 
           ? 'bottom-0 bg-slate-950 pt-8 pb-safe' 
-          : 'bottom-0 md:bottom-auto md:top-1/2 md:-translate-y-1/2 pb-safe md:pb-0 bg-slate-950'
+          : 'bottom-0 pb-safe bg-slate-950'
       }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
