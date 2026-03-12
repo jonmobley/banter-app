@@ -2722,7 +2722,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Radio tab / participant grid */}
-        <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} sm:flex flex-col flex-1 overflow-auto px-4 pb-96`}>
+        <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-auto px-4 pb-96`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
           {isAdmin && (
             <button
@@ -2956,8 +2956,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
 
         {/* Chat panel - full screen on mobile, side panel on desktop */}
-        <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} sm:flex flex-col sm:w-80 sm:border-l sm:border-slate-800 bg-slate-950 ${activeTab === 'chat' ? 'w-full' : ''}`}>
-          <div className="hidden sm:flex items-center justify-between px-4 py-3 border-b border-slate-800">
+        <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} md:flex flex-col md:w-80 md:border-l md:border-slate-800 bg-slate-950 ${activeTab === 'chat' ? 'w-full' : ''}`}>
+          <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <h3 className="font-semibold text-sm text-slate-300">Group Chat</h3>
             <span className="text-xs text-slate-500">{chatMessages.length} messages</span>
           </div>
@@ -3005,7 +3005,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <div ref={chatEndRef} />
           </div>
           {authToken && (
-            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-52' : ''} sm:pb-3`}>
+            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-52' : ''} md:pb-3`}>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -3033,7 +3033,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
       {/* Tab bar - mobile only */}
       {authToken && (
-        <div className="sm:hidden flex border-t border-slate-800 bg-slate-950 fixed bottom-0 left-0 right-0 z-50">
+        <div className="flex md:hidden border-t border-slate-800 bg-slate-950 fixed bottom-0 left-0 right-0 z-50">
           <button
             onClick={() => setActiveTab('radio')}
             className={`flex-1 flex flex-col items-center py-2 transition-colors ${
@@ -3067,8 +3067,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       {/* Bottom controls */}
       <div className={`fixed left-0 right-0 px-6 z-40 ${
         isConnected || isConnecting 
-          ? `${authToken ? 'bottom-12 sm:bottom-0' : 'bottom-0'} bg-slate-950 pt-8 pb-safe` 
-          : `${authToken ? 'bottom-12 sm:bottom-0' : 'bottom-0'} sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 pb-safe sm:pb-0 bg-slate-950`
+          ? `${authToken ? 'bottom-12 md:bottom-0' : 'bottom-0'} bg-slate-950 pt-8 pb-safe` 
+          : `${authToken ? 'bottom-12 md:bottom-0' : 'bottom-0'} md:bottom-auto md:top-1/2 md:-translate-y-1/2 pb-safe md:pb-0 bg-slate-950`
       }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
