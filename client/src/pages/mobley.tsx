@@ -2945,7 +2945,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <div ref={chatEndRef} />
           </div>
           {authToken && (
-            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-32' : ''} sm:pb-3`}>
+            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-52' : ''} sm:pb-3`}>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -2973,7 +2973,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
       {/* Tab bar - mobile only */}
       {authToken && (
-        <div className="sm:hidden flex border-t border-slate-800 bg-slate-950">
+        <div className="sm:hidden flex border-t border-slate-800 bg-slate-950 fixed bottom-0 left-0 right-0 z-50">
           <button
             onClick={() => setActiveTab('radio')}
             className={`flex-1 flex flex-col items-center py-2 transition-colors ${
@@ -3005,10 +3005,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {/* Bottom controls */}
-      <div className={`fixed left-0 right-0 px-6 ${
+      <div className={`fixed left-0 right-0 px-6 z-40 ${
         isConnected || isConnecting 
-          ? 'bottom-0 bg-slate-950 pt-8 pb-safe' 
-          : 'bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 pb-safe sm:pb-0 bg-slate-950'
+          ? `${authToken ? 'bottom-12 sm:bottom-0' : 'bottom-0'} bg-slate-950 pt-8 pb-safe` 
+          : `${authToken ? 'bottom-12 sm:bottom-0' : 'bottom-0'} sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 pb-safe sm:pb-0 bg-slate-950`
       }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
