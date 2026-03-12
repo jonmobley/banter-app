@@ -119,6 +119,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [room, setRoom] = useState<Room | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>(ConnectionState.Disconnected);
   const [isMuted, setIsMuted] = useState(true);
+  const [isHoldMuted, setIsHoldMuted] = useState(false);
+  const isHoldMutedRef = useRef(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [localIdentity, setLocalIdentity] = useState<string | null>(null);
   
@@ -1182,6 +1184,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     if (room) {
       setRemoteAudioMuted(false);
       setIsTalking(false);
+      isHoldMutedRef.current = false;
+      setIsHoldMuted(false);
       await room.disconnect();
       setRoom(null);
       setLocalIdentity(null);
@@ -1248,6 +1252,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const changeTalkMode = useCallback(async (mode: TalkMode) => {
     setTalkMode(mode);
     localStorage.setItem('banter_talk_mode', mode);
+    isHoldMutedRef.current = false;
+    setIsHoldMuted(false);
     
     if (mode === 'always' && room?.localParticipant) {
       await room.localParticipant.setMicrophoneEnabled(true);
@@ -1259,6 +1265,22 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setRemoteAudioMuted(false);
     }
   }, [room, setRemoteAudioMuted]);
+
+  const startHoldMute = useCallback(async () => {
+    if (talkMode !== 'always' || !room?.localParticipant) return;
+    isHoldMutedRef.current = true;
+    setIsHoldMuted(true);
+    await room.localParticipant.setMicrophoneEnabled(false);
+    setIsMuted(true);
+  }, [room, talkMode]);
+
+  const stopHoldMute = useCallback(async () => {
+    if (!isHoldMutedRef.current || talkMode !== 'always' || !room?.localParticipant) return;
+    isHoldMutedRef.current = false;
+    setIsHoldMuted(false);
+    await room.localParticipant.setMicrophoneEnabled(true);
+    setIsMuted(false);
+  }, [room, talkMode]);
 
   // Change audio device
   const changeAudioDevice = useCallback(async (deviceId: string) => {
@@ -2146,6 +2168,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         startTalking();
       } else if (talkMode === 'auto') {
         toggleMute();
+      } else if (talkMode === 'always') {
+        startHoldMute();
       }
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -2155,6 +2179,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       e.preventDefault();
       if (talkMode === 'ptt') {
         stopTalking();
+      } else if (talkMode === 'always') {
+        stopHoldMute();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -2163,7 +2189,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [connectionState, talkMode, startTalking, stopTalking, toggleMute]);
+  }, [connectionState, talkMode, startTalking, stopTalking, toggleMute, startHoldMute, stopHoldMute]);
 
   // Stable refs for hardware PTT callbacks (avoids effect re-runs on every render)
   const talkModeRef = useRef(talkMode);
@@ -2174,6 +2200,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   stopTalkingRef.current = stopTalking;
   const toggleMuteRef = useRef(toggleMute);
   toggleMuteRef.current = toggleMute;
+  const startHoldMuteRef = useRef(startHoldMute);
+  startHoldMuteRef.current = startHoldMute;
+  const stopHoldMuteRef = useRef(stopHoldMute);
+  stopHoldMuteRef.current = stopHoldMute;
   const changeTalkModeRef = useRef(changeTalkMode);
   changeTalkModeRef.current = changeTalkMode;
   const refreshFlicButtonsRef = useRef(refreshFlicButtons);
@@ -2199,11 +2229,13 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           console.log('[Flic] PTT PRESSED — talkMode:', mode);
           if (mode === 'ptt') startTalkingRef.current();
           else if (mode === 'auto') toggleMuteRef.current();
+          else if (mode === 'always') startHoldMuteRef.current();
         });
         pttReleasedHandle = await PushToTalk.addListener('hardwarePTTReleased', () => {
           const mode = talkModeRef.current;
           console.log('[Flic] PTT RELEASED — talkMode:', mode);
           if (mode === 'ptt') stopTalkingRef.current();
+          else if (mode === 'always') stopHoldMuteRef.current();
         });
         flicDoubleClickHandle = await PushToTalk.addListener('flicDoubleClick', () => {
           const mode = talkModeRef.current;
@@ -2278,7 +2310,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             }
           }
 
-          if (talkMode === 'always' && room?.localParticipant) {
+          if (talkMode === 'always' && room?.localParticipant && !isHoldMutedRef.current) {
             await room.localParticipant.setMicrophoneEnabled(true);
             setIsMuted(false);
           }
@@ -3029,12 +3061,22 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   </div>
                 ) : talkMode === 'always' ? (
                   <button
-                    onClick={toggleTalkLock}
-                    className="w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 relative"
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      startHoldMute();
+                    }}
+                    onPointerUp={() => stopHoldMute()}
+                    onPointerLeave={() => stopHoldMute()}
+                    onPointerCancel={() => stopHoldMute()}
+                    className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full relative select-none touch-none transition-all ${
+                      isHoldMuted
+                        ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
+                        : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+                    }`}
                     data-testid="status-always-on"
                   >
-                    <Radio className="w-5 h-5" />
-                    Always On
+                    {isHoldMuted ? <MicOff className="w-5 h-5" /> : <Radio className="w-5 h-5" />}
+                    {isHoldMuted ? 'Muted' : 'Always On'}
                     <Lock className="w-3.5 h-3.5 absolute right-5 opacity-70" />
                   </button>
                 ) : (
