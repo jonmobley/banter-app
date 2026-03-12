@@ -2739,6 +2739,27 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       </header>
 
+      {/* Page indicator dots */}
+      {authToken && (
+        <div className="flex justify-center items-center gap-3 py-1.5 flex-shrink-0">
+          <button
+            onClick={() => setActiveTab('radio')}
+            className={`w-2 h-2 rounded-full transition-colors ${activeTab === 'radio' ? 'bg-emerald-400' : 'bg-slate-600 hover:bg-slate-500'}`}
+            data-testid="dot-radio"
+          />
+          <button
+            onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
+            className="relative"
+            data-testid="dot-chat"
+          >
+            <div className={`w-2 h-2 rounded-full transition-colors ${activeTab === 'chat' ? 'bg-emerald-400' : 'bg-slate-600 hover:bg-slate-500'}`} />
+            {unreadCount > 0 && activeTab !== 'chat' && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
+            )}
+          </button>
+        </div>
+      )}
+
         {/* Radio tab / participant grid */}
         <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} flex-col flex-1 overflow-auto px-4 pb-96`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
@@ -3024,7 +3045,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <div ref={chatEndRef} />
           </div>
           {authToken && (
-            <div className={`px-3 pb-3 pt-2 border-t border-slate-800 ${activeTab === 'chat' ? 'pb-40' : ''}`}>
+            <div className="px-3 pb-3 pt-2 border-t border-slate-800 pb-safe">
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -3049,26 +3070,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           )}
         </div>
 
-      {/* Page indicator dots - mobile only */}
-      {authToken && (
-        <div className="flex justify-center items-center gap-3 py-2 fixed bottom-0 left-0 right-0 z-50">
-          <button
-            onClick={() => setActiveTab('radio')}
-            className={`w-2 h-2 rounded-full transition-colors ${activeTab === 'radio' ? 'bg-emerald-400' : 'bg-slate-600 hover:bg-slate-500'}`}
-            data-testid="dot-radio"
-          />
-          <button
-            onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
-            className="relative"
-            data-testid="dot-chat"
-          >
-            <div className={`w-2 h-2 rounded-full transition-colors ${activeTab === 'chat' ? 'bg-emerald-400' : 'bg-slate-600 hover:bg-slate-500'}`} />
-            {unreadCount > 0 && activeTab !== 'chat' && (
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />
-            )}
-          </button>
-        </div>
-      )}
 
       {/* Floating talk button - mobile chat view only */}
       {isConnected && activeTab === 'chat' && (
