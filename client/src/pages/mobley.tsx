@@ -2217,6 +2217,9 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     let flicDoubleClickHandle: any = null;
     let flicConnectionFailedHandle: any = null;
     let flicUnpairedHandle: any = null;
+    let flicConnectedHandle: any = null;
+    let flicDisconnectedHandle: any = null;
+    let flicReadyHandle: any = null;
     let active = true;
     const setupHardwarePTT = async () => {
       try {
@@ -2253,6 +2256,18 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           console.log('[Flic] UNPAIRED:', data.uuid);
           refreshFlicButtonsRef.current();
         });
+        flicConnectedHandle = await PushToTalk.addListener('flicConnected', (data: { uuid: string; name: string }) => {
+          console.log('[Flic] CONNECTED:', data.name, data.uuid);
+          setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'connecting' } : b));
+        });
+        flicReadyHandle = await PushToTalk.addListener('flicReady', (data: { uuid: string; name: string }) => {
+          console.log('[Flic] READY:', data.name, data.uuid);
+          setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'connected' } : b));
+        });
+        flicDisconnectedHandle = await PushToTalk.addListener('flicDisconnected', (data: { uuid: string }) => {
+          console.log('[Flic] DISCONNECTED:', data.uuid);
+          setFlicButtons(prev => prev.map(b => b.uuid === data.uuid ? { ...b, connectionState: 'disconnected' } : b));
+        });
         console.log('[Flic] Hardware PTT listeners registered');
       } catch (e) {
         console.log('[Flic] Hardware PTT setup failed (not on native?):', e);
@@ -2269,6 +2284,9 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           if (flicDoubleClickHandle) await flicDoubleClickHandle.remove();
           if (flicConnectionFailedHandle) await flicConnectionFailedHandle.remove();
           if (flicUnpairedHandle) await flicUnpairedHandle.remove();
+          if (flicConnectedHandle) await flicConnectedHandle.remove();
+          if (flicDisconnectedHandle) await flicDisconnectedHandle.remove();
+          if (flicReadyHandle) await flicReadyHandle.remove();
           const { PushToTalk } = await import('capacitor-pushtotalk');
           await PushToTalk.disableHardwarePTT();
         } catch {}
