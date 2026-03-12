@@ -3063,8 +3063,73 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       )}
 
+      {/* Floating talk button - mobile chat view only */}
+      {isConnected && activeTab === 'chat' && (
+        <div className="md:hidden fixed right-4 bottom-16 z-50">
+          {broadcastActive && !canSpeakInBroadcast ? (
+            <button
+              onClick={toggleRaiseHand}
+              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                handRaised ? 'bg-amber-500 text-white' : 'bg-slate-700 text-slate-300'
+              }`}
+              data-testid="button-raise-hand-float"
+            >
+              <Hand className="w-6 h-6" />
+            </button>
+          ) : talkMode === 'ptt' ? (
+            <button
+              onPointerDown={(e) => { e.preventDefault(); unlockAudio(); startTalking(); }}
+              onPointerUp={stopTalking}
+              onPointerLeave={stopTalking}
+              onPointerCancel={stopTalking}
+              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg select-none touch-none transition-all ${
+                isMuted ? 'bg-slate-700 text-slate-300' : 'bg-emerald-500 text-white shadow-emerald-500/30'
+              }`}
+              data-testid="button-ptt-float"
+            >
+              {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+            </button>
+          ) : talkMode === 'always' ? (
+            <button
+              onPointerDown={(e) => {
+                e.preventDefault();
+                const now = Date.now();
+                if (now - alwaysOnLastTapRef.current <= 300) {
+                  alwaysOnDoubleTapRef.current = true;
+                  alwaysOnLastTapRef.current = 0;
+                  changeTalkMode('auto');
+                  return;
+                }
+                alwaysOnLastTapRef.current = now;
+                alwaysOnDoubleTapRef.current = false;
+                startHoldMute();
+              }}
+              onPointerUp={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+              onPointerLeave={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+              onPointerCancel={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg select-none touch-none transition-all ${
+                isHoldMuted ? 'bg-amber-500 text-white shadow-amber-500/30' : 'bg-emerald-500 text-white shadow-emerald-500/30'
+              }`}
+              data-testid="button-always-on-float"
+            >
+              {isHoldMuted ? <MicOff className="w-6 h-6" /> : <Radio className="w-6 h-6" />}
+            </button>
+          ) : (
+            <button
+              onClick={toggleMute}
+              className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                isMuted ? 'bg-slate-700 text-slate-300' : 'bg-emerald-500 text-white shadow-emerald-500/30'
+              }`}
+              data-testid="button-toggle-mute-float"
+            >
+              {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Bottom controls */}
-      <div className={`fixed left-0 right-0 md:right-80 px-6 z-40 ${
+      <div className={`fixed left-0 right-0 md:right-80 px-6 z-40 ${activeTab === 'chat' ? 'hidden md:block' : ''} ${
         isConnected || isConnecting 
           ? 'bottom-0 bg-slate-950 pt-8 pb-safe' 
           : 'bottom-0 md:bottom-auto md:top-1/2 md:-translate-y-1/2 pb-safe md:pb-0 bg-slate-950'
