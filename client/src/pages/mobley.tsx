@@ -3041,7 +3041,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <div ref={chatEndRef} />
           </div>
           {authToken && (
-            <div className="px-3 pb-3 pt-2 border-t border-slate-800">
+            <div className="px-3 pb-8 md:pb-3 pt-2 border-t border-slate-800">
               <div className="flex gap-2">
                 <input
                   type="text"
