@@ -3152,8 +3152,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             }`}
             data-testid="tab-talk"
           >
-            <Radio className="w-5 h-5" />
-            <span className="text-[10px] mt-0.5 font-medium">Talk</span>
+            <User className="w-5 h-5" />
           </button>
 
           {/* Center talk button */}
@@ -3283,7 +3282,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 </span>
               )}
             </div>
-            <span className="text-[10px] mt-0.5 font-medium">Chat</span>
           </button>
           <button
             onClick={() => setActiveTab('note')}
@@ -3293,7 +3291,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             data-testid="tab-note"
           >
             <StickyNote className="w-5 h-5" />
-            <span className="text-[10px] mt-0.5 font-medium">Note</span>
           </button>
         </div>
       )}
