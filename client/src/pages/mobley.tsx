@@ -3461,7 +3461,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
-              onFocus={() => { if (activeTab !== 'chat' && splashDismissedRef.current) setActiveTab('chat'); }}
+              onTouchStart={() => { if (activeTab !== 'chat') setActiveTab('chat'); }}
               placeholder="Message..."
               maxLength={1000}
               className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
