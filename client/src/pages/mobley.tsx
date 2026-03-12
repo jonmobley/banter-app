@@ -2161,7 +2161,9 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   };
 
   const isMyMessage = (msg: ChatMessage) => {
-    return msg.senderIdentity === localIdentity;
+    return msg.senderIdentity === localIdentity 
+      || (verifiedPhone && msg.senderIdentity === verifiedPhone)
+      || (verifiedEmail && msg.senderIdentity === verifiedEmail);
   };
 
   const participants = [...realParticipants].sort((a, b) => {
