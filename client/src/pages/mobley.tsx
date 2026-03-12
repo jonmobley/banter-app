@@ -478,6 +478,23 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [talkLocked, setTalkLocked] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'talk' | 'chat' | 'note'>('chat');
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const handleSwipeStart = useCallback((e: React.TouchEvent) => {
+    swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, []);
+  const handleSwipeEnd = useCallback((e: React.TouchEvent) => {
+    if (!swipeStartRef.current) return;
+    const dx = e.changedTouches[0].clientX - swipeStartRef.current.x;
+    const dy = e.changedTouches[0].clientY - swipeStartRef.current.y;
+    swipeStartRef.current = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx > 0) {
+        setActiveTab('talk');
+      } else {
+        setActiveTab('chat');
+      }
+    }
+  }, []);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
@@ -2765,10 +2782,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       </header>
 
         {/* Three-pane layout: desktop side-by-side, mobile tabbed */}
-        <div className="flex flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-1 min-h-0 overflow-hidden" onTouchStart={handleSwipeStart} onTouchEnd={handleSwipeEnd}>
 
         {/* Talk panel (participant grid) */}
-        <div className="hidden md:flex flex-col flex-1 overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800">
+        <div className={`${activeTab === 'talk' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
           {isAdmin && (
             <button
@@ -3002,7 +3019,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
 
         {/* Chat panel */}
-        <div className="flex md:flex flex-col bg-slate-950 w-full md:w-80 md:flex-shrink-0 md:border-r md:border-slate-800">
+        <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} md:flex flex-col bg-slate-950 w-full md:w-80 md:flex-shrink-0 md:border-r md:border-slate-800`}>
           <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-emerald-400" />
