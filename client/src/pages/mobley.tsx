@@ -3185,12 +3185,16 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       )}
 
-      {/* Bottom controls */}
-      <div className={`fixed left-0 right-0 px-6 z-40 ${activeTab !== 'radio' ? 'hidden md:block' : ''} ${
-        isConnected || isConnecting 
-          ? 'bottom-12 md:bottom-0 bg-slate-950 pt-8 pb-safe' 
-          : 'bottom-12 md:bottom-0 pb-safe bg-slate-950'
-      }`}>
+      {/* Bottom controls - positioned above footer nav on mobile, at bottom on desktop */}
+      <style>{`
+        .bottom-controls-position { bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px)); }
+        @media (min-width: 768px) { .bottom-controls-position { bottom: 0; } }
+      `}</style>
+      <div
+        className={`fixed left-0 right-0 px-6 z-40 bottom-controls-position ${activeTab !== 'radio' ? 'hidden md:block' : ''} ${
+          isConnected || isConnecting ? 'bg-slate-950 pt-8 pb-4 md:pb-safe' : 'pb-4 md:pb-safe bg-slate-950'
+        }`}
+      >
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
             <div className="flex flex-col items-center gap-3">
