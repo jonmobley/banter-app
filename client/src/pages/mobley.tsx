@@ -2768,7 +2768,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         <div className="flex flex-1 min-h-0 overflow-hidden">
 
         {/* Talk panel (participant grid) */}
-        <div className={`${activeTab === 'talk' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-auto px-4 pb-96 md:border-r md:border-slate-800`}>
+        <div className={`${activeTab === 'talk' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
           {isAdmin && (
             <button
@@ -3144,7 +3144,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
       {/* Footer nav bar - mobile only */}
       {authToken && (
-        <div className="flex md:hidden border-t border-slate-800 bg-slate-950 pb-safe flex-shrink-0 z-50">
+        <div className="flex md:hidden items-end border-t border-slate-800 bg-slate-950 pb-safe flex-shrink-0 z-50 relative">
           <button
             onClick={() => setActiveTab('talk')}
             className={`flex-1 flex flex-col items-center py-2 transition-colors ${
@@ -3155,6 +3155,119 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             <Radio className="w-5 h-5" />
             <span className="text-[10px] mt-0.5 font-medium">Talk</span>
           </button>
+
+          {/* Center talk button */}
+          <div className="flex flex-col items-center" style={{ marginTop: '-1.5rem' }}>
+            {isConnected ? (
+              broadcastActive && !canSpeakInBroadcast ? (
+                <button
+                  onClick={toggleRaiseHand}
+                  className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                    handRaised
+                      ? 'bg-amber-500 text-white shadow-amber-500/30'
+                      : 'bg-slate-700 text-slate-300'
+                  }`}
+                  data-testid="button-raise-hand-footer"
+                >
+                  <Hand className="w-7 h-7" />
+                </button>
+              ) : talkMode === 'ptt' ? (
+                <button
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    unlockAudio();
+                    startTalking();
+                  }}
+                  onPointerUp={stopTalking}
+                  onPointerLeave={stopTalking}
+                  onPointerCancel={stopTalking}
+                  className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all select-none touch-none ${
+                    isMuted
+                      ? 'bg-slate-700 text-slate-300'
+                      : 'bg-emerald-500 text-white shadow-emerald-500/30'
+                  }`}
+                  data-testid="button-ptt-footer"
+                >
+                  {isMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+                </button>
+              ) : talkMode === 'always' ? (
+                <button
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    const now = Date.now();
+                    if (now - alwaysOnLastTapRef.current <= 300) {
+                      alwaysOnDoubleTapRef.current = true;
+                      alwaysOnLastTapRef.current = 0;
+                      changeTalkMode('auto');
+                      return;
+                    }
+                    alwaysOnLastTapRef.current = now;
+                    alwaysOnDoubleTapRef.current = false;
+                    startHoldMute();
+                  }}
+                  onPointerUp={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+                  onPointerLeave={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+                  onPointerCancel={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+                  className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg select-none touch-none transition-all ${
+                    isHoldMuted
+                      ? 'bg-amber-500 text-white shadow-amber-500/30'
+                      : 'bg-emerald-500 text-white shadow-emerald-500/30'
+                  }`}
+                  data-testid="button-always-on-footer"
+                >
+                  {isHoldMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+                </button>
+              ) : (
+                <button
+                  onClick={toggleMute}
+                  className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                    isMuted
+                      ? 'bg-slate-700 text-slate-300'
+                      : 'bg-emerald-500 text-white shadow-emerald-500/30'
+                  }`}
+                  data-testid="button-auto-talk-footer"
+                >
+                  {isMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+                </button>
+              )
+            ) : isConnecting ? (
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center bg-slate-600 text-white shadow-lg"
+                data-testid="button-connecting-footer"
+              >
+                <Globe className="w-7 h-7 animate-pulse" />
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  const nameToUse = userName || draftName.trim();
+                  if (!userName && draftName.trim()) {
+                    setUserName(draftName.trim());
+                    localStorage.setItem('banter_user_name', draftName.trim());
+                    if (authToken) {
+                      fetch('/api/user/profile', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ authToken, name: draftName.trim() })
+                      }).catch(() => {});
+                    }
+                  }
+                  unlockAudio();
+                  connectToRoom(nameToUse || undefined);
+                }}
+                disabled={!userName && !draftName.trim()}
+                className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                  !userName && !draftName.trim()
+                    ? 'bg-slate-700 text-slate-400'
+                    : 'bg-emerald-500 hover:bg-emerald-400 text-white'
+                }`}
+                data-testid="button-connect-footer"
+              >
+                <Wifi className="w-7 h-7" />
+              </button>
+            )}
+          </div>
+
           <button
             onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
             className={`flex-1 flex flex-col items-center py-2 transition-colors relative ${
@@ -3185,14 +3298,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       )}
 
-      {/* Bottom controls - positioned above footer nav on mobile, at bottom on desktop */}
-      <style>{`
-        .bottom-controls-position { bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px)); }
-        @media (min-width: 768px) { .bottom-controls-position { bottom: 0; } }
-      `}</style>
+      {/* Bottom controls - desktop only */}
       <div
-        className={`fixed left-0 right-0 px-6 z-40 bottom-controls-position ${activeTab !== 'talk' ? 'hidden md:block' : ''} ${
-          isConnected || isConnecting ? 'bg-slate-950 pt-8 pb-4 md:pb-safe' : 'pb-4 md:pb-safe bg-slate-950'
+        className={`fixed left-0 right-0 px-6 z-40 bottom-0 hidden md:block ${
+          isConnected || isConnecting ? 'bg-slate-950 pt-8 pb-safe' : 'pb-safe bg-slate-950'
         }`}
       >
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
