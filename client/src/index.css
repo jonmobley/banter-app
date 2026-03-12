@@ -446,6 +446,10 @@ html, body {
     transform: none !important;
     width: auto !important;
     transition: none !important;
+    position: relative !important;
+  }
+  .mobile-slide-wrapper > div {
+    width: auto !important;
   }
 }
 

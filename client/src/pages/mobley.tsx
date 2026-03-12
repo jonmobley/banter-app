@@ -2817,15 +2817,15 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           className="mobile-slide-wrapper flex absolute top-0 left-0 bottom-0 md:relative md:top-auto md:left-auto md:bottom-auto md:flex-1"
           style={{
             transform: isSwiping
-              ? `translateX(calc(${activeTab === 'talk' ? '0%' : '-50%'} + ${swipeOffset}px))`
-              : `translateX(${activeTab === 'talk' ? '0%' : '-50%'})`,
+              ? `translateX(calc(${activeTab === 'talk' ? '0' : '-100vw'} + ${swipeOffset}px))`
+              : `translateX(${activeTab === 'talk' ? '0' : '-100vw'})`,
             transition: isSwiping ? 'none' : 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1)',
-            width: '200%',
+            width: '200vw',
           }}
         >
 
         {/* Talk panel (participant grid) */}
-        <div className="w-1/2 md:w-auto md:flex-1 flex flex-col overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800">
+        <div className="md:flex-1 flex flex-col overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800" style={{ width: '100vw' }}>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
           {isAdmin && (
             <button
@@ -3059,7 +3059,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
 
         {/* Chat panel */}
-        <div className="w-1/2 md:w-80 flex flex-col bg-slate-950 md:flex-shrink-0 md:border-r md:border-slate-800 pb-20 md:pb-0">
+        <div className="md:w-80 flex flex-col bg-slate-950 md:flex-shrink-0 md:border-r md:border-slate-800 pb-20 md:pb-0" style={{ width: '100vw' }}>
           <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-emerald-400" />
