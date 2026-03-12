@@ -2529,7 +2529,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }
 
   return (
-    <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden">
+    <div className="h-full bg-slate-950 text-white flex md:flex-row flex-col overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
       <header className="relative flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
           {isConnected && (
@@ -2720,7 +2721,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
         {/* Radio tab / participant grid */}
         <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-auto px-4 pb-96`}>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
@@ -2954,6 +2954,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           
         </div>
         </div>
+      </div>
 
         {/* Chat panel - full screen on mobile, side panel on desktop */}
         <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} md:flex flex-col md:w-80 md:border-l md:border-slate-800 bg-slate-950 ${activeTab === 'chat' ? 'w-full' : ''}`}>
@@ -3029,7 +3030,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             </div>
           )}
         </div>
-      </div>
 
       {/* Tab bar - mobile only */}
       {authToken && (
