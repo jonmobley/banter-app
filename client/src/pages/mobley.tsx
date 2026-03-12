@@ -3067,7 +3067,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
 
         {/* Note panel */}
-        <div className={`${activeTab === 'note' ? 'flex' : 'hidden'} md:flex flex-col bg-slate-950 w-full md:w-80 md:flex-shrink-0`}>
+        <div className="hidden md:flex flex-col bg-slate-950 w-full md:w-80 md:flex-shrink-0">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <StickyNote className="w-4 h-4 text-amber-400" />
@@ -3129,110 +3129,142 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       </div>{/* End inner wrapper */}
 
 
-      {/* Footer nav bar - mobile only */}
+      {/* Footer nav bar - mobile only: Safari-style pill layout */}
       {authToken && (
-        <div className="flex md:hidden items-center border-t border-slate-800 bg-slate-950 pb-safe flex-shrink-0 z-50 relative">
+        <div className="flex md:hidden items-center px-4 py-2 pb-safe bg-slate-950 flex-shrink-0 z-50 relative gap-3">
+          {/* Left circle: Chat */}
           <button
-            onClick={() => setActiveTab('talk')}
-            className={`flex-1 flex flex-col items-center py-2 transition-colors ${
-              activeTab === 'talk' ? 'text-emerald-400' : 'text-slate-500'
+            onClick={() => { setActiveTab(activeTab === 'chat' ? 'talk' : 'chat'); if (activeTab !== 'chat') setUnreadCount(0); }}
+            className={`w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+              activeTab === 'chat' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'
             }`}
-            data-testid="tab-talk"
+            data-testid="tab-chat"
           >
-            <User className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setShowAudioSettings(true)}
-            className={`flex-1 flex flex-col items-center py-2 transition-colors ${
-              flicButtons.some(b => b.connectionState === 'connected')
-                ? 'text-blue-400'
-                : 'text-slate-500'
-            }`}
-            data-testid="tab-settings-footer"
-          >
-            <Settings className="w-5 h-5" />
+            <div className="relative">
+              <MessageSquare className="w-5 h-5" />
+              {unreadCount > 0 && activeTab !== 'chat' && (
+                <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </div>
           </button>
 
-          {/* Center talk button */}
-          <div className="flex flex-col items-center px-4">
+          {/* Center pill: PTT button + lock */}
+          <div className="flex-1 flex items-center justify-center bg-slate-800 rounded-full h-11 px-1 gap-1">
             {isConnected ? (
               broadcastActive && !canSpeakInBroadcast ? (
-                <button
-                  onClick={toggleRaiseHand}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all ${
-                    handRaised
-                      ? 'bg-amber-500 text-white shadow-amber-500/30'
-                      : 'bg-slate-700 text-slate-300'
-                  }`}
-                  data-testid="button-raise-hand-footer"
-                >
-                  <Hand className="w-7 h-7" />
-                </button>
+                <>
+                  <button
+                    onClick={toggleRaiseHand}
+                    className={`flex-1 h-9 rounded-full flex items-center justify-center transition-all ${
+                      handRaised
+                        ? 'bg-amber-500 text-white'
+                        : 'text-slate-300'
+                    }`}
+                    data-testid="button-raise-hand-footer"
+                  >
+                    <Hand className="w-5 h-5" />
+                  </button>
+                </>
               ) : talkMode === 'ptt' ? (
-                <button
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    unlockAudio();
-                    startTalking();
-                  }}
-                  onPointerUp={stopTalking}
-                  onPointerLeave={stopTalking}
-                  onPointerCancel={stopTalking}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all select-none touch-none ${
-                    isMuted
-                      ? 'bg-slate-700 text-slate-300'
-                      : 'bg-emerald-500 text-white shadow-emerald-500/30'
-                  }`}
-                  data-testid="button-ptt-footer"
-                >
-                  {isMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
-                </button>
+                <>
+                  <button
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      unlockAudio();
+                      startTalking();
+                    }}
+                    onPointerUp={stopTalking}
+                    onPointerLeave={stopTalking}
+                    onPointerCancel={stopTalking}
+                    className={`flex-1 h-9 rounded-full flex items-center justify-center transition-all select-none touch-none ${
+                      isMuted
+                        ? 'text-slate-400'
+                        : 'bg-emerald-500 text-white'
+                    }`}
+                    data-testid="button-ptt-footer"
+                  >
+                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                  <button
+                    onClick={toggleTalkLock}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                      talkLocked ? 'bg-emerald-500 text-white' : 'text-slate-500'
+                    }`}
+                    data-testid="button-lock-footer"
+                  >
+                    {talkLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  </button>
+                </>
               ) : talkMode === 'always' ? (
-                <button
-                  onPointerDown={(e) => {
-                    e.preventDefault();
-                    const now = Date.now();
-                    if (now - alwaysOnLastTapRef.current <= 300) {
-                      alwaysOnDoubleTapRef.current = true;
-                      alwaysOnLastTapRef.current = 0;
-                      changeTalkMode('auto');
-                      return;
-                    }
-                    alwaysOnLastTapRef.current = now;
-                    alwaysOnDoubleTapRef.current = false;
-                    startHoldMute();
-                  }}
-                  onPointerUp={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
-                  onPointerLeave={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
-                  onPointerCancel={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg select-none touch-none transition-all ${
-                    isHoldMuted
-                      ? 'bg-amber-500 text-white shadow-amber-500/30'
-                      : 'bg-emerald-500 text-white shadow-emerald-500/30'
-                  }`}
-                  data-testid="button-always-on-footer"
-                >
-                  {isHoldMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
-                </button>
+                <>
+                  <button
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      const now = Date.now();
+                      if (now - alwaysOnLastTapRef.current <= 300) {
+                        alwaysOnDoubleTapRef.current = true;
+                        alwaysOnLastTapRef.current = 0;
+                        changeTalkMode('auto');
+                        return;
+                      }
+                      alwaysOnLastTapRef.current = now;
+                      alwaysOnDoubleTapRef.current = false;
+                      startHoldMute();
+                    }}
+                    onPointerUp={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+                    onPointerLeave={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+                    onPointerCancel={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+                    className={`flex-1 h-9 rounded-full flex items-center justify-center select-none touch-none transition-all ${
+                      isHoldMuted
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-emerald-500 text-white'
+                    }`}
+                    data-testid="button-always-on-footer"
+                  >
+                    {isHoldMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                  <button
+                    onClick={toggleTalkLock}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                      talkLocked ? 'bg-emerald-500 text-white' : 'text-slate-500'
+                    }`}
+                    data-testid="button-lock-footer"
+                  >
+                    {talkLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  </button>
+                </>
               ) : (
-                <button
-                  onClick={toggleMute}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all ${
-                    isMuted
-                      ? 'bg-slate-700 text-slate-300'
-                      : 'bg-emerald-500 text-white shadow-emerald-500/30'
-                  }`}
-                  data-testid="button-auto-talk-footer"
-                >
-                  {isMuted ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
-                </button>
+                <>
+                  <button
+                    onClick={toggleMute}
+                    className={`flex-1 h-9 rounded-full flex items-center justify-center transition-all ${
+                      isMuted
+                        ? 'text-slate-400'
+                        : 'bg-emerald-500 text-white'
+                    }`}
+                    data-testid="button-auto-talk-footer"
+                  >
+                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                  <button
+                    onClick={toggleTalkLock}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
+                      talkLocked ? 'bg-emerald-500 text-white' : 'text-slate-500'
+                    }`}
+                    data-testid="button-lock-footer"
+                  >
+                    {talkLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                  </button>
+                </>
               )
             ) : isConnecting ? (
               <div
-                className="w-12 h-12 rounded-full flex items-center justify-center bg-slate-600 text-white shadow-lg"
+                className="flex-1 h-9 rounded-full flex items-center justify-center text-white"
                 data-testid="button-connecting-footer"
               >
-                <Mic className="w-7 h-7 animate-pulse" />
+                <Mic className="w-5 h-5 animate-pulse" />
               </div>
             ) : (
               <button
@@ -3253,42 +3285,25 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   connectToRoom(nameToUse || undefined);
                 }}
                 disabled={!userName && !draftName.trim()}
-                className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all ${
+                className={`flex-1 h-9 rounded-full flex items-center justify-center transition-all ${
                   !userName && !draftName.trim()
-                    ? 'bg-slate-700 text-slate-400'
-                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+                    ? 'text-slate-500'
+                    : 'text-slate-300'
                 }`}
                 data-testid="button-connect-footer"
               >
-                <MicOff className="w-7 h-7" />
+                <MicOff className="w-5 h-5" />
               </button>
             )}
           </div>
 
+          {/* Right circle: Settings (three dots) */}
           <button
-            onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
-            className={`flex-1 flex flex-col items-center py-2 transition-colors relative ${
-              activeTab === 'chat' ? 'text-emerald-400' : 'text-slate-500'
-            }`}
-            data-testid="tab-chat"
+            onClick={() => setShowAudioSettings(true)}
+            className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 bg-slate-800 text-slate-400 transition-colors"
+            data-testid="tab-settings-footer"
           >
-            <div className="relative">
-              <MessageSquare className="w-5 h-5" />
-              {unreadCount > 0 && activeTab !== 'chat' && (
-                <span className="absolute -top-1.5 -right-2 bg-red-500 text-white text-[9px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </div>
-          </button>
-          <button
-            onClick={() => setActiveTab('note')}
-            className={`flex-1 flex flex-col items-center py-2 transition-colors ${
-              activeTab === 'note' ? 'text-emerald-400' : 'text-slate-500'
-            }`}
-            data-testid="tab-note"
-          >
-            <StickyNote className="w-5 h-5" />
+            <MoreVertical className="w-5 h-5" />
           </button>
         </div>
       )}
