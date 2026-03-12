@@ -3020,7 +3020,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               const showName = !mine && (i === 0 || chatMessages[i - 1].senderIdentity !== msg.senderIdentity);
               return (
                 <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid={`chat-message-${i}`}>
-                  <div className={`max-w-[80%] ${mine ? 'items-end' : 'items-start'}`}>
+                  <div className={`max-w-[80%] flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
                     {showName && (
                       <p className="text-[10px] text-slate-500 px-2 mb-0.5">{msg.senderName}</p>
                     )}
