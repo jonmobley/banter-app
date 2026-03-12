@@ -471,6 +471,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [muteAllLoading, setMuteAllLoading] = useState(false);
   const [allCallLoading, setAllCallLoading] = useState(false);
   const [awayUsers, setAwayUsers] = useState<Set<string>>(new Set());
+  const [adminMutedUsers, setAdminMutedUsers] = useState<Set<string>>(new Set());
 
   const [talkLocked, setTalkLocked] = useState(false);
 
@@ -1374,7 +1375,16 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       if (!res.ok) throw new Error("Failed to mute");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
+      if (variables.muted) {
+        setAdminMutedUsers(prev => new Set(prev).add(variables.identity));
+      } else {
+        setAdminMutedUsers(prev => {
+          const next = new Set(prev);
+          next.delete(variables.identity);
+          return next;
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/participants", currentBanterId] });
     },
     onError: () => {
@@ -2793,6 +2803,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                         <Clock className="w-3 h-3 text-amber-400" />
                         <span className="text-xs text-amber-400">Away</span>
                       </div>
+                    ) : adminMutedUsers.has(p.identity) ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-red-500/20">
+                        <MicOff className="w-3 h-3 text-red-400" />
+                        <span className="text-xs text-red-400">Muted</span>
+                      </div>
                     ) : (
                       <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-600/50">
                         <MicOff className="w-3 h-3 text-slate-400" />
@@ -4078,26 +4093,19 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               </div>
             </div>
             <div className="px-4 space-y-1 mb-2">
-              {actionDrawerParticipant.isConnected && actionDrawerParticipant.identity && (
+              {actionDrawerParticipant.isConnected && actionDrawerParticipant.identity && !actionDrawerParticipant.muted && (
                 <button
                   onClick={() => {
                     toggleParticipantMute.mutate({ 
                       identity: actionDrawerParticipant.identity!, 
-                      muted: !actionDrawerParticipant.muted 
+                      muted: true 
                     });
                     setActionDrawerParticipant(null);
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left hover:bg-slate-800 transition-colors"
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3.5 rounded-xl transition-colors"
                   data-testid="drawer-action-mute"
                 >
-                  {actionDrawerParticipant.muted ? (
-                    <Mic className="w-5 h-5 text-emerald-400" />
-                  ) : (
-                    <MicOff className="w-5 h-5 text-slate-400" />
-                  )}
-                  <span className="text-white font-medium">
-                    {actionDrawerParticipant.muted ? 'Unmute' : 'Mute'}
-                  </span>
+                  Mute
                 </button>
               )}
               {(actionDrawerParticipant.phone || actionDrawerParticipant.email) && (
@@ -4119,11 +4127,10 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     kickParticipant.mutate(actionDrawerParticipant.identity!);
                     setActionDrawerParticipant(null);
                   }}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-left hover:bg-slate-800 transition-colors"
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-medium py-3.5 rounded-xl transition-colors"
                   data-testid="drawer-action-kick"
                 >
-                  <PhoneOff className="w-5 h-5 text-red-400" />
-                  <span className="text-red-400 font-medium">Remove from Call</span>
+                  Remove
                 </button>
               )}
               {!actionDrawerParticipant.isConnected && actionDrawerParticipant.expectedId && (
