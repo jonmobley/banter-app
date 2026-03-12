@@ -121,6 +121,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [isMuted, setIsMuted] = useState(true);
   const [isHoldMuted, setIsHoldMuted] = useState(false);
   const isHoldMutedRef = useRef(false);
+  const alwaysOnLastTapRef = useRef<number>(0);
+  const alwaysOnDoubleTapRef = useRef(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [localIdentity, setLocalIdentity] = useState<string | null>(null);
   
@@ -1254,6 +1256,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     localStorage.setItem('banter_talk_mode', mode);
     isHoldMutedRef.current = false;
     setIsHoldMuted(false);
+    alwaysOnLastTapRef.current = 0;
+    alwaysOnDoubleTapRef.current = false;
     
     if (mode === 'always' && room?.localParticipant) {
       await room.localParticipant.setMicrophoneEnabled(true);
@@ -3081,11 +3085,29 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   <button
                     onPointerDown={(e) => {
                       e.preventDefault();
+                      const now = Date.now();
+                      if (now - alwaysOnLastTapRef.current <= 300) {
+                        alwaysOnDoubleTapRef.current = true;
+                        alwaysOnLastTapRef.current = 0;
+                        changeTalkMode('auto');
+                        return;
+                      }
+                      alwaysOnLastTapRef.current = now;
+                      alwaysOnDoubleTapRef.current = false;
                       startHoldMute();
                     }}
-                    onPointerUp={() => stopHoldMute()}
-                    onPointerLeave={() => stopHoldMute()}
-                    onPointerCancel={() => stopHoldMute()}
+                    onPointerUp={() => {
+                      if (alwaysOnDoubleTapRef.current) return;
+                      stopHoldMute();
+                    }}
+                    onPointerLeave={() => {
+                      if (alwaysOnDoubleTapRef.current) return;
+                      stopHoldMute();
+                    }}
+                    onPointerCancel={() => {
+                      if (alwaysOnDoubleTapRef.current) return;
+                      stopHoldMute();
+                    }}
                     className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full relative select-none touch-none transition-all ${
                       isHoldMuted
                         ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
