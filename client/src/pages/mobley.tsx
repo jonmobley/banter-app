@@ -2825,7 +2825,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         >
 
         {/* Talk panel (participant grid) */}
-        <div className="md:flex-1 flex flex-col overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800" style={{ width: '100vw' }}>
+        <div className="shrink-0 md:shrink md:flex-1 flex flex-col overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800" style={{ width: '100vw' }}>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
           {isAdmin && (
             <button
@@ -3059,7 +3059,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
 
         {/* Chat panel */}
-        <div className="md:w-80 flex flex-col bg-slate-950 md:flex-shrink-0 md:border-r md:border-slate-800 pb-20 md:pb-0" style={{ width: '100vw' }}>
+        <div className="shrink-0 md:shrink-0 md:w-80 flex flex-col bg-slate-950 md:border-r md:border-slate-800 pb-20 md:pb-0" style={{ width: '100vw' }}>
           <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-emerald-400" />
