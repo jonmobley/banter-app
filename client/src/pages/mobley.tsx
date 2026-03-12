@@ -478,20 +478,48 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const [talkLocked, setTalkLocked] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'talk' | 'chat' | 'note'>('talk');
-  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [isSwiping, setIsSwiping] = useState(false);
+  const swipeStartRef = useRef<{ x: number; y: number; locked: boolean; direction: 'h' | 'v' | null } | null>(null);
+  const activeTabRef2 = useRef(activeTab);
+  activeTabRef2.current = activeTab;
   const handleSwipeStart = useCallback((e: React.TouchEvent) => {
-    swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, locked: false, direction: null };
+  }, []);
+  const handleSwipeMove = useCallback((e: React.TouchEvent) => {
+    if (!swipeStartRef.current) return;
+    const dx = e.touches[0].clientX - swipeStartRef.current.x;
+    const dy = e.touches[0].clientY - swipeStartRef.current.y;
+    if (!swipeStartRef.current.direction) {
+      if (Math.abs(dx) > 8 || Math.abs(dy) > 8) {
+        swipeStartRef.current.direction = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
+      }
+      return;
+    }
+    if (swipeStartRef.current.direction === 'v') return;
+    setIsSwiping(true);
+    const tab = activeTabRef2.current;
+    let offset = dx;
+    const isOverscroll = (tab === 'talk' && dx > 0) || (tab === 'chat' && dx < 0);
+    if (isOverscroll) {
+      offset = dx * 0.15;
+    }
+    setSwipeOffset(offset);
   }, []);
   const handleSwipeEnd = useCallback((e: React.TouchEvent) => {
-    if (!swipeStartRef.current) return;
+    if (!swipeStartRef.current || swipeStartRef.current.direction !== 'h') {
+      swipeStartRef.current = null;
+      return;
+    }
     const dx = e.changedTouches[0].clientX - swipeStartRef.current.x;
-    const dy = e.changedTouches[0].clientY - swipeStartRef.current.y;
     swipeStartRef.current = null;
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      if (dx > 0) {
-        setActiveTab('talk');
-      } else {
+    setIsSwiping(false);
+    setSwipeOffset(0);
+    if (Math.abs(dx) > 80) {
+      if (dx < 0 && activeTabRef2.current === 'talk') {
         setActiveTab('chat');
+      } else if (dx > 0 && activeTabRef2.current === 'chat') {
+        setActiveTab('talk');
       }
     }
   }, []);
@@ -2781,11 +2809,75 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       </header>
 
-        {/* Three-pane layout: desktop side-by-side, mobile tabbed */}
-        <div className="flex flex-1 min-h-0 overflow-hidden" onTouchStart={handleSwipeStart} onTouchEnd={handleSwipeEnd}>
+        {/* Three-pane layout: desktop side-by-side, mobile sliding */}
+        <div className="flex flex-1 min-h-0 overflow-hidden relative" onTouchStart={handleSwipeStart} onTouchMove={handleSwipeMove} onTouchEnd={handleSwipeEnd}>
 
-        {/* Talk panel (participant grid) */}
-        <div className={`${activeTab === 'talk' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800`}>
+        {/* Mobile sliding container */}
+        <div
+          className="md:hidden absolute inset-0 flex"
+          style={{
+            transform: isSwiping
+              ? `translateX(calc(${activeTab === 'talk' ? '0%' : '-50%'} + ${swipeOffset}px))`
+              : `translateX(${activeTab === 'talk' ? '0%' : '-50%'})`,
+            transition: isSwiping ? 'none' : 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1)',
+            width: '200%',
+          }}
+        >
+          <div className="w-1/2 flex flex-col overflow-auto px-4 pb-24">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+          {isAdmin && (
+            <button
+              onClick={() => setShowAddExpectedModal(true)}
+              className="flex flex-col items-center justify-center rounded-xl p-4 border-2 border-dashed border-slate-700 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-colors cursor-pointer min-h-[120px]"
+              data-testid="button-add-participant-card-mobile"
+            >
+              <div className="w-14 h-14 rounded-full flex items-center justify-center bg-emerald-500/20">
+                <Plus className="w-6 h-6 text-emerald-400" />
+              </div>
+              <p className="font-medium text-sm mt-2 text-emerald-400">Add</p>
+            </button>
+          )}
+          {allParticipantCards.map(card => renderParticipantCard(card))}
+        </div>
+          </div>
+          <div className="w-1/2 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-1" ref={chatContainerRef}>
+              {chatMessages.length === 0 && (
+                <div className="flex flex-col items-center justify-center flex-1 text-center">
+                  <MessageSquare className="w-8 h-8 text-slate-700 mb-2" />
+                  <p className="text-slate-600 text-xs mt-1">Send a message to the group</p>
+                </div>
+              )}
+              {chatMessages.map((msg, i) => {
+                const mine = isMyMessage(msg);
+                const showName = !mine && (i === 0 || chatMessages[i - 1].senderIdentity !== msg.senderIdentity);
+                return (
+                  <div key={msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid={`chat-message-mobile-${i}`}>
+                    <div className={`max-w-[80%] flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
+                      {showName && (
+                        <p className="text-[10px] text-slate-500 px-2 mb-0.5">{msg.senderName}</p>
+                      )}
+                      <div className={`px-3 py-1.5 rounded-2xl text-sm ${
+                        mine 
+                          ? 'bg-emerald-600 text-white rounded-br-md' 
+                          : 'bg-slate-800 text-slate-200 rounded-bl-md'
+                      }`}>
+                        {msg.content}
+                      </div>
+                      <p className={`text-[10px] text-slate-600 px-2 mt-0.5 ${mine ? 'text-right' : ''}`}>
+                        {formatMessageTime(msg.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={chatEndRef} />
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop: Talk panel (participant grid) */}
+        <div className="hidden md:flex flex-col flex-1 overflow-auto px-4 pb-24 md:pb-96 md:border-r md:border-slate-800">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
           {isAdmin && (
             <button
@@ -3019,7 +3111,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
 
         {/* Chat panel */}
-        <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} md:flex flex-col bg-slate-950 w-full md:w-80 md:flex-shrink-0 md:border-r md:border-slate-800`}>
+        <div className="hidden md:flex flex-col bg-slate-950 w-full md:w-80 md:flex-shrink-0 md:border-r md:border-slate-800">
           <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-emerald-400" />
@@ -3270,7 +3362,141 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       </div>{/* End inner wrapper */}
 
 
-      {/* Footer nav removed - talk button integrated into chat compose */}
+      {/* Mobile fixed footer: talk button + chat input */}
+      {authToken && (
+        <div className="md:hidden sticky bottom-0 left-0 right-0 px-3 pb-safe pt-2 bg-slate-950 border-t border-slate-800 z-50">
+          <div className="flex gap-2 items-center">
+            <div className="w-10 h-10 flex-shrink-0">
+              {isConnected ? (
+                broadcastActive && !canSpeakInBroadcast ? (
+                  <button
+                    onClick={toggleRaiseHand}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                      handRaised
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-slate-700 text-slate-300'
+                    }`}
+                    data-testid="button-raise-hand-footer"
+                  >
+                    <Hand className="w-5 h-5" />
+                  </button>
+                ) : talkMode === 'ptt' ? (
+                  <button
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      unlockAudio();
+                      startTalking();
+                    }}
+                    onPointerUp={stopTalking}
+                    onPointerLeave={stopTalking}
+                    onPointerCancel={stopTalking}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all select-none touch-none ${
+                      isMuted
+                        ? 'bg-slate-700 text-slate-400'
+                        : 'bg-emerald-500 text-white'
+                    }`}
+                    data-testid="button-ptt-footer"
+                  >
+                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                ) : talkMode === 'always' ? (
+                  <button
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      const now = Date.now();
+                      if (now - alwaysOnLastTapRef.current <= 300) {
+                        alwaysOnDoubleTapRef.current = true;
+                        alwaysOnLastTapRef.current = 0;
+                        changeTalkMode('auto');
+                        return;
+                      }
+                      alwaysOnLastTapRef.current = now;
+                      alwaysOnDoubleTapRef.current = false;
+                      startHoldMute();
+                    }}
+                    onPointerUp={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+                    onPointerLeave={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+                    onPointerCancel={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center select-none touch-none transition-all ${
+                      isHoldMuted
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-emerald-500 text-white'
+                    }`}
+                    data-testid="button-always-on-footer"
+                  >
+                    {isHoldMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                ) : (
+                  <button
+                    onClick={toggleMute}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                      isMuted
+                        ? 'bg-slate-700 text-slate-400'
+                        : 'bg-emerald-500 text-white'
+                    }`}
+                    data-testid="button-auto-talk-footer"
+                  >
+                    {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                  </button>
+                )
+              ) : isConnecting ? (
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center bg-slate-700 text-white"
+                  data-testid="button-connecting-footer"
+                >
+                  <Mic className="w-5 h-5 animate-pulse" />
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    const nameToUse = userName || draftName.trim();
+                    if (!userName && draftName.trim()) {
+                      setUserName(draftName.trim());
+                      localStorage.setItem('banter_user_name', draftName.trim());
+                      if (authToken) {
+                        fetch('/api/user/profile', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ authToken, name: draftName.trim() })
+                        }).catch(() => {});
+                      }
+                    }
+                    unlockAudio();
+                    connectToRoom(nameToUse || undefined);
+                  }}
+                  disabled={!userName && !draftName.trim()}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                    !userName && !draftName.trim()
+                      ? 'bg-slate-700 text-slate-500'
+                      : 'bg-slate-700 text-slate-300'
+                  }`}
+                  data-testid="button-connect-footer"
+                >
+                  <MicOff className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); } }}
+              placeholder="Message..."
+              maxLength={1000}
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-full px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50"
+              data-testid="input-chat-message-footer"
+            />
+            <button
+              onClick={sendChatMessage}
+              disabled={chatSending || !chatInput.trim()}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 disabled:text-slate-500 text-white transition-colors flex-shrink-0"
+              data-testid="button-send-chat-footer"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bottom controls - desktop only */}
       <div
