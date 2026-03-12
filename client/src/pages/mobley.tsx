@@ -3232,7 +3232,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 className="w-16 h-16 rounded-full flex items-center justify-center bg-slate-600 text-white shadow-lg"
                 data-testid="button-connecting-footer"
               >
-                <Globe className="w-7 h-7 animate-pulse" />
+                <Mic className="w-7 h-7 animate-pulse" />
               </div>
             ) : (
               <button
@@ -3256,11 +3256,11 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                 className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all ${
                   !userName && !draftName.trim()
                     ? 'bg-slate-700 text-slate-400'
-                    : 'bg-emerald-500 hover:bg-emerald-400 text-white'
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
                 }`}
                 data-testid="button-connect-footer"
               >
-                <Wifi className="w-7 h-7" />
+                <MicOff className="w-7 h-7" />
               </button>
             )}
           </div>
