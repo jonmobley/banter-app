@@ -807,19 +807,45 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     }
   }, [verifiedPhone, expectedData, contactsData, userName]);
 
+  useEffect(() => {
+    if (verifiedEmail && !userName) {
+      const normalizedVerifiedEmail = verifiedEmail.toLowerCase().trim();
+      
+      if (expectedData) {
+        const matchingParticipant = expectedData.find(p =>
+          p.email && p.email.toLowerCase().trim() === normalizedVerifiedEmail
+        );
+        if (matchingParticipant) {
+          setUserName(matchingParticipant.name);
+          localStorage.setItem('banter_user_name', matchingParticipant.name);
+          return;
+        }
+      }
+      
+      if (contactsData) {
+        const matchingContact = contactsData.find((c: any) =>
+          c.email && c.email.toLowerCase().trim() === normalizedVerifiedEmail
+        );
+        if (matchingContact) {
+          setUserName(matchingContact.name);
+          localStorage.setItem('banter_user_name', matchingContact.name);
+        }
+      }
+    }
+  }, [verifiedEmail, expectedData, contactsData, userName]);
+
   // Track if we've already auto-connected this session
   const hasAutoConnected = useRef(false);
 
   // Connect to LiveKit room
-  const connectToRoom = useCallback(async () => {
+  const connectToRoom = useCallback(async (overrideName?: string) => {
     try {
       setConnectionError(null);
       setConnectionState(ConnectionState.Connecting);
 
       let identity = 'WebUser';
-      let displayName = userName.trim();
+      let displayName = (overrideName ?? userName).trim();
       
-      // If user entered a name, use it
       if (displayName) {
         identity = displayName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
         localStorage.setItem('banter_user_name', displayName);
@@ -834,7 +860,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         const normalizedVerified = verifiedPhone.replace(/\D/g, '');
         let found = false;
         
-        // Try to match by verified phone in expected participants
         if (expectedData) {
           const matchingParticipant = expectedData.find(p => {
             const normalizedExpected = p.phone.replace(/\D/g, '');
@@ -849,7 +874,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           }
         }
         
-        // Try to match in contacts if not found
         if (!found && contactsData) {
           const matchingContact = contactsData.find(c => {
             const normalizedContact = c.phone.replace(/\D/g, '');
@@ -865,13 +889,42 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         }
         
         if (!found) {
-          // Generate random identity if no match found
+          const randomDigits = Array.from({ length: 8 }, () => Math.floor(Math.random() * 8) + 2).join('');
+          identity = `WebUser_${randomDigits}`;
+          displayName = identity;
+        }
+      } else if (verifiedEmail) {
+        const normalizedVerifiedEmail = verifiedEmail.toLowerCase().trim();
+        let found = false;
+        
+        if (expectedData) {
+          const matchingParticipant = expectedData.find(p =>
+            p.email && p.email.toLowerCase().trim() === normalizedVerifiedEmail
+          );
+          if (matchingParticipant) {
+            identity = matchingParticipant.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+            displayName = matchingParticipant.name;
+            found = true;
+          }
+        }
+        
+        if (!found && contactsData) {
+          const matchingContact = contactsData.find((c: any) =>
+            c.email && c.email.toLowerCase().trim() === normalizedVerifiedEmail
+          );
+          if (matchingContact) {
+            identity = matchingContact.name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+            displayName = matchingContact.name;
+            found = true;
+          }
+        }
+        
+        if (!found) {
           const randomDigits = Array.from({ length: 8 }, () => Math.floor(Math.random() * 8) + 2).join('');
           identity = `WebUser_${randomDigits}`;
           displayName = identity;
         }
       } else {
-        // Generate random numbers 2-9 only (no 0 or 1 to avoid confusion)
         const randomDigits = Array.from({ length: 8 }, () => Math.floor(Math.random() * 8) + 2).join('');
         identity = `WebUser_${randomDigits}`;
         displayName = identity;
@@ -1080,7 +1133,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       setConnectionError(error.message || 'Connection failed');
       setConnectionState(ConnectionState.Disconnected);
     }
-  }, [userName, verifiedPhone, expectedData, contactsData, channelsData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken, currentBanterId, slug]);
+  }, [userName, verifiedPhone, verifiedEmail, expectedData, contactsData, channelsData, echoCancellation, noiseSuppression, autoGainControl, selectedAudioDevice, queryClient, authToken, currentBanterId, slug]);
 
   useEffect(() => {
     const handleVisibilityChange = async () => {
@@ -3039,6 +3092,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               )}
               <button
                 onClick={() => {
+                  const nameToUse = userName || draftName.trim();
                   if (!userName && draftName.trim()) {
                     setUserName(draftName.trim());
                     localStorage.setItem('banter_user_name', draftName.trim());
@@ -3051,7 +3105,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                     }
                   }
                   unlockAudio();
-                  connectToRoom();
+                  connectToRoom(nameToUse || undefined);
                 }}
                 disabled={!userName && !draftName.trim()}
                 className={`w-full flex items-center justify-center gap-2 font-semibold py-4 px-6 rounded-full transition-colors ${
