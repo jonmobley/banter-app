@@ -3154,7 +3154,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           </button>
 
           {/* Center talk button */}
-          <div className="flex flex-col items-center px-4" style={{ marginTop: '-0.5rem' }}>
+          <div className="flex flex-col items-center px-4 py-2">
             {isConnected ? (
               broadcastActive && !canSpeakInBroadcast ? (
                 <button
