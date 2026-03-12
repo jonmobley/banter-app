@@ -3065,7 +3065,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       )}
 
       {/* Bottom controls */}
-      <div className={`fixed left-0 right-0 px-6 z-40 ${
+      <div className={`fixed left-0 right-0 md:right-80 px-6 z-40 ${
         isConnected || isConnecting 
           ? `${authToken ? 'bottom-12 md:bottom-0' : 'bottom-0'} bg-slate-950 pt-8 pb-safe` 
           : `${authToken ? 'bottom-12 md:bottom-0' : 'bottom-0'} md:bottom-auto md:top-1/2 md:-translate-y-1/2 pb-safe md:pb-0 bg-slate-950`
