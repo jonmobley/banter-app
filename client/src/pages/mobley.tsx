@@ -3139,13 +3139,13 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
       {/* Footer nav bar - mobile only: Talk pill + Chat circle */}
       {authToken && (
         <div className="flex md:hidden items-center px-4 py-2 pb-safe bg-slate-950 flex-shrink-0 z-50 relative gap-3">
-          {/* Left: Talk pill */}
-          <div className="flex-1 flex items-center justify-center bg-slate-800 rounded-full h-11 px-1">
+          {/* Left: Talk button */}
+          <div className="w-11 h-11 flex items-center justify-center bg-slate-800 rounded-full flex-shrink-0">
             {isConnected ? (
               broadcastActive && !canSpeakInBroadcast ? (
                 <button
                   onClick={toggleRaiseHand}
-                  className={`flex-1 h-9 rounded-full flex items-center justify-center transition-all ${
+                  className={`w-full h-full rounded-full flex items-center justify-center transition-all ${
                     handRaised
                       ? 'bg-amber-500 text-white'
                       : 'text-slate-300'
@@ -3164,7 +3164,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   onPointerUp={stopTalking}
                   onPointerLeave={stopTalking}
                   onPointerCancel={stopTalking}
-                  className={`flex-1 h-9 rounded-full flex items-center justify-center transition-all select-none touch-none ${
+                  className={`w-full h-full rounded-full flex items-center justify-center transition-all select-none touch-none ${
                     isMuted
                       ? 'text-slate-400'
                       : 'bg-emerald-500 text-white'
@@ -3191,7 +3191,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   onPointerUp={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
                   onPointerLeave={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
                   onPointerCancel={() => { if (!alwaysOnDoubleTapRef.current) stopHoldMute(); }}
-                  className={`flex-1 h-9 rounded-full flex items-center justify-center select-none touch-none transition-all ${
+                  className={`w-full h-full rounded-full flex items-center justify-center select-none touch-none transition-all ${
                     isHoldMuted
                       ? 'bg-amber-500 text-white'
                       : 'bg-emerald-500 text-white'
@@ -3203,7 +3203,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               ) : (
                 <button
                   onClick={toggleMute}
-                  className={`flex-1 h-9 rounded-full flex items-center justify-center transition-all ${
+                  className={`w-full h-full rounded-full flex items-center justify-center transition-all ${
                     isMuted
                       ? 'text-slate-400'
                       : 'bg-emerald-500 text-white'
@@ -3215,7 +3215,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               )
             ) : isConnecting ? (
               <div
-                className="flex-1 h-9 rounded-full flex items-center justify-center text-white"
+                className="w-full h-full rounded-full flex items-center justify-center text-white"
                 data-testid="button-connecting-footer"
               >
                 <Mic className="w-5 h-5 animate-pulse" />
@@ -3239,7 +3239,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
                   connectToRoom(nameToUse || undefined);
                 }}
                 disabled={!userName && !draftName.trim()}
-                className={`flex-1 h-9 rounded-full flex items-center justify-center transition-all ${
+                className={`w-full h-full rounded-full flex items-center justify-center transition-all ${
                   !userName && !draftName.trim()
                     ? 'text-slate-500'
                     : 'text-slate-300'
