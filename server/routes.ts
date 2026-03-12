@@ -1814,6 +1814,46 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/note", async (req, res) => {
+    try {
+      const authToken = req.headers.authorization?.replace('Bearer ', '') || req.query.authToken as string;
+      if (!authToken || !verifyAuthToken(authToken)) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const banterId = (req.query.banterId as string) || 'global';
+      const note = await storage.getNote(banterId);
+      res.json({ content: note?.content || '', updatedAt: note?.updatedAt || null, updatedBy: note?.updatedBy || null });
+    } catch (error: any) {
+      log(`Error fetching note: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to fetch note" });
+    }
+  });
+
+  app.put("/api/note", async (req, res) => {
+    try {
+      const { authToken: clientAuthToken, content, banterId } = req.body;
+      if (!verifyAdminAuth(clientAuthToken)) {
+        return res.status(401).json({ error: "Admin access required" });
+      }
+      if (typeof content !== 'string') {
+        return res.status(400).json({ error: "Content must be a string" });
+      }
+      if (content.length > 50000) {
+        return res.status(400).json({ error: "Note content too long (max 50,000 characters)" });
+      }
+      const noteId = banterId || 'global';
+      const identity = verifyAuthToken(clientAuthToken);
+      const note = await storage.upsertNote(noteId, content, identity || undefined);
+      
+      broadcastToFrontend({ type: 'note_updated', content: note.content, updatedAt: note.updatedAt, updatedBy: note.updatedBy }, noteId === 'global' ? null : noteId);
+      
+      res.json(note);
+    } catch (error: any) {
+      log(`Error saving note: ${error.message}`, "api");
+      res.status(500).json({ error: "Failed to save note" });
+    }
+  });
+
   /**
    * POST /api/alert-crew
    * Sends an instant "Join Now" SMS to crew members. Requires admin auth.

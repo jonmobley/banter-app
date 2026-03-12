@@ -225,6 +225,16 @@ export const insertMessageSchema = createInsertSchema(messages).omit({
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
 
+export const banterNotes = pgTable("banter_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  banterId: text("banter_id").notNull().default('global').unique(),
+  content: text("content").notNull().default(''),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+  updatedBy: text("updated_by"),
+});
+
+export type BanterNote = typeof banterNotes.$inferSelect;
+
 export function generateSlug(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';

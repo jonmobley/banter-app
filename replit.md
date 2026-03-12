@@ -30,7 +30,7 @@ Banter is a web-based real-time audio communication application designed for gro
 
 ### Data Storage
 - **Database**: PostgreSQL via Drizzle ORM
-- **Key Tables**: `users`, `contacts`, `groups`, `channels`, `scheduled_banters`, `expected_participants`.
+- **Key Tables**: `users`, `contacts`, `groups`, `channels`, `scheduled_banters`, `expected_participants`, `banter_notes`, `messages`.
 
 ### Session Isolation
 Each Scheduled Banter is an isolated session with its own LiveKit room, channels, participant list, channel assignments, and state. A unique shareable join link (`/join/{slug}`) is generated for each. Backward compatibility supports a global, always-on banter when `banterId` is null. Room naming conventions differentiate global and scoped sessions.
@@ -55,7 +55,9 @@ WebSocket communication, including speaking states and broadcasts, is scoped by 
 - **Admin Groups Management**: UI for creating, renaming, deleting groups, and managing members.
 - **Pre-join Participant List**: Shows participants before joining a banter.
 - **Away Status Detection**: Detects when participants switch tabs or get phone calls; shows amber "Away" badge via WebSocket-broadcast `awayUsers` state per banter.
-- **Group Chat**: Per-banter text chat with `messages` table. REST endpoints for send/fetch with pagination. Real-time via WebSocket broadcast. Mobile: Radio/Chat tab switcher at bottom. Desktop: side panel alongside participant grid. Sender grouping, relative timestamps, unread badge, message deduplication.
+- **Group Chat**: Per-banter text chat with `messages` table. REST endpoints for send/fetch with pagination. Real-time via WebSocket broadcast. Sender grouping, relative timestamps, unread badge, message deduplication.
+- **Shared Note**: Per-banter shared note (`banter_notes` table). Admin-only editing via REST (GET/PUT `/api/note`). Real-time sync via WebSocket `note_updated` events. Non-admins see read-only view.
+- **Layout**: Desktop: three-pane side-by-side (Talk grid | Chat | Note). Mobile: three-tab footer nav (Talk, Chat, Note). Footer nav hidden on desktop (`md:hidden`). Bottom controls (PTT, connect) fixed-positioned, offset for mobile footer.
 - **Navigation**: Main app route is `/login` with redirects and accessible logout options.
 - **Safe Areas**: Support for iOS notch/home indicator via `safe-top safe-bottom` CSS classes.
 

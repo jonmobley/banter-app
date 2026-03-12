@@ -1,4 +1,4 @@
-import { type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments, type User, type InsertUser, type UpdateUser, users, type Message, type InsertMessage, messages, normalizePhone, generateSlug } from "@shared/schema";
+import { type Contact, type InsertContact, contacts, type ExpectedParticipant, type InsertExpectedParticipant, type UpdateExpectedParticipant, expectedParticipants, verificationCodes, type ScheduledBanter, type InsertScheduledBanter, type UpdateScheduledBanter, scheduledBanters, betaRequests, type Group, type InsertGroup, groups, type GroupMember, groupMembers, type Channel, type InsertChannel, channels, type ChannelAssignment, channelAssignments, type User, type InsertUser, type UpdateUser, users, type Message, type InsertMessage, messages, normalizePhone, generateSlug, type BanterNote, banterNotes } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, gt, lt, lte, desc, sql, isNull } from "drizzle-orm";
 import pg from "pg";
@@ -87,6 +87,9 @@ export interface IStorage {
   
   createMessage(msg: InsertMessage): Promise<Message>;
   getMessages(banterId: string | null, limit?: number, before?: string): Promise<Message[]>;
+  
+  getNote(banterId: string): Promise<BanterNote | undefined>;
+  upsertNote(banterId: string, content: string, updatedBy?: string): Promise<BanterNote>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -451,6 +454,25 @@ export class DatabaseStorage implements IStorage {
       .where(and(...conditions))
       .orderBy(desc(messages.createdAt))
       .limit(limit);
+  }
+  async getNote(banterId: string): Promise<BanterNote | undefined> {
+    const [note] = await db.select().from(banterNotes).where(eq(banterNotes.banterId, banterId));
+    return note;
+  }
+
+  async upsertNote(banterId: string, content: string, updatedBy?: string): Promise<BanterNote> {
+    const existing = await this.getNote(banterId);
+    if (existing) {
+      const [updated] = await db.update(banterNotes)
+        .set({ content, updatedAt: new Date(), updatedBy: updatedBy || null })
+        .where(eq(banterNotes.banterId, banterId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(banterNotes)
+      .values({ banterId, content, updatedBy: updatedBy || null })
+      .returning();
+    return created;
   }
 }
 

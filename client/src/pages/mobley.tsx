@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, PhoneOff, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw, Clock, Send, Lock, Unlock } from "lucide-react";
+import { Phone, Users, User, Plus, Volume2, VolumeX, Settings, MoreVertical, MessageSquare, Trash2, X, Pencil, PhoneOutgoing, PhoneOff, Calendar, PhoneCall, Mic, MicOff, Globe, Wifi, Radio, Bell, Megaphone, Hand, Bluetooth, Loader2, LogOut, Shield, Search, UserPlus, RefreshCw, Clock, Send, Lock, Unlock, StickyNote, Save } from "lucide-react";
 import { Link } from "wouter";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Room, RoomEvent, Track, LocalParticipant, RemoteParticipant, ConnectionState, AudioPresets, VideoPresets, DataPacket_Kind } from "livekit-client";
@@ -477,7 +477,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
 
   const [talkLocked, setTalkLocked] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<'radio' | 'chat'>('radio');
+  const [activeTab, setActiveTab] = useState<'radio' | 'chat' | 'note'>('radio');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
@@ -486,11 +486,16 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const activeTabRef = useRef<'radio' | 'chat'>('radio');
+  const activeTabRef = useRef<'radio' | 'chat' | 'note'>('radio');
   useEffect(() => {
     activeTabRef.current = activeTab;
     if (activeTab === 'chat') setUnreadCount(0);
   }, [activeTab]);
+
+  const [noteContent, setNoteContent] = useState('');
+  const [noteEditing, setNoteEditing] = useState(false);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
 
   // Broadcast state
   const [broadcastActive, setBroadcastActive] = useState(false);
@@ -589,6 +594,8 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
               setChirpEnabled(msg.enabled);
               chirpEnabledRef.current = msg.enabled;
             }
+          } else if (msg.type === 'note_updated') {
+            setNoteContent(msg.content || '');
           } else if (msg.type === 'broadcast') {
             const msgBanterId = msg.banterId || null;
             if (msgBanterId === myBanterId) {
@@ -1644,6 +1651,40 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     setLoadingMore(false);
   }, [authToken, loadingMore, hasMoreMessages, chatMessages, currentBanterId]);
 
+  const loadNote = useCallback(async () => {
+    if (!authToken) return;
+    try {
+      const params = new URLSearchParams({ authToken });
+      if (currentBanterId) params.set('banterId', currentBanterId);
+      const res = await fetch(`/api/note?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setNoteContent(data.content || '');
+      }
+    } catch {}
+  }, [authToken, currentBanterId]);
+
+  useEffect(() => {
+    if (authToken) loadNote();
+  }, [authToken, currentBanterId, loadNote]);
+
+  const saveNote = useCallback(async () => {
+    if (!authToken || noteSaving) return;
+    setNoteSaving(true);
+    try {
+      const res = await fetch('/api/note', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authToken, content: noteDraft, banterId: currentBanterId || undefined }),
+      });
+      if (res.ok) {
+        setNoteContent(noteDraft);
+        setNoteEditing(false);
+      }
+    } catch {}
+    setNoteSaving(false);
+  }, [authToken, noteDraft, noteSaving, currentBanterId]);
+
   const toggleMuteAll = useCallback(async () => {
     if (muteAllLoading) return;
     setMuteAllLoading(true);
@@ -2531,7 +2572,7 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
   }
 
   return (
-    <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden max-w-lg mx-auto w-full">
+    <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden w-full">
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
       <header className="relative flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -2723,9 +2764,12 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         </div>
       </header>
 
-        {/* Radio tab / participant grid */}
-        <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} flex-col flex-1 overflow-auto px-4 pb-96`}>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-4">
+        {/* Three-pane layout: desktop side-by-side, mobile tabbed */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+
+        {/* Talk panel (participant grid) */}
+        <div className={`${activeTab === 'radio' ? 'flex' : 'hidden'} md:flex flex-col flex-1 overflow-auto px-4 pb-96 md:border-r md:border-slate-800`}>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
           {isAdmin && (
             <button
               onClick={() => setShowAddExpectedModal(true)}
@@ -2956,12 +3000,14 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           
         </div>
         </div>
-      </div>
 
-        {/* Chat panel - full screen on mobile, side panel on desktop */}
-        <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} flex-col bg-slate-950 w-full`}>
-          <div className="hidden">
-            <h3 className="font-semibold text-sm text-slate-300">Group Chat</h3>
+        {/* Chat panel */}
+        <div className={`${activeTab === 'chat' ? 'flex' : 'hidden'} md:flex flex-col bg-slate-950 w-full md:w-80 md:flex-shrink-0 md:border-r md:border-slate-800`}>
+          <div className="hidden md:flex items-center justify-between px-4 py-3 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-emerald-400" />
+              <h3 className="font-semibold text-sm text-slate-300">Chat</h3>
+            </div>
             <span className="text-xs text-slate-500">{chatMessages.length} messages</span>
           </div>
           <div ref={chatContainerRef} className="flex-1 overflow-auto px-3 py-2 space-y-1 flex flex-col justify-end" data-testid="chat-messages">
@@ -3033,19 +3079,81 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
           )}
         </div>
 
+        {/* Note panel */}
+        <div className={`${activeTab === 'note' ? 'flex' : 'hidden'} md:flex flex-col bg-slate-950 w-full md:w-80 md:flex-shrink-0`}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <StickyNote className="w-4 h-4 text-amber-400" />
+              <h3 className="font-semibold text-sm text-slate-300">Note</h3>
+            </div>
+            {isAdmin && !noteEditing && (
+              <button
+                onClick={() => { setNoteDraft(noteContent); setNoteEditing(true); }}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                data-testid="button-edit-note"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
+            {isAdmin && noteEditing && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setNoteEditing(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                  data-testid="button-cancel-note"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={saveNote}
+                  disabled={noteSaving}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-emerald-500 hover:bg-emerald-400 text-white transition-colors disabled:opacity-50"
+                  data-testid="button-save-note"
+                >
+                  {noteSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="flex-1 overflow-auto p-4">
+            {noteEditing ? (
+              <textarea
+                value={noteDraft}
+                onChange={e => setNoteDraft(e.target.value)}
+                className="w-full h-full min-h-[200px] bg-slate-900 border border-slate-700 rounded-lg p-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 resize-none"
+                placeholder="Paste or type your note here..."
+                data-testid="textarea-note"
+              />
+            ) : (
+              <div className="text-sm text-slate-300 whitespace-pre-wrap" data-testid="text-note-content">
+                {noteContent || (
+                  <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                    <StickyNote className="w-10 h-10 text-slate-700 mb-3" />
+                    <p className="text-slate-500 text-sm">No note yet</p>
+                    {isAdmin && <p className="text-slate-600 text-xs mt-1">Tap the edit button to add a note</p>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
 
-      {/* Footer nav bar */}
+        </div>{/* End three-pane wrapper */}
+      </div>{/* End inner wrapper */}
+
+
+      {/* Footer nav bar - mobile only */}
       {authToken && (
-        <div className="flex border-t border-slate-800 bg-slate-950 pb-safe flex-shrink-0 z-50">
+        <div className="flex md:hidden border-t border-slate-800 bg-slate-950 pb-safe flex-shrink-0 z-50">
           <button
             onClick={() => setActiveTab('radio')}
             className={`flex-1 flex flex-col items-center py-2 transition-colors ${
               activeTab === 'radio' ? 'text-emerald-400' : 'text-slate-500'
             }`}
-            data-testid="tab-audio"
+            data-testid="tab-talk"
           >
             <Radio className="w-5 h-5" />
-            <span className="text-[10px] mt-0.5 font-medium">Audio</span>
+            <span className="text-[10px] mt-0.5 font-medium">Talk</span>
           </button>
           <button
             onClick={() => { setActiveTab('chat'); setUnreadCount(0); }}
@@ -3064,14 +3172,24 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
             </div>
             <span className="text-[10px] mt-0.5 font-medium">Chat</span>
           </button>
+          <button
+            onClick={() => setActiveTab('note')}
+            className={`flex-1 flex flex-col items-center py-2 transition-colors ${
+              activeTab === 'note' ? 'text-emerald-400' : 'text-slate-500'
+            }`}
+            data-testid="tab-note"
+          >
+            <StickyNote className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5 font-medium">Note</span>
+          </button>
         </div>
       )}
 
       {/* Bottom controls */}
-      <div className={`fixed left-0 right-0 px-6 z-40 ${activeTab === 'chat' ? 'hidden' : ''} ${
+      <div className={`fixed left-0 right-0 px-6 z-40 ${activeTab !== 'radio' ? 'hidden md:block' : ''} ${
         isConnected || isConnecting 
-          ? 'bottom-12 bg-slate-950 pt-8 pb-safe' 
-          : 'bottom-12 pb-safe bg-slate-950'
+          ? 'bottom-12 md:bottom-0 bg-slate-950 pt-8 pb-safe' 
+          : 'bottom-12 md:bottom-0 pb-safe bg-slate-950'
       }`}>
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
