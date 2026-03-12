@@ -2532,6 +2532,29 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
     <div className="h-full bg-slate-950 text-white flex flex-col overflow-hidden">
       <header className="relative flex items-end justify-between px-4 pb-3 pt-safe border-b border-slate-800 flex-shrink-0">
         <div className="flex items-center gap-2">
+          {isConnected && (
+            <button
+              onClick={() => setShowDisconnectConfirm(true)}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+              data-testid="button-leave-header"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          )}
+          {isConnected && isAdmin && (
+            <button
+              onClick={toggleMuteAll}
+              disabled={muteAllLoading}
+              className={`w-10 h-10 flex items-center justify-center rounded-full transition-all ${
+                muteAllActive
+                  ? 'bg-amber-500 text-white animate-glow-pulse'
+                  : 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+              }`}
+              data-testid="button-mute-all-header"
+            >
+              <VolumeX className="w-5 h-5" />
+            </button>
+          )}
         </div>
         <div className="absolute left-0 right-0 bottom-2 flex justify-center pointer-events-none">
           <div className="text-center">
@@ -3050,31 +3073,6 @@ export default function Mobley({ slug }: { slug?: string } = {}) {
         <div className="flex flex-col gap-3 max-w-xs mx-auto">
           {isConnected ? (
             <div className="flex flex-col items-center gap-3">
-              {isAdmin && (
-                <div className="flex gap-3 w-full">
-                  <button
-                    onClick={toggleMuteAll}
-                    disabled={muteAllLoading}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm ${
-                      muteAllActive
-                        ? 'bg-amber-500 hover:bg-amber-400 text-white animate-glow-pulse'
-                        : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400'
-                    }`}
-                    data-testid="button-mute-all"
-                  >
-                    <VolumeX className={`w-4 h-4 ${muteAllActive ? 'text-white' : 'text-amber-400'}`} />
-                    {muteAllActive ? 'Unmute All' : 'Mute All'}
-                  </button>
-                </div>
-              )}
-              <button
-                onClick={() => setShowDisconnectConfirm(true)}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-full font-medium transition-all text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400"
-                data-testid="button-end-call"
-              >
-                <LogOut className="w-4 h-4" />
-                Leave
-              </button>
               <div className="w-full">
                 {broadcastActive && !canSpeakInBroadcast ? (
                   <button

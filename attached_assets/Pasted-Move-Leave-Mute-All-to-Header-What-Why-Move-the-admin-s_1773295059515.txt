@@ -1,0 +1,24 @@
+Move Leave & Mute All to Header
+What & Why
+Move the admin's "Leave" and "Mute All" buttons from the bottom controls area into the header for consistency — non-admin users already have their Leave button accessible from the header area. Both buttons should be round icon-only buttons (no text labels), matching the size and style of the existing Bluetooth/Flic button in the header.
+
+Done looks like
+Header left side shows two round icon buttons (same w-10 h-10 rounded-full style as the Flic button):
+Leave button: red themed (bg-red-500/20 text-red-400, or solid red when relevant), uses LogOut icon, triggers the existing disconnect confirmation dialog
+Mute All button: yellow/amber themed (bg-amber-500/20 text-amber-400, or solid amber when active), uses VolumeX icon, triggers toggleMuteAll
+Both buttons are aligned left in the header, in the currently empty <div className="flex items-center gap-2"> container
+The Mute All button only appears for admin users (keep existing isAdmin guard)
+Leave button appears for all connected users
+The bottom controls area no longer contains these two buttons (remove them from lines ~2996-3020)
+All existing functionality (disconnect confirmation, mute/unmute toggle, loading state) is preserved
+Active/inactive states for Mute All are preserved as round icon styling (solid amber when active with glow pulse, amber outline when inactive)
+Out of scope
+Changing any other header buttons (Flic, Settings)
+Changing the bottom controls area beyond removing these two buttons
+Changing the disconnect confirmation dialog
+Tasks
+Add Leave and Mute All as round icon-only buttons to the header's left-side container, matching the Flic button dimensions and styling pattern, with Leave in red and Mute All in amber/yellow
+Remove the Leave button and the admin Mute All button from the bottom controls section
+Ensure the Mute All button retains its admin-only visibility, active/inactive visual states, and loading disabled state
+Relevant files
+client/src/pages/mobley.tsx:2485-2529,2996-3020
